@@ -1,0 +1,4 @@
+*.swp
+*.dylib
+*.dSYM
+mustache
