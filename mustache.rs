@@ -11,8 +11,8 @@ enum token {
     text(str),
     etag(str),
     utag(str),
-    section({ name: str, inverted: bool, children: [token] }),
-    incomplete_section(str, bool),
+    section({ name: str, inverted: bool, children: [token], src: str }),
+    incomplete_section(str, bool, uint),
     partial(str),
 }
 
@@ -25,36 +25,76 @@ enum data {
 
 type context = map<str, data>;
 
+type parser = {
+    src: str,
+    len: uint,
+    mut curr: char,
+    mut pos: uint,
+    mut content: str,
+    mut state: parser::state,
+    mut otag: str,
+    mut ctag: str,
+    mut otag_chars: [char],
+    mut ctag_chars: [char],
+    mut tag_position: uint,
+    mut tokens: [token],
+};
+
+fn mk_parser(src: str) -> parser {
+    let parser :parser = {
+        src: src,
+        len: str::len_bytes(src),
+        mut curr: -1 as char,
+        mut pos: 0u,
+        mut content: "",
+        mut state: parser::TEXT,
+        mut otag: "{{",
+        mut ctag: "}}",
+        mut otag_chars: ['{', '{'],
+        mut ctag_chars: ['}', '}'],
+        mut tag_position: 0u,
+        mut tokens: [],
+    };
+
+    /*
+    if parser.pos < parser.len {
+        let {ch, next} = str::char_range_at(src, 0u);
+        parser.curr = ch;
+        parser.pos = next;
+    }
+    */
+
+    parser
+}
+
 mod parser {
     enum state { TEXT, OTAG, TAG, CTAG }
+}
 
-    type t = {
-        mutable state: state,
-        mutable otag: str,
-        mutable ctag: str,
-        mutable content: str,
-        mutable tag_position: uint,
-        mutable tokens: [token],
-    };
+impl parser for parser {
+    fn bump() {
+        if self.pos < self.len {
+            let {ch, next} = str::char_range_at(self.src, self.pos);
+            self.curr = ch;
+            self.pos = next;
+        } else {
+            self.curr = -1 as char;
+        }
+    }
 }
 
 fn compile(src: str) -> [token] {
-    let parser : parser::t = {
-        mutable state: parser::TEXT,
-        mutable otag: "{{",
-        mutable ctag: "}}",
-        mutable content: "",
-        mutable tag_position: 0u,
-        mutable tokens: [],
-    };
+    let parser = mk_parser(src);
 
     let curly_brace_tag = false;
 
-    str::bytes_iter(src) { |c|
+    while parser.pos < parser.len {
+        parser.bump();
+
         alt parser.state {
           parser::TEXT {
-            if c == parser.otag[0] {
-                if str::len_bytes(parser.otag) > 1u {
+            if parser.curr == parser.otag_chars[0] {
+                if vec::len(parser.otag_chars) > 1u {
                     parser.tag_position = 1u;
                     parser.state = parser::OTAG;
                 } else {
@@ -62,12 +102,12 @@ fn compile(src: str) -> [token] {
                     parser.state = parser::TAG;
                 }
             } else {
-                unsafe { str::unsafe::push_byte(parser.content, c) };
+                unsafe { str::push_char(parser.content, parser.curr) };
             }
           }
           parser::OTAG {
-            if c == parser.otag[parser.tag_position] {
-                if parser.tag_position == str::len_bytes(parser.otag) - 1u {
+            if parser.curr == parser.otag_chars[parser.tag_position] {
+                if parser.tag_position == vec::len(parser.otag_chars) - 1u {
                     add_text(parser);
                     curly_brace_tag = false;
                     parser.state = parser::TAG;
@@ -79,18 +119,18 @@ fn compile(src: str) -> [token] {
                 // so far to the string.
                 parser.state = parser::TEXT;
                 not_otag(parser);
-                unsafe { str::unsafe::push_byte(parser.content, c) };
+                unsafe { str::push_char(parser.content, parser.curr) };
             }
           }
           parser::TAG {
-              if parser.content == "" && c == '{' as u8 {
+              if parser.content == "" && parser.curr == '{' {
                   curly_brace_tag = true;
-                  unsafe { str::unsafe::push_byte(parser.content, c) };
-              } else if curly_brace_tag && c == '}' as u8 {
+                  unsafe { str::push_char(parser.content, parser.curr) };
+              } else if curly_brace_tag && parser.curr == '}' {
                   curly_brace_tag = false;
-                  unsafe { str::unsafe::push_byte(parser.content, c) };
-              } else if c == parser.ctag[0u] {
-                  if str::len_bytes(parser.ctag) > 1u {
+                  unsafe { str::push_char(parser.content, parser.curr) };
+              } else if parser.curr == parser.ctag_chars[0u] {
+                  if vec::len(parser.ctag_chars) > 1u {
                       parser.tag_position = 1u;
                       parser.state = parser::CTAG;
                   } else {
@@ -98,22 +138,22 @@ fn compile(src: str) -> [token] {
                       parser.state = parser::TEXT;
                   }
               } else {
-                  unsafe { str::unsafe::push_byte(parser.content, c) };
+                  unsafe { str::push_char(parser.content, parser.curr) };
               }
           }
           parser::CTAG {
-              if c == parser.ctag[parser.tag_position] {
-                  if parser.tag_position == str::len_bytes(parser.ctag) - 1u {
+              if parser.curr == parser.ctag_chars[parser.tag_position] {
+                  if parser.tag_position == vec::len(parser.ctag_chars) - 1u {
                       add_tag(parser);
                       parser.state = parser::TEXT;
                   } else {
                       parser.state = parser::TAG;
                       not_ctag(parser);
-                      unsafe { str::unsafe::push_byte(parser.content, c) };
+                      unsafe { str::push_char(parser.content, parser.curr) };
                   }
               }
           }
-      }
+        }
     };
 
     alt parser.state {
@@ -126,7 +166,7 @@ fn compile(src: str) -> [token] {
     // Check that we don't have any incomplete sections.
     vec::iter(copy parser.tokens) { |token|
         alt token {
-          incomplete_section(name, _) {
+          incomplete_section(name, _, _) {
               fail #fmt("Unclosed mustache section %s", name);
           }
           _ {}
@@ -136,14 +176,14 @@ fn compile(src: str) -> [token] {
     parser.tokens
 }
 
-fn add_text(parser: parser::t) {
+fn add_text(parser: parser) {
     if parser.content != "" {
         vec::push(parser.tokens, text(parser.content));
         parser.content = "";
     }
 }
 
-fn add_tag(parser: parser::t) {
+fn add_tag(parser: parser) {
     let content = parser.content;
     let content_len = str::len_bytes(content);
 
@@ -164,11 +204,13 @@ fn add_tag(parser: parser::t) {
       }
       '#' {
           let name = check_content(str::slice(content, 1u, content_len));
-          vec::push(parser.tokens, incomplete_section(name, false));
+          vec::push(parser.tokens,
+                    incomplete_section(name, false, parser.pos));
       }
       '^' {
           let name = check_content(str::slice(content, 1u, content_len));
-          vec::push(parser.tokens, incomplete_section(name, true));
+          vec::push(parser.tokens,
+                    incomplete_section(name, true, parser.pos));
       }
       '/' {
           let name = check_content(str::slice(content, 1u, content_len));
@@ -182,13 +224,26 @@ fn add_tag(parser: parser::t) {
               let last = vec::pop(parser.tokens);
 
               alt last {
-                incomplete_section(section_name, inverted) {
+                incomplete_section(section_name, inverted, pos) {
                     if section_name == name {
+                        // Extract out the source of the section in case we
+                        // want to pass it to a function.
+                        let src = unsafe {
+                            let end = parser.pos -
+                                      content_len -
+                                      str::len_bytes(parser.otag) -
+                                      str::len_bytes(parser.ctag);
+                            str::unsafe::slice_bytes(parser.src,
+                                                     pos,
+                                                     end)
+                        };
+
                         vec::push(parser.tokens,
                             section({
                                 name: name,
                                 inverted: inverted,
                                 children: vec::reversed(children),
+                                src: src,
                             }));
                         break;
                     } else {
@@ -210,7 +265,10 @@ fn add_tag(parser: parser::t) {
 
               if vec::len(tags) == 2u {
                   parser.otag = tags[0];
+                  parser.otag_chars = str::chars(parser.otag);
+
                   parser.ctag = tags[1];
+                  parser.ctag_chars = str::chars(parser.ctag);
               } else {
                   fail "invalid change delimiter tag content";
               }
@@ -226,18 +284,18 @@ fn add_tag(parser: parser::t) {
     parser.content = "";
 }
 
-fn not_otag(parser: parser::t) {
+fn not_otag(parser: parser) {
     let i = 0u;
     while i < parser.tag_position {
-        unsafe { str::unsafe::push_byte(parser.content, parser.otag[i]) };
+        unsafe { str::push_char(parser.content, parser.otag_chars[i]) };
         i += 1u;
     }
 }
 
-fn not_ctag(parser: parser::t) {
+fn not_ctag(parser: parser) {
     let i = 0u;
     while i < parser.tag_position {
-        unsafe { str::unsafe::push_byte(parser.content, parser.ctag[i]) };
+        unsafe { str::push_char(parser.content, parser.ctag_chars[i]) };
         i += 1u;
     }
 }
@@ -277,7 +335,7 @@ fn render(tokens: [token], context: context) -> str {
               some(tag) { render_utag(tag) }
             }
           }
-          section({name, inverted, children}) {
+          section({name, inverted, children, src}) {
             alt context.find(name) {
               none {
                 if inverted {
@@ -285,7 +343,7 @@ fn render(tokens: [token], context: context) -> str {
                 } else { "" }
               }
               some(tag) {
-                render_section(tag, inverted, children) }
+                render_section(tag, inverted, children, src) }
             }
           }
           partial(name) { from_file(name + ".mustache", context) }
@@ -318,7 +376,8 @@ fn render_utag(data: data) -> str {
     }
 }
 
-fn render_section(data: data, inverted: bool, children: [token]) -> str {
+fn render_section(data: data, inverted: bool, children: [token], src: str) ->
+  str {
     alt data {
       bool(b) {
         if inverted {
@@ -334,7 +393,7 @@ fn render_section(data: data, inverted: bool, children: [token]) -> str {
             str::concat(vec::map(ctxs) { |ctx| render(children, ctx) })
         }
       }
-      fun(f) { fail }
+      fun(f) { f(src) }
       _ { fail }
     }
 }
@@ -394,34 +453,62 @@ mod tests {
     #[test]
     fn test_compile_sections() {
         assert compile("{{# name}}{{/name}}") == [
-            section({name: "name", inverted: false, children: []})
+            section({
+                name: "name",
+                inverted: false,
+                children: [],
+                src: "",
+            })
         ];
 
         assert compile("before {{^name}}{{/name}} after") == [
             text("before "),
-            section({name: "name", inverted: true, children: []}),
+            section({
+                name: "name",
+                inverted: true,
+                children: [],
+                src: "",
+            }),
             text(" after")
         ];
 
         assert compile("before {{#name}}{{/name}}") == [
             text("before "),
-            section({name: "name", inverted: false, children: []})
+            section({
+                name: "name",
+                inverted: false,
+                children: [],
+                src: "",
+            })
         ];
 
         assert compile("{{#name}}{{/name}} after") == [
-            section({name: "name", inverted: false, children: []}),
+            section({
+                name: "name",
+                inverted: false,
+                children: [],
+                src: "",
+            }),
             text(" after")
         ];
 
         assert compile("before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after") == [
             text("before "),
-            section({name: "a", inverted: false, children: [
-                text(" 1 "),
-                section({name: "b", inverted: true, children: [
-                    text(" 2 ")
-                ]}),
-                text(" ")
-            ]}),
+            section({
+                name: "a",
+                inverted: false,
+                children: [
+                    text(" 1 "),
+                    section({
+                        name: "b",
+                        inverted: true,
+                        children: [text(" 2 ")],
+                        src: " 2 ",
+                    }),
+                    text(" ")
+                ],
+                src: " 1 {{^b}} 2 {{/b}} ",
+            }),
             text(" after")
         ];
     }
@@ -501,6 +588,12 @@ mod tests {
 
         ctx1.insert("n", str("a"));
         assert render(template, ctx0) == "01 a 35";
+
+        ctx0.insert("a", fun({|text|
+            assert text == "1 {{n}} 3";
+            "foo"
+        }));
+        assert render(template, ctx0) == "0foo5";
     }
 
     #[test]
