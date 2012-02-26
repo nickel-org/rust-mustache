@@ -20,6 +20,7 @@ enum data {
     str(str),
     bool(bool),
     vec([context]),
+    dict(context),
     fun(fn@(str) -> str),
 }
 
@@ -320,33 +321,50 @@ fn from_file(path: str, context: context) -> str {
 }
 
 fn render(tokens: [token], context: context) -> str {
+    render_helper(tokens, [context])
+}
+
+fn render_helper(tokens: [token], stack: [context]) -> str {
+    fn find(stack: [context], name: str) -> option<data> {
+        let i = vec::len(stack);
+        while i > 0u {
+            alt stack[i - 1u].find(name) {
+              some(value) { ret some(value); }
+              none { }
+            }
+            i -= 1u;
+        }
+
+        ret none;
+    }
+
     let output = vec::map(tokens) { |token|
         alt token {
           text(s) { s }
           etag(name) {
-            alt context.find(name) {
+            alt find(stack, name) {
               none { "" }
               some(tag) { render_etag(tag) }
             }
           }
           utag(name) {
-            alt context.find(name) {
+            alt find(stack, name) {
               none { "" }
               some(tag) { render_utag(tag) }
             }
           }
           section({name, inverted, children, src}) {
-            alt context.find(name) {
+            alt find(stack, name) {
               none {
                 if inverted {
-                    render(children, new_str_hash())
+                    render_helper(children, stack)
                 } else { "" }
               }
               some(tag) {
-                render_section(tag, inverted, children, src) }
+                render_section(tag, inverted, children, src, stack) }
             }
           }
-          partial(name) { from_file(name + ".mustache", context) }
+          //partial(name) { from_file(name + ".mustache", context) }
           _ { fail }
         }
     };
@@ -376,23 +394,30 @@ fn render_utag(data: data) -> str {
     }
 }
 
-fn render_section(data: data, inverted: bool, children: [token], src: str) ->
-  str {
+fn render_section(data: data,
+                  inverted: bool,
+                  children: [token],
+                  src: str,
+                  stack: [context]
+                  ) -> str {
     alt data {
       bool(b) {
-        if inverted {
-            render(children, new_str_hash())
+        if b || inverted {
+            render_helper(children, stack)
         } else { "" }
       }
       vec(ctxs) {
         if inverted {
             if vec::is_empty(ctxs) {
-                render(children, new_str_hash())
+                render_helper(children, stack)
             } else { "" }
         } else {
-            str::concat(vec::map(ctxs) { |ctx| render(children, ctx) })
+            str::concat(vec::map(ctxs) { |ctx|
+                render_helper(children, stack + [ctx])
+            })
         }
       }
+      dict(d) { render_helper(children, stack + [d]) }
       fun(f) { f(src) }
       _ { fail }
     }
@@ -400,6 +425,9 @@ fn render_section(data: data, inverted: bool, children: [token], src: str) ->
 
 #[cfg(test)]
 mod tests {
+    import std::json;
+
+    /*
     #[test]
     fn test_compile_texts() {
         assert compile("hello world") == [text("hello world")];
@@ -642,5 +670,93 @@ mod tests {
             "<h2>Names</h2>\n\n" +
             "  <strong>a</strong>\n\n\n" +
             "  <strong>&lt;b&gt;</strong>\n\n\n";
+    }
+    */
+
+    fn parse_spec_tests(src: str) -> [json::json] {
+        alt io::read_whole_file_str(src) {
+          err(e) { fail e }
+          ok(s) {
+            alt json::from_str(s) {
+              err(e) { fail #fmt("%s:%u:%u: %s", src, e.line, e.col, e.msg) }
+              ok(json) {
+                alt json {
+                  json::dict(d) {
+                    alt d.find("tests") {
+                      some(json::list(tests)) { tests }
+                      _ { fail #fmt("%s: tests key not a list", src) }
+                    }
+                  }
+                  _ { fail #fmt("%s: JSON value not a map", src) }
+                }
+              }
+            }
+          }
+        }
+    }
+
+    fn convert_json_map(map: map<str, json::json>) -> context {
+        let ctx = new_str_hash();
+        map.items { |key, value|
+            alt value {
+              json::num(n) { ctx.insert(key, str(float::to_str(n, 6u))); }
+              json::string(s) { ctx.insert(key, str(s)); }
+              json::boolean(b) { ctx.insert(key, bool(b)); }
+              json::list(v) {
+                let value = vec::map(v) { |item|
+                    alt item {
+                      json::dict(m) { convert_json_map(m) }
+                      _ { fail }
+                    }
+                };
+                ctx.insert(key, vec(value));
+              }
+              json::dict(d) {
+                ctx.insert(key, dict(convert_json_map(d)));
+              }
+              _ { fail #fmt("%?", value) }
+            }
+        };
+        ctx
+    }
+
+    fn run_test(test: json::json) {
+        let test = alt test {
+          json::dict(m) { m }
+          _ { fail }
+        };
+
+        let ctx = alt test.get("data") {
+          json::dict(m) { convert_json_map(m) }
+          _ { fail }
+        };
+
+        let template = alt test.get("template") {
+          json::string(s) { s }
+          _ { fail }
+        };
+
+        let expected = alt test.get("expected") {
+          json::string(s) { s }
+          _ { fail }
+        };
+
+        io::println(#fmt("context:  %?", ctx));
+        io::println(#fmt("template: %?", template));
+        io::println(#fmt("expected: %?", expected));
+        io::println(#fmt("result:   %?", from_str(template, ctx)));
+        io::println(#fmt(""));
+        assert from_str(template, ctx) == expected;
+    }
+
+    #[test]
+    fn test_specs() {
+        //vec::iter(parse_spec_tests("spec/specs/comments.json"), run_test);
+        //vec::iter(parse_spec_tests("spec/specs/delimiters.json"), run_test);
+        //vec::iter(parse_spec_tests("spec/specs/interpolation.json"), run_test);
+        //vec::iter(parse_spec_tests("spec/specs/inverted.json"), run_test);
+        //vec::iter(parse_spec_tests("spec/specs/partials.json"), run_test);
+        vec::iter(parse_spec_tests("spec/specs/sections.json"), run_test);
+        //vec::iter(parse_spec_tests("spec/specs/~lambdas.json"), run_test);
     }
 }
