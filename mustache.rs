@@ -13,7 +13,7 @@ enum token {
     text(str),
     etag(str, str),
     utag(str, str),
-    section(str, bool, [token], str),
+    section(str, bool, [token], str, str, str),
     incomplete_section(str, bool, str),
     partial(str, str),
 }
@@ -160,7 +160,7 @@ impl parser for parser {
     }
 
     fn add_tag() {
-        let src = self.otag + self.content + self.ctag;
+        let tag = self.otag + self.content + self.ctag;
         let content = self.content;
         let content_len = str::len(content);
 
@@ -169,12 +169,12 @@ impl parser for parser {
           '&' {
             let name = str::slice(content, 1u, content_len);
             let name = self.check_content(name);
-            vec::push(self.tokens, utag(name, src)); }
+            vec::push(self.tokens, utag(name, tag)); }
           '{' {
             if str::ends_with(content, "}") {
                 let name = str::slice(content, 1u, content_len - 1u);
                 let name = self.check_content(name);
-                vec::push(self.tokens, utag(name, src));
+                vec::push(self.tokens, utag(name, tag));
             } else {
                 log(error, self.content);
                 log(error, content);
@@ -185,13 +185,13 @@ impl parser for parser {
             let name = self.check_content(str::slice(content, 1u, content_len));
             vec::push(
                 self.tokens,
-                incomplete_section(name, false, src));
+                incomplete_section(name, false, tag));
           }
           '^' {
             let name = self.check_content(str::slice(content, 1u, content_len));
             vec::push(
                 self.tokens,
-                incomplete_section(name, true, src));
+                incomplete_section(name, true, tag));
           }
           '/' {
             let name = self.check_content(str::slice(content, 1u, content_len));
@@ -205,29 +205,35 @@ impl parser for parser {
                 let last = vec::pop(self.tokens);
 
                 alt last {
-                  incomplete_section(section_name, inverted, section_src) {
+                  incomplete_section(section_name, inverted, otag) {
                     let children = vec::reversed(children);
 
                     // Collect all the children's sources.
-                    let srcs = [section_src];
+                    let srcs = [];
                     vec::iter(children) { |child: token|
                         alt child {
-                        text(s)
-                        | etag(_, s)
-                        | utag(_, s)
-                        | section(_, _, _, s)
-                        | incomplete_section(_, _, s)
-                        | partial(_, s) {
+                          text(s) | etag(_,s) | utag(_,s) {
                             vec::push(srcs, s);
                           }
+                          section(_, _, _, otag, src, ctag) {
+                            vec::push(srcs, otag);
+                            vec::push(srcs, src);
+                            vec::push(srcs, ctag);
+                          }
+                          _ { fail; }
                         }
                     }
-                    vec::push(srcs, self.otag + self.content + self.ctag);
 
                     if section_name == name {
                         vec::push(
                             self.tokens,
-                            section(name, inverted, children, str::concat(srcs)));
+                            section(
+                                name,
+                                inverted,
+                                children,
+                                otag,
+                                str::concat(srcs),
+                                tag));
                         break;
                     } else {
                         fail "Unclosed section";
@@ -239,7 +245,9 @@ impl parser for parser {
           }
           '>' {
             let name = self.check_content(str::slice(content, 1u, content_len));
-            vec::push(self.tokens, partial(name, src));
+
+            // Load the tokens from the file.
+            self.tokens += compile_file(name + ".mustache");
           }
           '=' {
             if (content_len > 2u && str::ends_with(content, "=")) {
@@ -260,8 +268,7 @@ impl parser for parser {
             }
           }
           _ {
-            let src = self.otag + self.content + self.ctag;
-            vec::push(self.tokens, etag(self.check_content(content), src));
+            vec::push(self.tokens, etag(self.check_content(content), tag));
           }
         }
 
@@ -320,6 +327,13 @@ fn compile_reader(rdr: io::reader) -> [token] {
     parser.parse()
 }
 
+fn compile_file(path: str) -> [token] {
+    alt io::file_reader(path) {
+      ok(rdr) { compile_reader(rdr) }
+      err(e) { fail e; }
+    }
+}
+
 fn compile_str(src: str) -> [token] {
     io::with_str_reader(src, compile_reader)
 }
@@ -368,7 +382,7 @@ fn render_helper(tokens: [token], stack: [context]) -> str {
               some(tag) { render_utag(tag) }
             }
           }
-          section(name, inverted, children, src) {
+          section(name, inverted, children, _, src, _) {
             alt find(stack, name) {
               none {
                 if inverted {
@@ -379,7 +393,14 @@ fn render_helper(tokens: [token], stack: [context]) -> str {
                 render_section(tag, inverted, children, src, stack) }
             }
           }
-          //partial(name) { from_file(name + ".mustache", context) }
+          /*
+          partial(name) {
+              alt io::read_whole_file_str(name + ".mustache") {
+                  let 
+              }
+              from_file(name + ".mustache", context)
+          }
+          */
           _ { fail }
         }
     };
@@ -503,7 +524,9 @@ mod tests {
                 "name",
                 false,
                 [],
-                "{{# name}}{{/name}}"
+                "{{# name}}",
+                "",
+                "{{/name}}"
             )
         ];
 
@@ -513,7 +536,9 @@ mod tests {
                 "name",
                 true,
                 [],
-                "{{^name}}{{/name}}"
+                "{{^name}}",
+                "",
+                "{{/name}}"
             ),
             text(" after")
         ];
@@ -524,7 +549,9 @@ mod tests {
                 "name",
                 false,
                 [],
-                "{{#name}}{{/name}}"
+                "{{#name}}",
+                "",
+                "{{/name}}"
             )
         ];
 
@@ -533,7 +560,9 @@ mod tests {
                 "name",
                 false,
                 [],
-                "{{#name}}{{/name}}"
+                "{{#name}}",
+                "",
+                "{{/name}}"
             ),
             text(" after")
         ];
@@ -549,11 +578,15 @@ mod tests {
                         "b",
                         true,
                         [text(" 2 ")],
-                        "{{^b}} 2 {{/b}}"
+                        "{{^b}}",
+                        " 2 ",
+                        "{{/b}}"
                     ),
                     text(" ")
                 ],
-                "{{#a}} 1 {{^b}} 2 {{/b}} {{/a}}"
+                "{{#a}}",
+                " 1 {{^b}} 2 {{/b}} ",
+                "{{/a}}"
             ),
             text(" after")
         ];
@@ -561,23 +594,27 @@ mod tests {
 
     #[test]
     fn test_compile_partials() {
-        assert compile_str("{{> name}}") == [
-            partial("name", "{{> name}}")
+        assert compile_str("{{> test}}") == [
+            etag("foo", "{{foo}}"),
+            text("bar\n")
         ];
 
-        assert compile_str("before {{>name}} after") == [
+        assert compile_str("before {{>test}} after") == [
             text("before "),
-            partial("name", "{{>name}}"),
+            etag("foo", "{{foo}}"),
+            text("bar\n"),
             text(" after")
         ];
 
-        assert compile_str("before {{> name}}") == [
+        assert compile_str("before {{> test}}") == [
             text("before "),
-            partial("name", "{{> name}}")
+            etag("foo", "{{foo}}"),
+            text("bar\n")
         ];
 
-        assert compile_str("{{>name}} after") == [
-            partial("name", "{{>name}}"),
+        assert compile_str("{{>test}} after") == [
+            etag("foo", "{{foo}}"),
+            text("bar\n"),
             text(" after")
         ];
     }
