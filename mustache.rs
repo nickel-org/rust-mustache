@@ -274,7 +274,10 @@ impl parser for parser {
         let content_len = str::len(content);
 
         alt content[0] as char {
-          '!' {} // ignore comments
+          '!' {
+            // ignore comments
+            self.eat_whitespace();
+          }
           '&' {
             let name = str::slice(content, 1u, content_len);
             let name = self.check_content(name);
@@ -366,6 +369,8 @@ impl parser for parser {
             self.tokens += compile_file(name + ".mustache");
           }
           '=' {
+            self.eat_whitespace();
+
             if (content_len > 2u && str::ends_with(content, "=")) {
                 let s = self.check_content(str::slice(content, 1u, content_len - 1u));
                 let tags = str::splitn_char(s, ' ', 2u);
@@ -958,9 +963,9 @@ mod tests {
 
         if from_str(template, ctx) != expected {
             io::println(#fmt("context:  %?", to_list(test.get("data"))));
-            io::println(#fmt("template:\n%?", template));
-            io::println(#fmt("expected:\n%?", expected));
-            io::println(#fmt("result:  \n%?", from_str(template, ctx)));
+            io::println(#fmt("template:\n%s", template));
+            io::println(#fmt("expected:\n%s", expected));
+            io::println(#fmt("result:  \n%s", from_str(template, ctx)));
             io::println(#fmt(""));
         }
         assert from_str(template, ctx) == expected;
@@ -968,21 +973,12 @@ mod tests {
 
     #[test]
     fn test_specs() {
-        io::println(#fmt("%?", "|\n{{#b}}\n{{/b}}\n|"));
-        io::println("");
-        io::println(#fmt("%?", "|\r\n{{#b}}\r\n{{/b}}\r\n|"));
-        io::println("");
-        io::println(#fmt("%?", compile_str("|\n{{#b}}\n{{/b}}\n|")));
-        io::println("");
-        io::println(#fmt("%?", compile_str("|\r\n{{#b}}\r\n{{/b}}\r\n|")));
-        io::println("");
-
         //vec::iter(parse_spec_tests("spec/specs/comments.json"), run_test);
-        //vec::iter(parse_spec_tests("spec/specs/delimiters.json"), run_test);
+        vec::iter(parse_spec_tests("spec/specs/delimiters.json"), run_test);
         //vec::iter(parse_spec_tests("spec/specs/interpolation.json"), run_test);
         //vec::iter(parse_spec_tests("spec/specs/inverted.json"), run_test);
         //vec::iter(parse_spec_tests("spec/specs/partials.json"), run_test);
-        vec::iter(parse_spec_tests("spec/specs/sections.json"), run_test);
+        //vec::iter(parse_spec_tests("spec/specs/sections.json"), run_test);
         //vec::iter(parse_spec_tests("spec/specs/~lambdas.json"), run_test);
     }
 }
