@@ -57,8 +57,6 @@ impl parser for parser {
           some(ch) { self.ch = ch; self.lookahead = none; }
         }
 
-        //io::println(#fmt("bump: %?", str::from_char(self.ch)));
-
         if self.ch == '\n' {
             self.line += 1u;
             self.col = 1u;
@@ -72,7 +70,6 @@ impl parser for parser {
           none {
             let ch = self.rdr.read_char();
             self.lookahead = some(ch);
-            //io::println(#fmt("peek: %?", str::from_char(ch)));
             ch
           }
           some(ch) { ch }
@@ -191,15 +188,6 @@ impl parser for parser {
            self.ch == '\n' ||
            (self.ch == '\r' && self.peek() == '\n') {
             // Find the last text token.
-            /*
-            let token = vec::rfind(self.tokens) { |token|
-                alt token {
-                  text(_) { true }
-                  _ { false }
-                }
-            };
-            */
-
             alt vec::last(self.tokens) {
               none | some(incomplete_section(_, _, _, true)) {
                 //io::println("eating newline");
@@ -215,7 +203,6 @@ impl parser for parser {
                 let pos = str::rfind(s) { |c|
                     c == '\n' || !char::is_whitespace(c)
                 };
-                //io::println(#fmt("pos:  %?", pos));
 
                 // If we found a newline, then we can skip this
                 // newline.
@@ -242,31 +229,14 @@ impl parser for parser {
 
                     vec::push(self.tokens, text(s));
                     true
-
-                    /*
-                } else if str::char_at(s, i) == '\r' &&
-                              str::len(s) > i + 1u &&
-                              str::char_at(s, i + 1u) == '\n' {
-                        self.bump();
-                        self.bump();
-                    */
-                } else {
-                    false
-                }
+                } else { false }
               }
-              _ {
-                //io::println(#fmt("not text: %?", vec::last(self.tokens)));
-                false
-              }
+              _ { false }
             }
-        } else {
-            false
-        }
+        } else { false }
     }
 
     fn add_tag() {
-        //io::println("add_tag");
-
         self.bump();
 
         let tag = self.otag + self.content + self.ctag;
