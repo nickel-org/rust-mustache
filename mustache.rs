@@ -2,7 +2,7 @@ use std;
 
 import result::{ok, err};
 import std::io;
-import std::io::{reader_util};
+import std::io::{reader_util, writer_util};
 import std::map::{map, new_str_hash};
 
 export token;
@@ -366,7 +366,10 @@ impl parser for parser {
             let name = self.check_content(str::slice(content, 1u, content_len));
 
             // Load the tokens from the file.
-            self.tokens += compile_file(name + ".mustache");
+            alt io::file_reader(name + ".mustache") {
+              ok(rdr) { self.tokens += compile_reader(rdr); }
+              err(e) {}
+            }
           }
           '=' {
             self.eat_whitespace();
@@ -604,6 +607,7 @@ fn render_section(value: data,
 
 #[cfg(test)]
 mod tests {
+    import std::fs;
     import std::json;
 
     /*
@@ -921,6 +925,31 @@ mod tests {
         }
     }
 
+    fn write_partials(value: json::json) -> [str] {
+        let files = [];
+
+        alt value {
+          json::dict(d) {
+            d.items { |key, value|
+                alt value {
+                  json::string(s) {
+                    let file = key + ".mustache";
+                    #error("%?", file);
+                    alt io::file_writer(file, [io::create, io::truncate]) {
+                      ok(wr) { vec::push(files, file); wr.write_str(s); }
+                      err(e) { fail e; }
+                    }
+                  }
+                  _ { fail; }
+                }
+            }
+          }
+          _ { fail; }
+        }
+
+        files
+    }
+
     fn run_test(test: json::json) {
         let test = alt test {
           json::dict(m) { m }
@@ -941,6 +970,13 @@ mod tests {
           json::string(s) { s }
           _ { fail }
         };
+
+        let partials = alt test.find("partials") {
+          some(value) { write_partials(value) }
+          none { [] }
+        };
+
+        #error("%?", partials);
 
         io::println(#fmt("desc:     %?", test.get("desc")));
 
@@ -969,15 +1005,17 @@ mod tests {
             io::println(#fmt(""));
         }
         assert from_str(template, ctx) == expected;
+
+        vec::iter(partials) { |file| fs::remove_file(file); }
     }
 
     #[test]
     fn test_specs() {
         //vec::iter(parse_spec_tests("spec/specs/comments.json"), run_test);
-        vec::iter(parse_spec_tests("spec/specs/delimiters.json"), run_test);
+        //vec::iter(parse_spec_tests("spec/specs/delimiters.json"), run_test);
         //vec::iter(parse_spec_tests("spec/specs/interpolation.json"), run_test);
         //vec::iter(parse_spec_tests("spec/specs/inverted.json"), run_test);
-        //vec::iter(parse_spec_tests("spec/specs/partials.json"), run_test);
+        vec::iter(parse_spec_tests("spec/specs/partials.json"), run_test);
         //vec::iter(parse_spec_tests("spec/specs/sections.json"), run_test);
         //vec::iter(parse_spec_tests("spec/specs/~lambdas.json"), run_test);
     }
