@@ -43,7 +43,7 @@ type parser = {
 fn mk_parser(src: str) -> parser {
     let parser :parser = {
         src: src,
-        len: str::len_bytes(src),
+        len: str::len(src),
         mut curr: -1 as char,
         mut pos: 0u,
         mut content: "",
@@ -185,7 +185,7 @@ fn add_text(parser: parser) {
 
 fn add_tag(parser: parser) {
     let content = parser.content;
-    let content_len = str::len_bytes(content);
+    let content_len = str::len(content);
 
     alt content[0] as char {
       '!' {} // ignore comments
@@ -231,8 +231,8 @@ fn add_tag(parser: parser) {
                         let src = unsafe {
                             let end = parser.pos -
                                       content_len -
-                                      str::len_bytes(parser.otag) -
-                                      str::len_bytes(parser.ctag);
+                                      str::len(parser.otag) -
+                                      str::len(parser.ctag);
                             str::unsafe::slice_bytes(parser.src,
                                                      pos,
                                                      end)
@@ -302,7 +302,7 @@ fn not_ctag(parser: parser) {
 
 fn check_content(content: str) -> str {
     let trimmed = str::trim(content);
-    if str::len_bytes(trimmed) == 0u {
+    if str::len(trimmed) == 0u {
         fail "empty tag";
     }
     trimmed
