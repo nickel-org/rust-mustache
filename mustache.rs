@@ -5,7 +5,6 @@ import std::io;
 import std::io::{reader_util, writer_util};
 import std::map::{map, new_str_hash};
 
-export token;
 export compile_reader;
 export compile_str;
 
@@ -15,8 +14,22 @@ enum token {
     utag([str], str),
     section([str], bool, [token], str, str, str),
     incomplete_section([str], bool, str, bool),
-    partial([str], str),
+    partial(str, str),
 }
+
+enum token_class {
+    normal,
+    standalone,
+    whitespace(str, uint),
+    newline_whitespace(str, uint),
+}
+
+type partial_map = map<str, [token]>;
+
+type template = {
+    tokens: [token],
+    partials: partial_map,
+};
 
 enum data {
     str(str),
@@ -42,6 +55,7 @@ type parser = {
     mut ctag_chars: [char],
     mut tag_position: uint,
     mut tokens: [token],
+    mut partials: [str],
 };
 
 mod parser {
@@ -56,6 +70,8 @@ impl parser for parser {
           none { self.ch = self.rdr.read_char(); }
           some(ch) { self.ch = ch; self.lookahead = none; }
         }
+
+        io::println(#fmt("bump: %s", str::from_char(self.ch)));
 
         if self.ch == '\n' {
             self.line += 1u;
@@ -76,7 +92,7 @@ impl parser for parser {
         }
     }
 
-    fn parse() -> [token] {
+    fn parse() -> ([token], [str]) {
         let curly_brace_tag = false;
 
         while !self.eof() {
@@ -170,7 +186,7 @@ impl parser for parser {
             }
         };
 
-        self.tokens
+        (self.tokens, self.partials)
     }
 
     fn add_text() {
@@ -180,6 +196,86 @@ impl parser for parser {
         }
     }
 
+    // This function classifies whether or not a token is standalone, or if it
+    // has trailing whitespace. It's looking for this pattern:
+    //
+    //   ("\n" | "\r\n") whitespace* token ("\n" | "\r\n")
+    //
+    fn classify_token() -> token_class {
+        // Exit early if the next character is not '\n' or '\r\n'.
+        if !self.eof() &&
+                self.ch != '\n' &&
+                (self.ch == '\r' && self.peek() != '\n') {
+            ret normal;
+        }
+
+        // If the last token ends with a newline (or there is no previous
+        // token), then this token is standalone.
+        alt vec::last(self.tokens) {
+          none | some(incomplete_section(_, _, _, true)) {
+              standalone
+          }
+
+          some(text(s)) if s != "" {
+              io::println(#fmt("classify_token: %?", s));
+
+            // Look for the last newline character that may have whitespace
+            // following it.
+            alt str::rfind(s, {|c| c == '\n' || !char::is_whitespace(c)}) {
+              none {
+                // It's all whitespace.
+                //whitespace(s, 0u)
+                normal
+              }
+              some(pos) {
+                if str::char_at(s, pos) == '\n' {
+                    standalone
+                  /*
+                    if pos == str::len(s) {
+                        standalone
+                    } else {
+                        whitespace(s, pos + 1u)
+                    }
+                    */
+                } else {
+                    normal
+                }
+              }
+            }
+          }
+          _ { normal }
+        }
+    }
+
+    /*
+    fn eat_whitespace() -> bool {
+        // If the next character is a newline, and the last token ends with a
+        // newline and whitespace, clear out the whitespace.
+
+        alt self.classify_token() {
+          normal { false }
+          standalone {
+              io::println("eating");
+              if self.ch == '\r' { self.bump(); }
+              self.bump();
+              true
+          }
+          whitespace(s, pos) | newline_whitespace(s, pos) {
+              io::println("eating");
+
+              if self.ch == '\r' { self.bump(); }
+              self.bump();
+
+              // Trim the whitespace from the last token.
+              vec::pop(self.tokens);
+              vec::push(self.tokens, text(str::slice(s, 0u, pos)));
+
+              true
+          }
+        }
+    }
+    */
+
     fn eat_whitespace() -> bool {
         // If the next character is a newline, and the last token ends with a
         // newline and whitespace, clear out the whitespace.
@@ -188,6 +284,15 @@ impl parser for parser {
            self.ch == '\n' ||
            (self.ch == '\r' && self.peek() == '\n') {
             // Find the last text token.
+            /*
+            let token = vec::rfind(self.tokens) { |token|
+                alt token {
+                  text(_) { true }
+                  _ { false }
+                }
+            };
+            */
+
             alt vec::last(self.tokens) {
               none | some(incomplete_section(_, _, _, true)) {
                 //io::println("eating newline");
@@ -203,6 +308,7 @@ impl parser for parser {
                 let pos = str::rfind(s) { |c|
                     c == '\n' || !char::is_whitespace(c)
                 };
+                //io::println(#fmt("pos:  %?", pos));
 
                 // If we found a newline, then we can skip this
                 // newline.
@@ -229,11 +335,30 @@ impl parser for parser {
 
                     vec::push(self.tokens, text(s));
                     true
-                } else { false }
+
+                    /*
+                } else if str::char_at(s, i) == '\r' &&
+                              str::len(s) > i + 1u &&
+                              str::char_at(s, i + 1u) == '\n' {
+                        self.bump();
+                        self.bump();
+                    */
+                } else {
+                    false
+                }
               }
-              _ { false }
+              _ {
+                //io::println(#fmt("not text: %?", vec::last(self.tokens)));
+                false
+              }
             }
-        } else { false }
+        } else {
+            false
+        }
+    }
+
+    fn eat_newline() {
+        self.eat_whitespace();
     }
 
     fn add_tag() {
@@ -267,6 +392,7 @@ impl parser for parser {
           }
           '#' {
             let newlined = self.eat_whitespace();
+            #error("incomplete: %b", newlined);
 
             let name = self.check_content(str::slice(content, 1u, content_len));
             let name = str::split_char_nonempty(name, '.');
@@ -280,7 +406,8 @@ impl parser for parser {
             vec::push(self.tokens, incomplete_section(name, true, tag, newlined));
           }
           '/' {
-            self.eat_whitespace();
+            let newlined = self.eat_whitespace();
+            #error("complete: %b", newlined);
 
             let name = self.check_content(str::slice(content, 1u, content_len));
             let name = str::split_char_nonempty(name, '.');
@@ -301,7 +428,7 @@ impl parser for parser {
                     let srcs = [];
                     vec::iter(children) { |child: token|
                         alt child {
-                          text(s) | etag(_, s) | utag(_, s) {
+                          text(s) | etag(_, s) | utag(_, s) | partial(_, s) {
                             vec::push(srcs, s);
                           }
                           section(_, _, _, otag, src, ctag) {
@@ -333,13 +460,15 @@ impl parser for parser {
             }
           }
           '>' {
-            let name = self.check_content(str::slice(content, 1u, content_len));
+            self.eat_newline();
 
-            // Load the tokens from the file.
-            alt io::file_reader(name + ".mustache") {
-              ok(rdr) { self.tokens += compile_reader(rdr); }
-              err(e) {}
-            }
+            // We can't inline the tokens directly as we may have a recursive
+            // partial. So instead, we'll cache the partials we used and look
+            // them up later.
+            let name = str::slice(content, 1u, content_len);
+            let name = self.check_content(name);
+            vec::push(self.tokens, partial(name, tag));
+            vec::push(self.partials, name);
           }
           '=' {
             self.eat_whitespace();
@@ -371,9 +500,6 @@ impl parser for parser {
         self.content = "";
     }
 
-    fn add_section_tag() {
-    }
-
     fn not_otag() {
         let i = 0u;
         while i < self.tag_position {
@@ -399,8 +525,15 @@ impl parser for parser {
     }
 }
 
-fn compile_reader(rdr: io::reader) -> [token] {
-    let parser :parser = {
+fn compile_reader(rdr: io::reader) -> template {
+    let partials = new_str_hash();
+    let tokens = compile_helper(rdr, partials);
+
+    { tokens: tokens, partials: partials }
+}
+
+fn compile_helper(rdr: io::reader, partials: partial_map) -> [token] {
+    let parser = {
         rdr: rdr,
         mut ch: rdr.read_char(),
         mut lookahead: none,
@@ -414,19 +547,37 @@ fn compile_reader(rdr: io::reader) -> [token] {
         mut ctag_chars: ['}', '}'],
         mut tag_position: 0u,
         mut tokens: [],
+        mut partials: [],
     };
 
-    parser.parse()
+    let (tokens, partial_names) = parser.parse();
+
+    // Compile the partials if we haven't done so already.
+    vec::iter(partial_names) { |name|
+        let path = name + ".mustache";
+
+        if !partials.contains_key(name) {
+            // Insert a placeholder so we don't recurse off to infinity.
+            partials.insert(name, []);
+
+            alt io::file_reader(path) {
+              err(e) {}
+              ok(rdr) { partials.insert(name, compile_helper(rdr, partials)); }
+            }
+        }
+    }
+
+    tokens
 }
 
-fn compile_file(path: str) -> [token] {
+fn compile_file(path: str) -> template {
     alt io::file_reader(path) {
       ok(rdr) { compile_reader(rdr) }
       err(e) { fail e; }
     }
 }
 
-fn compile_str(src: str) -> [token] {
+fn compile_str(src: str) -> template {
     io::with_str_reader(src, compile_reader)
 }
 
@@ -441,11 +592,12 @@ fn from_file(path: str, context: context) -> str {
     }
 }
 
-fn render(tokens: [token], context: context) -> str {
-    render_helper(tokens, [dict(context)])
+fn render(template: template, context: context) -> str {
+    render_helper(template.tokens, template.partials, [dict(context)])
 }
 
-fn render_helper(tokens: [token], stack: [data]) -> str {
+fn render_helper(tokens: [token], partials: partial_map, stack: [data])
+  -> str {
     fn find(stack: [data], path: [str]) -> option<data> {
         // If we have an empty path, we just want the top value in our stack.
         if vec::is_empty(path) {
@@ -506,14 +658,24 @@ fn render_helper(tokens: [token], stack: [data]) -> str {
           }
           section(path, true, children, _, _, _) {
             alt find(stack, path) {
-              none { render_helper(children, stack) }
-              some(value) { render_inverted_section(value, children, stack) }
+              none { render_helper(children, partials, stack) }
+              some(value) {
+                render_inverted_section(value, children, partials, stack)
+              }
             }
           }
           section(path, false, children, _, src, _) {
             alt find(stack, path) {
               none { "" }
-              some(value) { render_section(value, children, src, stack) }
+              some(value) {
+                render_section(value, children, src, partials, stack)
+              }
+            }
+          }
+          partial(name, _) {
+            alt partials.find(name) {
+              none { "" }
+              some(tokens) { render_helper(tokens, partials, stack) }
             }
           }
           _ { fail }
@@ -547,10 +709,11 @@ fn render_utag(value: data) -> str {
 
 fn render_inverted_section(value: data,
                            children: [token],
+                           partials: partial_map,
                            stack: [data]) -> str {
     alt value {
-      bool(false) { render_helper(children, stack) }
-      vec(xs) if vec::is_empty(xs) { render_helper(children, stack) }
+      bool(false) { render_helper(children, partials, stack) }
+      vec(xs) if vec::is_empty(xs) { render_helper(children, partials, stack) }
       _ { "" }
     }
 }
@@ -558,17 +721,18 @@ fn render_inverted_section(value: data,
 fn render_section(value: data,
                   children: [token],
                   src: str,
+                  partials: partial_map,
                   stack: [data]) -> str {
     alt value {
-      bool(true) { render_helper(children, stack) }
+      bool(true) { render_helper(children, partials, stack) }
       bool(false) { "" }
       vec(vs) {
         str::concat(vec::map(vs) { |v|
-            render_helper(children, stack + [v])
+            render_helper(children, partials, stack + [v])
         })
       }
       dict(_) {
-          render_helper(children, stack + [value])
+          render_helper(children, partials, stack + [value])
       }
       fun(f) { f(src) }
       _ { fail }
@@ -904,7 +1068,6 @@ mod tests {
                 alt value {
                   json::string(s) {
                     let file = key + ".mustache";
-                    #error("%?", file);
                     alt io::file_writer(file, [io::create, io::truncate]) {
                       ok(wr) { vec::push(files, file); wr.write_str(s); }
                       err(e) { fail e; }
@@ -946,10 +1109,6 @@ mod tests {
           none { [] }
         };
 
-        #error("%?", partials);
-
-        io::println(#fmt("desc:     %?", test.get("desc")));
-
             fn to_list(x: json::json) -> json::json {
                 alt x {
                   json::dict(d) {
@@ -968,10 +1127,12 @@ mod tests {
 
 
         if from_str(template, ctx) != expected {
+            io::println(#fmt("desc:     %?", test.get("desc")));
             io::println(#fmt("context:  %?", to_list(test.get("data"))));
-            io::println(#fmt("template:\n%s", template));
-            io::println(#fmt("expected:\n%s", expected));
-            io::println(#fmt("result:  \n%s", from_str(template, ctx)));
+            io::println(#fmt("partials: %?", partials));
+            io::println(#fmt("template:\n%?", template));
+            io::println(#fmt("expected:\n%?", expected));
+            io::println(#fmt("result:  \n%?", from_str(template, ctx)));
             io::println(#fmt(""));
         }
         assert from_str(template, ctx) == expected;
@@ -985,8 +1146,8 @@ mod tests {
         //vec::iter(parse_spec_tests("spec/specs/delimiters.json"), run_test);
         //vec::iter(parse_spec_tests("spec/specs/interpolation.json"), run_test);
         //vec::iter(parse_spec_tests("spec/specs/inverted.json"), run_test);
-        vec::iter(parse_spec_tests("spec/specs/partials.json"), run_test);
-        //vec::iter(parse_spec_tests("spec/specs/sections.json"), run_test);
+        //vec::iter(parse_spec_tests("spec/specs/partials.json"), run_test);
+        vec::iter(parse_spec_tests("spec/specs/sections.json"), run_test);
         //vec::iter(parse_spec_tests("spec/specs/~lambdas.json"), run_test);
     }
 }
