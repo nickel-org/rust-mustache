@@ -12,7 +12,7 @@ enum token {
     text(str),
     etag([str], str),
     utag([str], str),
-    section([str], bool, [token], str, str, str),
+    section([str], bool, [token], str, str, str, str, str),
     incomplete_section([str], bool, str, bool),
     partial(str, str, str),
 }
@@ -320,7 +320,7 @@ impl parser for parser {
                 let last = vec::pop(self.tokens);
 
                 alt last {
-                  incomplete_section(section_name, inverted, otag, _) {
+                  incomplete_section(section_name, inverted, osection, _) {
                     let children = vec::reversed(children);
 
                     // Collect all the children's sources.
@@ -333,10 +333,10 @@ impl parser for parser {
                           | partial(_, _, s) {
                             vec::push(srcs, s);
                           }
-                          section(_, _, _, otag, src, ctag) {
-                            vec::push(srcs, otag);
+                          section(_, _, _, _, osection, src, csection, _) {
+                            vec::push(srcs, osection);
                             vec::push(srcs, src);
-                            vec::push(srcs, ctag);
+                            vec::push(srcs, csection);
                           }
                           _ { fail; }
                         }
@@ -349,9 +349,11 @@ impl parser for parser {
                                 name,
                                 inverted,
                                 children,
-                                otag,
+                                self.otag,
+                                osection,
                                 str::concat(srcs),
-                                tag));
+                                tag,
+                                self.ctag));
                         break;
                     } else {
                         fail "Unclosed section";
@@ -464,12 +466,15 @@ impl parser for parser {
 
 fn compile_reader(rdr: io::reader) -> template {
     let partials = new_str_hash();
-    let tokens = compile_helper(rdr, partials);
+    let tokens = compile_helper(rdr, partials, "{{", "}}");
 
     { tokens: tokens, partials: partials }
 }
 
-fn compile_helper(rdr: io::reader, partials: partial_map) -> [token] {
+fn compile_helper(rdr: io::reader,
+                  partials: partial_map,
+                  otag: str,
+                  ctag: str) -> [token] {
     let parser = {
         rdr: rdr,
         mut ch: rdr.read_char(),
@@ -478,10 +483,10 @@ fn compile_helper(rdr: io::reader, partials: partial_map) -> [token] {
         mut col: 1u,
         mut content: "",
         mut state: parser::TEXT,
-        mut otag: "{{",
-        mut ctag: "}}",
-        mut otag_chars: ['{', '{'],
-        mut ctag_chars: ['}', '}'],
+        mut otag: otag,
+        mut ctag: ctag,
+        mut otag_chars: str::chars(otag),
+        mut ctag_chars: str::chars(ctag),
         mut tag_position: 0u,
         mut tokens: [],
         mut partials: [],
@@ -499,7 +504,10 @@ fn compile_helper(rdr: io::reader, partials: partial_map) -> [token] {
 
             alt io::file_reader(path) {
               err(e) {}
-              ok(rdr) { partials.insert(name, compile_helper(rdr, partials)); }
+              ok(rdr) {
+                partials.insert(name,
+                                compile_helper(rdr, partials, "{{", "}}"));
+              }
             }
         }
     }
@@ -529,12 +537,23 @@ fn from_file(path: str, context: context) -> str {
     }
 }
 
+type render_context = {
+    tokens: [token],
+    partials: partial_map,
+    stack: [data],
+    indent: str,
+};
+
 fn render(template: template, context: context) -> str {
-    render_helper(template.tokens, template.partials, [dict(context)], "")
+    render_helper({
+        tokens: template.tokens,
+        partials: template.partials,
+        stack: [dict(context)],
+        indent: ""
+    })
 }
 
-fn render_helper(tokens: [token], partials: partial_map, stack: [data],
-                 indent: str) -> str {
+fn render_helper(ctx: render_context) -> str {
     fn find(stack: [data], path: [str]) -> option<data> {
         // If we have an empty path, we just want the top value in our stack.
         if vec::is_empty(path) {
@@ -578,43 +597,57 @@ fn render_helper(tokens: [token], partials: partial_map, stack: [data],
         value
     }
 
-    let output = vec::map(tokens) { |token|
+    let output = vec::map(ctx.tokens) { |token|
         let res = alt token {
-          text(value) { indent_lines(value, indent) }
+          text(value) { indent_lines(value, ctx.indent) }
           etag(path, _) {
-            alt find(stack, path) {
+            alt find(ctx.stack, path) {
               none { "" }
-              some(value) { indent + render_etag(value) }
+              some(value) { ctx.indent + render_etag(value, ctx) }
             }
           }
           utag(path, _) {
-            alt find(stack, path) {
+            alt find(ctx.stack, path) {
               none { "" }
-              some(value) { indent + render_utag(value) }
+              some(value) { ctx.indent + render_utag(value, ctx) }
             }
           }
-          section(path, true, children, _, _, _) {
-            alt find(stack, path) {
-              none { render_helper(children, partials, stack, indent) }
-              some(value) {
-                render_inverted_section(value, children, partials, stack,
-                                        indent)
-              }
+          section(path, true, children, _, _, _, _, _) {
+            let ctx = {
+                tokens: children,
+                partials: ctx.partials,
+                stack: ctx.stack,
+                indent: ctx.indent,
+            };
+
+            alt find(ctx.stack, path) {
+              none { render_helper(ctx) }
+              some(value) { render_inverted_section(value, ctx) }
             }
           }
-          section(path, false, children, _, src, _) {
-            alt find(stack, path) {
+          section(path, false, children, otag, _, src, _, ctag) {
+            alt find(ctx.stack, path) {
               none { "" }
               some(value) {
-                render_section(value, children, src, partials, stack, indent)
+                render_section(value, src, otag, ctag, {
+                    tokens: children,
+                    partials: ctx.partials,
+                    stack: ctx.stack,
+                    indent: ctx.indent,
+                })
               }
             }
           }
           partial(name, ind, _) {
-            alt partials.find(name) {
+            alt ctx.partials.find(name) {
               none { "" }
               some(tokens) {
-                render_helper(tokens, partials, stack, indent + ind)
+                render_helper({
+                    tokens: tokens,
+                    partials: ctx.partials,
+                    stack: ctx.stack,
+                    indent: ctx.indent + ind,
+                })
               }
             }
           }
@@ -656,9 +689,9 @@ fn indent_lines(s: str, indent: str) -> str {
     }
 }
 
-fn render_etag(value: data) -> str {
+fn render_etag(value: data, ctx: render_context) -> str {
     let escaped = "";
-    str::chars_iter(render_utag(value)) { |c|
+    str::chars_iter(render_utag(value, ctx)) { |c|
         alt c {
           '<' { escaped += "&lt;" }
           '>' { escaped += "&gt;" }
@@ -671,49 +704,71 @@ fn render_etag(value: data) -> str {
     escaped
 }
 
-fn render_utag(value: data) -> str {
+fn render_utag(value: data, ctx: render_context) -> str {
     alt value {
       str(s) { s }
+      fun(f) {
+          // etags and utags use the default delimiter.
+          render_fun(ctx, "", "{{", "}}", f)
+      }
       _ { fail }
     }
 }
 
-fn render_inverted_section(value: data,
-                           children: [token],
-                           partials: partial_map,
-                           stack: [data],
-                           indent: str) -> str {
+fn render_inverted_section(value: data, ctx: render_context) -> str {
     alt value {
-      bool(false) {
-        render_helper(children, partials, stack, indent)
-      }
-      vec(xs) if vec::is_empty(xs) {
-        render_helper(children, partials, stack, indent)
-      }
+      bool(false) { render_helper(ctx) }
+      vec(xs) if vec::is_empty(xs) { render_helper(ctx) }
       _ { "" }
     }
 }
 
 fn render_section(value: data,
-                  children: [token],
                   src: str,
-                  partials: partial_map,
-                  stack: [data],
-                  indent: str) -> str {
+                  otag: str,
+                  ctag: str,
+                  ctx: render_context) -> str {
     alt value {
-      bool(true) { render_helper(children, partials, stack, indent) }
+      bool(true) { render_helper(ctx) }
       bool(false) { "" }
       vec(vs) {
         str::concat(vec::map(vs) { |v|
-            render_helper(children, partials, stack + [v], indent)
+            render_helper({
+                tokens: ctx.tokens,
+                partials: ctx.partials,
+                stack: ctx.stack + [v],
+                indent: ctx.indent,
+            })
         })
       }
       dict(_) {
-        render_helper(children, partials, stack + [value], indent)
+        render_helper({
+            tokens: ctx.tokens,
+            partials: ctx.partials,
+            stack: ctx.stack + [value],
+            indent: ctx.indent,
+        })
       }
-      fun(f) { f(src) }
+      fun(f) { render_fun(ctx, src, otag, ctag, f) }
       _ { fail }
     }
+}
+
+fn render_fun(ctx: render_context,
+              src: str,
+              otag: str,
+              ctag: str,
+              f: fn(str) -> str) -> str {
+    let tokens = io::with_str_reader(f(src)) { |rdr|
+        compile_helper(rdr, ctx.partials, otag, ctag)
+    };
+
+    render_helper({
+        tokens: tokens,
+        partials: ctx.partials,
+        stack: ctx.stack,
+        indent: ctx.indent,
+    })
 }
 
 #[cfg(test)]
@@ -782,9 +837,11 @@ mod tests {
                 ["name"],
                 false,
                 [],
+                "{{",
                 "{{# name}}",
                 "",
-                "{{/name}}"
+                "{{/name}}",
+                "}}"
             )
         ];
 
@@ -794,9 +851,11 @@ mod tests {
                 ["name"],
                 true,
                 [],
+                "{{",
                 "{{^name}}",
                 "",
-                "{{/name}}"
+                "{{/name}}",
+                "}}"
             ),
             text(" after")
         ];
@@ -807,9 +866,11 @@ mod tests {
                 ["name"],
                 false,
                 [],
+                "{{",
                 "{{#name}}",
                 "",
-                "{{/name}}"
+                "{{/name}}",
+                "}}"
             )
         ];
 
@@ -818,9 +879,11 @@ mod tests {
                 ["name"],
                 false,
                 [],
+                "{{",
                 "{{#name}}",
                 "",
-                "{{/name}}"
+                "{{/name}}",
+                "}}"
             ),
             text(" after")
         ];
@@ -837,15 +900,19 @@ mod tests {
                         ["b"],
                         true,
                         [text(" 2 ")],
+                        "{{",
                         "{{^b}}",
                         " 2 ",
-                        "{{/b}}"
+                        "{{/b}}",
+                        "}}"
                     ),
                     text(" ")
                 ],
+                "{{",
                 "{{#a}}",
                 " 1 {{^b}} 2 {{/b}} ",
-                "{{/a}}"
+                "{{/a}}",
+                "}}"
             ),
             text(" after")
         ];
@@ -1051,17 +1118,7 @@ mod tests {
         files
     }
 
-    fn run_test(test: json::json) {
-        let test = alt test {
-          json::dict(m) { m }
-          _ { fail }
-        };
-
-        let ctx = alt test.get("data") {
-          json::dict(m) { convert_json_map(m) }
-          _ { fail }
-        };
-
+    fn run_test(test: map<str, json::json>, ctx: context) {
         let template = alt test.get("template") {
           json::string(s) { s }
           _ { fail }
@@ -1077,6 +1134,10 @@ mod tests {
           none { [] }
         };
 
+        let compiled = compile_str(template);
+        let result = render(compiled, ctx);
+
+        if result != expected {
             fn to_list(x: json::json) -> json::json {
                 alt x {
                   json::dict(d) {
@@ -1093,10 +1154,6 @@ mod tests {
                 }
             }
 
-        let compiled = compile_str(template);
-        let result = render(compiled, ctx);
-
-        if result != expected {
             io::println(#fmt("desc:     %?", test.get("desc")));
             io::println(#fmt("context:  %?", to_list(test.get("data"))));
             io::println(#fmt("partials: %?", partials));
@@ -1117,14 +1174,104 @@ mod tests {
         vec::iter(partials) { |file| fs::remove_file(file); }
     }
 
+    fn run_tests(spec: str) {
+        vec::iter(parse_spec_tests(spec)) { |json|
+            let test =  alt json {
+              json::dict(m) { m }
+              _ { fail }
+            };
+
+            let ctx = alt test.get("data") {
+              json::dict(m) { convert_json_map(m) }
+              _ { fail }
+            };
+
+            run_test(test, ctx);
+        }
+    }
+
     #[test]
-    fn test_specs() {
-        vec::iter(parse_spec_tests("spec/specs/comments.json"), run_test);
-        vec::iter(parse_spec_tests("spec/specs/delimiters.json"), run_test);
-        vec::iter(parse_spec_tests("spec/specs/interpolation.json"), run_test);
-        vec::iter(parse_spec_tests("spec/specs/inverted.json"), run_test);
-        vec::iter(parse_spec_tests("spec/specs/partials.json"), run_test);
-        vec::iter(parse_spec_tests("spec/specs/sections.json"), run_test);
-        //vec::iter(parse_spec_tests("spec/specs/~lambdas.json"), run_test);
+    fn test_spec_comments() {
+        run_tests("spec/specs/comments.json");
+    }
+
+    #[test]
+    fn test_spec_delimiters() {
+        run_tests("spec/specs/delimiters.json");
+    }
+
+    #[test]
+    fn test_spec_interpolation() {
+        run_tests("spec/specs/interpolation.json");
+    }
+
+    #[test]
+    fn test_spec_inverted() {
+        run_tests("spec/specs/inverted.json");
+    }
+
+    #[test]
+    fn test_spec_partials() {
+        run_tests("spec/specs/partials.json");
+    }
+
+    #[test]
+    fn test_spec_sections() {
+        run_tests("spec/specs/sections.json");
+    }
+
+    #[test]
+    fn test_spec_lambdas() {
+        vec::iter(parse_spec_tests("spec/specs/~lambdas.json")) { |json|
+            let test =  alt json {
+              json::dict(m) { m }
+              _ { fail }
+            };
+
+            // Replace the lambda with rust code.
+            let ctx = alt test.get("data") {
+              json::dict(m) { convert_json_map(m) }
+              _ { fail }
+            };
+
+            let lambda = alt test.get("name") {
+              json::string("Interpolation") {
+                  { |_text| "world" }
+              }
+              json::string("Interpolation - Expansion") {
+                  { |_text| "{{planet}}" }
+              }
+              json::string("Interpolation - Alternate Delimiters") {
+                  { |_text| "|planet| => {{planet}}" }
+              }
+              json::string("Interpolation - Multiple Calls") {
+                  let calls = @mut 0;
+                  { |_text| *calls += 1; int::str(*calls) }
+              }
+              json::string("Escaping") {
+                  { |_text| ">" }
+              }
+              json::string("Section") {
+                  { |text| if text == "{{x}}" { "yes" } else { "no" } }
+              }
+              json::string("Section - Expansion") {
+                  { |text| text + "{{planet}}" + text }
+              }
+              json::string("Section - Alternate Delimiters") {
+                  { |text| text + "{{planet}} => |planet|" + text }
+              }
+              json::string("Section - Multiple Calls") {
+                  { |text| "__" + text + "__" }
+              }
+              json::string("Inverted Section") {
+                  { |_text| "" }
+              }
+              value { fail #fmt("%?", value) }
+            };
+
+            ctx.insert("lambda", fun(lambda));
+
+            run_test(test, ctx);
+        }
     }
 }
