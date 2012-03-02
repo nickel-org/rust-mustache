@@ -721,68 +721,65 @@ mod tests {
     import std::fs;
     import std::json;
 
-    /*
     #[test]
     fn test_compile_texts() {
-        assert compile_str("hello world") == [text("hello world")];
-        assert compile_str("hello {world") == [text("hello {world")];
-        assert compile_str("hello world}") == [text("hello world}")];
-        assert compile_str("hello world}}") == [text("hello world}}")];
+        assert compile_str("hello world").tokens == [text("hello world")];
+        assert compile_str("hello {world").tokens == [text("hello {world")];
+        assert compile_str("hello world}").tokens == [text("hello world}")];
+        assert compile_str("hello world}}").tokens == [text("hello world}}")];
     }
 
     #[test]
     fn test_compile_etags() {
-        assert compile_str("{{ name }}") == [
-            etag("name", "{{ name }}")
+        assert compile_str("{{ name }}").tokens == [
+            etag(["name"], "{{ name }}")
         ];
 
-        assert compile_str("before {{name}} after") == [
+        assert compile_str("before {{name}} after").tokens == [
             text("before "),
-            etag("name", "{{name}}"),
+            etag(["name"], "{{name}}"),
             text(" after")
         ];
 
-        assert compile_str("before {{name}}") == [
+        assert compile_str("before {{name}}").tokens == [
             text("before "),
-            etag("name", "{{name}}")
+            etag(["name"], "{{name}}")
         ];
 
-        assert compile_str("{{name}} after") == [
-            etag("name", "{{name}}"),
+        assert compile_str("{{name}} after").tokens == [
+            etag(["name"], "{{name}}"),
             text(" after")
         ];
     }
 
     #[test]
     fn test_compile_utags() {
-        assert compile_str("{{{name}}}") == [
-            utag("name", "{{{name}}}")
+        assert compile_str("{{{name}}}").tokens == [
+            utag(["name"], "{{{name}}}")
         ];
 
-        assert compile_str("before {{{name}}} after") == [
+        assert compile_str("before {{{name}}} after").tokens == [
             text("before "),
-            utag("name", "{{{name}}}"),
+            utag(["name"], "{{{name}}}"),
             text(" after")
         ];
 
-        assert compile_str("before {{{name}}}") == [
+        assert compile_str("before {{{name}}}").tokens == [
             text("before "),
-            utag("name", "{{{name}}}")
+            utag(["name"], "{{{name}}}")
         ];
 
-        assert compile_str("{{{name}}} after") == [
-            utag("name", "{{{name}}}"),
+        assert compile_str("{{{name}}} after").tokens == [
+            utag(["name"], "{{{name}}}"),
             text(" after")
         ];
     }
-    */
 
     #[test]
     fn test_compile_sections() {
-        /*
-        assert compile_str("{{# name}}{{/name}}") == [
+        assert compile_str("{{# name}}{{/name}}").tokens == [
             section(
-                "name",
+                ["name"],
                 false,
                 [],
                 "{{# name}}",
@@ -791,10 +788,10 @@ mod tests {
             )
         ];
 
-        assert compile_str("before {{^name}}{{/name}} after") == [
+        assert compile_str("before {{^name}}{{/name}} after").tokens == [
             text("before "),
             section(
-                "name",
+                ["name"],
                 true,
                 [],
                 "{{^name}}",
@@ -804,10 +801,10 @@ mod tests {
             text(" after")
         ];
 
-        assert compile_str("before {{#name}}{{/name}}") == [
+        assert compile_str("before {{#name}}{{/name}}").tokens == [
             text("before "),
             section(
-                "name",
+                ["name"],
                 false,
                 [],
                 "{{#name}}",
@@ -816,9 +813,9 @@ mod tests {
             )
         ];
 
-        assert compile_str("{{#name}}{{/name}} after") == [
+        assert compile_str("{{#name}}{{/name}} after").tokens == [
             section(
-                "name",
+                ["name"],
                 false,
                 [],
                 "{{#name}}",
@@ -828,15 +825,16 @@ mod tests {
             text(" after")
         ];
 
-        assert compile_str("before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after") == [
+        assert compile_str(
+                "before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after").tokens == [
             text("before "),
             section(
-                "a",
+                ["a"],
                 false,
                 [
                     text(" 1 "),
                     section(
-                        "b",
+                        ["b"],
                         true,
                         [text(" 2 ")],
                         "{{^b}}",
@@ -851,42 +849,36 @@ mod tests {
             ),
             text(" after")
         ];
-        */
     }
 
-    /*
     #[test]
     fn test_compile_partials() {
-        assert compile_str("{{> test}}") == [
-            etag("foo", "{{foo}}"),
-            text("bar\n")
+        assert compile_str("{{> test}}").tokens == [
+            partial("test", "", "{{> test}}")
         ];
 
-        assert compile_str("before {{>test}} after") == [
+        assert compile_str("before {{>test}} after").tokens == [
             text("before "),
-            etag("foo", "{{foo}}"),
-            text("bar\n"),
+            partial("test", "", "{{>test}}"),
             text(" after")
         ];
 
-        assert compile_str("before {{> test}}") == [
+        assert compile_str("before {{> test}}").tokens == [
             text("before "),
-            etag("foo", "{{foo}}"),
-            text("bar\n")
+            partial("test", "", "{{> test}}")
         ];
 
-        assert compile_str("{{>test}} after") == [
-            etag("foo", "{{foo}}"),
-            text("bar\n"),
+        assert compile_str("{{>test}} after").tokens == [
+            partial("test", "", "{{>test}}"),
             text(" after")
         ];
     }
 
     #[test]
     fn test_compile_delimiters() {
-        assert compile_str("before {{=<% %>=}}<%name%> after") == [
+        assert compile_str("before {{=<% %>=}}<%name%> after").tokens == [
             text("before "),
-            etag("name", "<%name%>"),
+            etag(["name"], "<%name%>"),
             text(" after")
         ];
     }
@@ -930,7 +922,7 @@ mod tests {
         assert render(template, ctx0) == "05";
 
         let ctx1 = new_str_hash();
-        ctx0.insert("a", vec([ctx1]));
+        ctx0.insert("a", vec([dict(ctx1)]));
 
         assert render(template, ctx0) == "01  35";
 
@@ -955,7 +947,7 @@ mod tests {
         assert from_str(template, ctx0) == "01 35";
 
         let ctx1 = new_str_hash();
-        ctx0.insert("a", vec([ctx1]));
+        ctx0.insert("a", vec([dict(ctx1)]));
         assert from_str(template, ctx0) == "05";
 
         ctx1.insert("n", str("a"));
@@ -967,31 +959,30 @@ mod tests {
         let path = "base.mustache";
 
         let ctx0 = new_str_hash();
-        assert from_file(path, ctx0) == "<h2>Names</h2>\n\n";
+        assert from_file(path, ctx0) == "<h2>Names</h2>\n";
 
         ctx0.insert("names", vec([]));
-        assert from_file(path, ctx0) == "<h2>Names</h2>\n\n";
+        assert from_file(path, ctx0) == "<h2>Names</h2>\n";
 
         let ctx1 = new_str_hash();
-        ctx0.insert("names", vec([ctx1]));
+        ctx0.insert("names", vec([dict(ctx1)]));
         assert from_file(path, ctx0) ==
-            "<h2>Names</h2>\n\n" +
-            "  <strong></strong>\n\n\n";
+            "<h2>Names</h2>\n" +
+            "  <strong></strong>\n\n";
 
         ctx1.insert("name", str("a"));
         assert from_file(path, ctx0) ==
-            "<h2>Names</h2>\n\n" +
-            "  <strong>a</strong>\n\n\n";
+            "<h2>Names</h2>\n" +
+            "  <strong>a</strong>\n\n";
 
         let ctx2 = new_str_hash();
         ctx2.insert("name", str("<b>"));
-        ctx0.insert("names", vec([ctx1, ctx2]));
+        ctx0.insert("names", vec([dict(ctx1), dict(ctx2)]));
         assert from_file(path, ctx0) ==
-            "<h2>Names</h2>\n\n" +
-            "  <strong>a</strong>\n\n\n" +
-            "  <strong>&lt;b&gt;</strong>\n\n\n";
+            "<h2>Names</h2>\n" +
+            "  <strong>a</strong>\n\n" +
+            "  <strong>&lt;b&gt;</strong>\n\n";
     }
-    */
 
     fn parse_spec_tests(src: str) -> [json::json] {
         alt io::read_whole_file_str(src) {
