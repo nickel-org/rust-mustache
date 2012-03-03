@@ -5,8 +5,100 @@ import std::io;
 import std::io::{reader_util, writer_util};
 import std::map::{map, new_str_hash};
 
+export template;
 export compile_reader;
+export compile_file;
 export compile_str;
+export render_reader;
+export render_file;
+export render_str;
+export data;
+export str;
+export bool;
+export vec;
+export dict;
+export fun;
+
+/*
+Enum: data
+
+Represents template data.
+*/
+enum data {
+    // Variant: str
+    str(str),
+    // Variant: bool
+    bool(bool),
+    // Variant: vec
+    vec([data]),
+    // Variant: dict
+    dict(context),
+    // Variant: fun
+    fun(fn@(str) -> str),
+}
+
+/*
+Function: compile_reader
+
+Compiles a template from an io::reader.
+*/
+fn compile_reader(rdr: io::reader) -> template {
+    let partials = new_str_hash();
+    let tokens = compile_helper(rdr, partials, "{{", "}}");
+
+    { tokens: tokens, partials: partials }
+}
+
+/*
+Function: compile_file
+
+Compiles a template from a file.
+*/
+fn compile_file(file: str) -> template {
+    alt io::file_reader(file) {
+      ok(rdr) { compile_reader(rdr) }
+      err(e) { fail e; }
+    }
+}
+
+/*
+Function: compile_str
+
+Compiles a template from a string.
+*/
+fn compile_str(src: str) -> template {
+    io::with_str_reader(src, compile_reader)
+}
+
+/*
+Function: render_reader
+
+Renders a template from an io::reader.
+*/
+fn render_reader(rdr: io::reader, context: context) -> str {
+    render(compile_reader(rdr), context)
+}
+
+/*
+Function: render_file
+
+Renders a template from a file.
+*/
+fn render_file(file: str, context: context) -> str {
+    alt io::file_reader(file) {
+      ok(rdr) { render_reader(rdr, context) }
+      err(e) { fail e; }
+    }
+}
+
+/*
+Function: render_str
+
+Renders a template from a string.
+*/
+fn render_str(template: str, context: context) -> str {
+    render(compile_str(template), context)
+}
 
 enum token {
     text(str),
@@ -31,16 +123,6 @@ type template = {
     partials: partial_map,
 };
 
-enum data {
-    str(str),
-    bool(bool),
-    vec([data]),
-    dict(context),
-    fun(fn@(str) -> str),
-}
-
-type context = map<str, data>;
-
 type parser = {
     rdr: io::reader,
     mut ch: char,
@@ -61,6 +143,15 @@ type parser = {
 mod parser {
     enum state { TEXT, OTAG, TAG, CTAG }
 }
+
+type context = map<str, data>;
+
+type render_context = {
+    tokens: [token],
+    partials: partial_map,
+    stack: [data],
+    indent: str,
+};
 
 impl parser for parser {
     fn eof() -> bool { self.ch == -1 as char }
@@ -464,13 +555,6 @@ impl parser for parser {
     }
 }
 
-fn compile_reader(rdr: io::reader) -> template {
-    let partials = new_str_hash();
-    let tokens = compile_helper(rdr, partials, "{{", "}}");
-
-    { tokens: tokens, partials: partials }
-}
-
 fn compile_helper(rdr: io::reader,
                   partials: partial_map,
                   otag: str,
@@ -514,35 +598,6 @@ fn compile_helper(rdr: io::reader,
 
     tokens
 }
-
-fn compile_file(path: str) -> template {
-    alt io::file_reader(path) {
-      ok(rdr) { compile_reader(rdr) }
-      err(e) { fail e; }
-    }
-}
-
-fn compile_str(src: str) -> template {
-    io::with_str_reader(src, compile_reader)
-}
-
-fn from_str(template: str, context: context) -> str {
-    render(compile_str(template), context)
-}
-
-fn from_file(path: str, context: context) -> str {
-    alt io::read_whole_file_str(path) {
-      ok(template) { from_str(template, context) }
-      err(e) { fail }
-    }
-}
-
-type render_context = {
-    tokens: [token],
-    partials: partial_map,
-    stack: [data],
-    indent: str,
-};
 
 fn render(template: template, context: context) -> str {
     render_helper({
@@ -1008,17 +1063,17 @@ mod tests {
         let template = "0{{^a}}1 3{{/a}}5";
 
         let ctx0 = new_str_hash();
-        assert from_str(template, ctx0) == "01 35";
+        assert render_str(template, ctx0) == "01 35";
 
         ctx0.insert("a", vec([]));
-        assert from_str(template, ctx0) == "01 35";
+        assert render_str(template, ctx0) == "01 35";
 
         let ctx1 = new_str_hash();
         ctx0.insert("a", vec([dict(ctx1)]));
-        assert from_str(template, ctx0) == "05";
+        assert render_str(template, ctx0) == "05";
 
         ctx1.insert("n", str("a"));
-        assert from_str(template, ctx0) == "05";
+        assert render_str(template, ctx0) == "05";
     }
 
     #[test]
@@ -1026,26 +1081,26 @@ mod tests {
         let path = "base.mustache";
 
         let ctx0 = new_str_hash();
-        assert from_file(path, ctx0) == "<h2>Names</h2>\n";
+        assert render_file(path, ctx0) == "<h2>Names</h2>\n";
 
         ctx0.insert("names", vec([]));
-        assert from_file(path, ctx0) == "<h2>Names</h2>\n";
+        assert render_file(path, ctx0) == "<h2>Names</h2>\n";
 
         let ctx1 = new_str_hash();
         ctx0.insert("names", vec([dict(ctx1)]));
-        assert from_file(path, ctx0) ==
+        assert render_file(path, ctx0) ==
             "<h2>Names</h2>\n" +
             "  <strong></strong>\n\n";
 
         ctx1.insert("name", str("a"));
-        assert from_file(path, ctx0) ==
+        assert render_file(path, ctx0) ==
             "<h2>Names</h2>\n" +
             "  <strong>a</strong>\n\n";
 
         let ctx2 = new_str_hash();
         ctx2.insert("name", str("<b>"));
         ctx0.insert("names", vec([dict(ctx1), dict(ctx2)]));
-        assert from_file(path, ctx0) ==
+        assert render_file(path, ctx0) ==
             "<h2>Names</h2>\n" +
             "  <strong>a</strong>\n\n" +
             "  <strong>&lt;b&gt;</strong>\n\n";
