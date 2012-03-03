@@ -16,7 +16,7 @@ export data;
 export str;
 export bool;
 export vec;
-export dict;
+export map;
 export fun;
 
 /*
@@ -31,8 +31,8 @@ enum data {
     bool(bool),
     // Variant: vec
     vec([data]),
-    // Variant: dict
-    dict(context),
+    // Variant: map
+    map(context),
     // Variant: fun
     fun(fn@(str) -> str),
 }
@@ -603,7 +603,7 @@ fn render(template: template, context: context) -> str {
     render_helper({
         tokens: template.tokens,
         partials: template.partials,
-        stack: [dict(context)],
+        stack: [map(context)],
         indent: ""
     })
 }
@@ -624,7 +624,7 @@ fn render_helper(ctx: render_context) -> str {
         let i = vec::len(stack);
         while i > 0u {
             alt stack[i - 1u] {
-              dict(ctx) {
+              map(ctx) {
                 alt ctx.find(path[0u]) {
                   some(v) { value = some(v); break; }
                   none {}
@@ -643,7 +643,7 @@ fn render_helper(ctx: render_context) -> str {
 
         while i < len {
             alt value {
-              some(dict(v)) { value = v.find(path[i]); }
+              some(map(v)) { value = v.find(path[i]); }
               _ { break; }
             }
             i += 1u;
@@ -796,7 +796,7 @@ fn render_section(value: data,
             })
         })
       }
-      dict(_) {
+      map(_) {
         render_helper({
             tokens: ctx.tokens,
             partials: ctx.partials,
@@ -1044,7 +1044,7 @@ mod tests {
         assert render(template, ctx0) == "05";
 
         let ctx1 = new_str_hash();
-        ctx0.insert("a", vec([dict(ctx1)]));
+        ctx0.insert("a", vec([map(ctx1)]));
 
         assert render(template, ctx0) == "01  35";
 
@@ -1069,7 +1069,7 @@ mod tests {
         assert render_str(template, ctx0) == "01 35";
 
         let ctx1 = new_str_hash();
-        ctx0.insert("a", vec([dict(ctx1)]));
+        ctx0.insert("a", vec([map(ctx1)]));
         assert render_str(template, ctx0) == "05";
 
         ctx1.insert("n", str("a"));
@@ -1087,7 +1087,7 @@ mod tests {
         assert render_file(path, ctx0) == "<h2>Names</h2>\n";
 
         let ctx1 = new_str_hash();
-        ctx0.insert("names", vec([dict(ctx1)]));
+        ctx0.insert("names", vec([map(ctx1)]));
         assert render_file(path, ctx0) ==
             "<h2>Names</h2>\n" +
             "  <strong></strong>\n\n";
@@ -1099,7 +1099,7 @@ mod tests {
 
         let ctx2 = new_str_hash();
         ctx2.insert("name", str("<b>"));
-        ctx0.insert("names", vec([dict(ctx1), dict(ctx2)]));
+        ctx0.insert("names", vec([map(ctx1), map(ctx2)]));
         assert render_file(path, ctx0) ==
             "<h2>Names</h2>\n" +
             "  <strong>a</strong>\n\n" +
@@ -1144,7 +1144,7 @@ mod tests {
           json::string(s) { str(s) }
           json::boolean(b) { bool(b) }
           json::list(v) { vec(vec::map(v, convert_json)) }
-          json::dict(d) { dict(convert_json_map(d)) }
+          json::dict(d) { map(convert_json_map(d)) }
           _ { fail #fmt("%?", value) }
         }
     }
