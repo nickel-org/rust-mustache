@@ -1,9 +1,8 @@
 use std;
 
 import result::{ok, err};
-import std::io;
-import std::io::{reader_util, writer_util};
-import std::map::{map, new_str_hash};
+import io::{reader_util, writer_util};
+import std::map::{hashmap, str_hash};
 
 export template;
 export compile_reader;
@@ -43,7 +42,7 @@ Function: compile_reader
 Compiles a template from an io::reader.
 */
 fn compile_reader(rdr: io::reader) -> template {
-    let partials = new_str_hash();
+    let partials = str_hash();
     let tokens = compile_helper(rdr, partials, "{{", "}}");
 
     { tokens: tokens, partials: partials }
@@ -116,7 +115,7 @@ enum token_class {
     newline_whitespace(str, uint),
 }
 
-type partial_map = map<str, [token]>;
+type partial_map = hashmap<str, [token]>;
 
 type template = {
     tokens: [token],
@@ -144,7 +143,7 @@ mod parser {
     enum state { TEXT, OTAG, TAG, CTAG }
 }
 
-type context = map<str, data>;
+type context = hashmap<str, data>;
 
 type render_context = {
     tokens: [token],
@@ -182,7 +181,7 @@ impl parser for parser {
     }
 
     fn parse() -> ([token], [str]) {
-        let curly_brace_tag = false;
+        let mut curly_brace_tag = false;
 
         while !self.eof() {
             alt self.state {
@@ -298,7 +297,7 @@ impl parser for parser {
 
             // If the last token ends with a newline (or there is no previous
             // token), then this token is standalone.
-            alt vec::last(self.tokens) {
+            alt vec::last_opt(self.tokens) {
               none | some(incomplete_section(_, _, _, true)) { standalone }
 
               some(text(s)) if s != "" {
@@ -401,7 +400,7 @@ impl parser for parser {
 
             let name = self.check_content(str::slice(content, 1u, content_len));
             let name = str::split_char_nonempty(name, '.');
-            let children = [];
+            let mut children = [];
 
             while true {
                 if vec::len(self.tokens) == 0u {
@@ -415,7 +414,7 @@ impl parser for parser {
                     let children = vec::reversed(children);
 
                     // Collect all the children's sources.
-                    let srcs = [];
+                    let mut srcs = [];
                     vec::iter(children) { |child: token|
                         alt child {
                           text(s)
@@ -531,7 +530,7 @@ impl parser for parser {
     }
 
     fn not_otag() {
-        let i = 0u;
+        let mut i = 0u;
         while i < self.tag_position {
             unsafe { str::push_char(self.content, self.otag_chars[i]) };
             i += 1u;
@@ -539,7 +538,7 @@ impl parser for parser {
     }
 
     fn not_ctag() {
-        let i = 0u;
+        let mut i = 0u;
         while i < self.tag_position {
             unsafe { str::push_char(self.content, self.ctag_chars[i]) };
             i += 1u;
@@ -612,16 +611,16 @@ fn render_helper(ctx: render_context) -> str {
     fn find(stack: [data], path: [str]) -> option<data> {
         // If we have an empty path, we just want the top value in our stack.
         if vec::is_empty(path) {
-            ret alt vec::last(stack) {
+            ret alt vec::last_opt(stack) {
               none { none }
               some(value) { some(value) }
             };
         }
 
         // Otherwise, find the stack that has the first part of our path.
-        let value = none;
+        let mut value = none;
 
-        let i = vec::len(stack);
+        let mut i = vec::len(stack);
         while i > 0u {
             alt stack[i - 1u] {
               map(ctx) {
@@ -636,9 +635,9 @@ fn render_helper(ctx: render_context) -> str {
         }
 
         // Walk the rest of the path to find our final value.
-        let value = value;
+        let mut value = value;
 
-        let i = 1u;
+        let mut i = 1u;
         let len = vec::len(path);
 
         while i < len {
@@ -719,8 +718,8 @@ fn indent_lines(s: str, indent: str) -> str {
     if indent == "" {
         s
     } else {
-        let res = "";
-        let pos = 0u;
+        let mut res = "";
+        let mut pos = 0u;
         let len = str::len(s);
 
         while pos < len {
@@ -745,7 +744,7 @@ fn indent_lines(s: str, indent: str) -> str {
 }
 
 fn render_etag(value: data, ctx: render_context) -> str {
-    let escaped = "";
+    let mut escaped = "";
     str::chars_iter(render_utag(value, ctx)) { |c|
         alt c {
           '<' { escaped += "&lt;" }
@@ -828,7 +827,6 @@ fn render_fun(ctx: render_context,
 
 #[cfg(test)]
 mod tests {
-    import std::fs;
     import std::json;
 
     #[test]
@@ -1007,7 +1005,7 @@ mod tests {
 
     #[test]
     fn test_render_texts() {
-        let ctx = new_str_hash();
+        let ctx = str_hash();
         ctx.insert("name", str("world"));
 
         assert render(compile_str("hello world"), ctx) == "hello world";
@@ -1019,7 +1017,7 @@ mod tests {
 
     #[test]
     fn test_render_etags() {
-        let ctx = new_str_hash();
+        let ctx = str_hash();
         ctx.insert("name", str("world"));
 
         assert render(compile_str("hello {{name}}"), ctx) == "hello world";
@@ -1027,7 +1025,7 @@ mod tests {
 
     #[test]
     fn test_render_utags() {
-        let ctx = new_str_hash();
+        let ctx = str_hash();
         ctx.insert("name", str("world"));
 
         assert render(compile_str("hello {{{name}}}"), ctx) == "hello world";
@@ -1035,7 +1033,7 @@ mod tests {
 
     #[test]
     fn test_render_sections() {
-        let ctx0 = new_str_hash();
+        let ctx0 = str_hash();
         let template = compile_str("0{{#a}}1 {{n}} 3{{/a}}5");
 
         assert render(template, ctx0) == "05";
@@ -1043,7 +1041,7 @@ mod tests {
         ctx0.insert("a", vec([]));
         assert render(template, ctx0) == "05";
 
-        let ctx1 = new_str_hash();
+        let ctx1 = str_hash();
         ctx0.insert("a", vec([map(ctx1)]));
 
         assert render(template, ctx0) == "01  35";
@@ -1062,13 +1060,13 @@ mod tests {
     fn test_render_inverted_sections() {
         let template = "0{{^a}}1 3{{/a}}5";
 
-        let ctx0 = new_str_hash();
+        let ctx0 = str_hash();
         assert render_str(template, ctx0) == "01 35";
 
         ctx0.insert("a", vec([]));
         assert render_str(template, ctx0) == "01 35";
 
-        let ctx1 = new_str_hash();
+        let ctx1 = str_hash();
         ctx0.insert("a", vec([map(ctx1)]));
         assert render_str(template, ctx0) == "05";
 
@@ -1080,13 +1078,13 @@ mod tests {
     fn test_render_partial() {
         let path = "base.mustache";
 
-        let ctx0 = new_str_hash();
+        let ctx0 = str_hash();
         assert render_file(path, ctx0) == "<h2>Names</h2>\n";
 
         ctx0.insert("names", vec([]));
         assert render_file(path, ctx0) == "<h2>Names</h2>\n";
 
-        let ctx1 = new_str_hash();
+        let ctx1 = str_hash();
         ctx0.insert("names", vec([map(ctx1)]));
         assert render_file(path, ctx0) ==
             "<h2>Names</h2>\n" +
@@ -1097,7 +1095,7 @@ mod tests {
             "<h2>Names</h2>\n" +
             "  <strong>a</strong>\n\n";
 
-        let ctx2 = new_str_hash();
+        let ctx2 = str_hash();
         ctx2.insert("name", str("<b>"));
         ctx0.insert("names", vec([map(ctx1), map(ctx2)]));
         assert render_file(path, ctx0) ==
@@ -1128,8 +1126,8 @@ mod tests {
         }
     }
 
-    fn convert_json_map(map: map<str, json::json>) -> context {
-        let ctx = new_str_hash();
+    fn convert_json_map(map: hashmap<str, json::json>) -> context {
+        let ctx = str_hash();
         map.items { |key, value| ctx.insert(key, convert_json(value)); };
         ctx
     }
@@ -1150,7 +1148,7 @@ mod tests {
     }
 
     fn write_partials(value: json::json) -> [str] {
-        let files = [];
+        let mut files = [];
 
         alt value {
           json::dict(d) {
@@ -1173,7 +1171,7 @@ mod tests {
         files
     }
 
-    fn run_test(test: map<str, json::json>, ctx: context) {
+    fn run_test(test: hashmap<str, json::json>, ctx: context) {
         let template = alt test.get("template") {
           json::string(s) { s }
           _ { fail }
@@ -1196,7 +1194,7 @@ mod tests {
             fn to_list(x: json::json) -> json::json {
                 alt x {
                   json::dict(d) {
-                    let xs = [];
+                    let mut xs = [];
                     d.items { |k,v|
                         let k = json::string(k);
                         let v = to_list(v);
@@ -1226,7 +1224,7 @@ mod tests {
         }
         assert result == expected;
 
-        vec::iter(partials) { |file| fs::remove_file(file); }
+        vec::iter(partials) { |file| os::remove_file(file); }
     }
 
     fn run_tests(spec: str) {
@@ -1310,10 +1308,10 @@ mod tests {
                   { |text| if text == "{{x}}" { "yes" } else { "no" } }
               }
               json::string("Section - Expansion") {
-                  { |text| text + "{{planet}}" + text }
+                  { |text: str| text + "{{planet}}" + text }
               }
               json::string("Section - Alternate Delimiters") {
-                  { |text| text + "{{planet}} => |planet|" + text }
+                  { |text: str| text + "{{planet}} => |planet|" + text }
               }
               json::string("Section - Multiple Calls") {
                   { |text| "__" + text + "__" }
