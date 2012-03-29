@@ -8,6 +8,7 @@ export template;
 export compile_reader;
 export compile_file;
 export compile_str;
+export render;
 export render_reader;
 export render_file;
 export render_str;
