@@ -19,29 +19,16 @@ export vec;
 export map;
 export fun;
 
-/*
-Enum: data
-
-Represents template data.
-*/
+#[doc = "Represents template data."]
 enum data {
-    // Variant: str
     str(str),
-    // Variant: bool
     bool(bool),
-    // Variant: vec
     vec([data]),
-    // Variant: map
     map(context),
-    // Variant: fun
     fun(fn@(str) -> str),
 }
 
-/*
-Function: compile_reader
-
-Compiles a template from an io::reader.
-*/
+#[doc = "Compiles a template from an io::reader."]
 fn compile_reader(rdr: io::reader) -> template {
     let partials = str_hash();
     let tokens = compile_helper(rdr, partials, "{{", "}}");
@@ -49,11 +36,7 @@ fn compile_reader(rdr: io::reader) -> template {
     { tokens: tokens, partials: partials }
 }
 
-/*
-Function: compile_file
-
-Compiles a template from a file.
-*/
+#[doc = "Compiles a template from a file."]
 fn compile_file(file: str) -> template {
     alt io::file_reader(file) {
       ok(rdr) { compile_reader(rdr) }
@@ -61,29 +44,17 @@ fn compile_file(file: str) -> template {
     }
 }
 
-/*
-Function: compile_str
-
-Compiles a template from a string.
-*/
+#[doc = "Compiles a template from a string."]
 fn compile_str(src: str) -> template {
     io::with_str_reader(src, compile_reader)
 }
 
-/*
-Function: render_reader
-
-Renders a template from an io::reader.
-*/
+#[doc = "Renders a template from an io::reader."]
 fn render_reader(rdr: io::reader, context: context) -> str {
     render(compile_reader(rdr), context)
 }
 
-/*
-Function: render_file
-
-Renders a template from a file.
-*/
+#[doc = "Renders a template from a file."]
 fn render_file(file: str, context: context) -> str {
     alt io::file_reader(file) {
       ok(rdr) { render_reader(rdr, context) }
@@ -91,11 +62,7 @@ fn render_file(file: str, context: context) -> str {
     }
 }
 
-/*
-Function: render_str
-
-Renders a template from a string.
-*/
+#[doc = "Renders a template from a string."]
 fn render_str(template: str, context: context) -> str {
     render(compile_str(template), context)
 }
