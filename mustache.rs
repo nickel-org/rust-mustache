@@ -4,67 +4,143 @@ import result::{ok, err};
 import io::{reader_util, writer_util};
 import std::map::{hashmap, str_hash};
 
+export context;
+export default_context;
+export data;
 export template;
 export compile_reader;
 export compile_file;
 export compile_str;
-export render;
 export render_reader;
 export render_file;
 export render_str;
-export data;
-export str;
-export bool;
-export vec;
-export map;
-export fun;
+
+#[doc = "
+Represents the shared metadata needed to compile and render a mustache
+template.
+"]
+type context = { template_path: str, template_extension: str };
+
+#[doc = "
+Configures a mustache context with the partial template path and extension.
+"]
+fn context(template_path: str, template_extension: str) -> context {
+    { template_path: template_path, template_extension: template_extension }
+}
+
+#[doc = "
+Configures a mustache context looking for partial files in the current
+directory.
+"]
+fn default_context() -> context { context(".", ".mustache") }
+
+impl context for context {
+    #[doc = "Compiles a template from an io::reader."]
+    fn compile_reader(rdr: io::reader) -> template {
+        let partials = str_hash();
+        let tokens = compile_helper({
+            rdr: rdr,
+            partials: partials,
+            otag: "{{",
+            ctag: "}}",
+            template_path: self.template_path,
+            template_extension: self.template_extension
+        });
+
+        {
+            ctx: self,
+            tokens: tokens,
+            partials: partials
+        }
+    }
+
+    #[doc = "Compiles a template from a file."]
+    fn compile_file(file: str) -> template {
+        let path = path::connect(self.template_path,
+                                 file + self.template_extension);
+
+        alt io::file_reader(path) {
+          ok(rdr) { self.compile_reader(rdr) }
+          err(e) { fail e; }
+        }
+    }
+
+    #[doc = "Compiles a template from a string."]
+    fn compile_str(src: str) -> template {
+        io::with_str_reader(src, self.compile_reader)
+    }
+
+    #[doc = "Renders a template from an io::reader."]
+    fn render_reader(rdr: io::reader, data: hashmap<str, data>) -> str {
+        self.compile_reader(rdr).render(data)
+    }
+
+    #[doc = "Renders a template from a file."]
+    fn render_file(file: str, data: hashmap<str, data>) -> str {
+        self.compile_file(file).render(data)
+    }
+
+    #[doc = "Renders a template from a string."]
+    fn render_str(template: str, data: hashmap<str, data>) -> str {
+        self.compile_str(template).render(data)
+    }
+}
+
+#[doc = "Compiles a template from an io::reader."]
+fn compile_reader(rdr: io::reader) -> template {
+    default_context().compile_reader(rdr)
+}
+
+#[doc = "Compiles a template from a file."]
+fn compile_file(file: str) -> template {
+    default_context().compile_file(file)
+}
+
+#[doc = "Compiles a template from a string."]
+fn compile_str(template: str) -> template {
+    default_context().compile_str(template)
+}
+
+#[doc = "Renders a template from an io::reader."]
+fn render_reader(rdr: io::reader, data: hashmap<str, data>) -> str {
+    default_context().compile_reader(rdr).render(data)
+}
+
+#[doc = "Renders a template from a file."]
+fn render_file(file: str, data: hashmap<str, data>) -> str {
+    default_context().compile_file(file).render(data)
+}
+
+#[doc = "Renders a template from a string."]
+fn render_str(template: str, data: hashmap<str, data>) -> str {
+    default_context().compile_str(template).render(data)
+}
 
 #[doc = "Represents template data."]
 enum data {
     str(str),
     bool(bool),
     vec([data]),
-    map(context),
+    map(hashmap<str, data>),
     fun(fn@(str) -> str),
 }
 
-#[doc = "Compiles a template from an io::reader."]
-fn compile_reader(rdr: io::reader) -> template {
-    let partials = str_hash();
-    let tokens = compile_helper(rdr, partials, "{{", "}}");
+type template = {
+    ctx: context,
+    tokens: [token],
+    partials: hashmap<str, [token]>
+};
 
-    { tokens: tokens, partials: partials }
-}
-
-#[doc = "Compiles a template from a file."]
-fn compile_file(file: str) -> template {
-    alt io::file_reader(file) {
-      ok(rdr) { compile_reader(rdr) }
-      err(e) { fail e; }
+impl template for template {
+    fn render(data: hashmap<str, data>) -> str {
+        render_helper({
+            ctx: self.ctx,
+            tokens: self.tokens,
+            partials: self.partials,
+            stack: [map(data)],
+            indent: ""
+        })
     }
-}
-
-#[doc = "Compiles a template from a string."]
-fn compile_str(src: str) -> template {
-    io::with_str_reader(src, compile_reader)
-}
-
-#[doc = "Renders a template from an io::reader."]
-fn render_reader(rdr: io::reader, context: context) -> str {
-    render(compile_reader(rdr), context)
-}
-
-#[doc = "Renders a template from a file."]
-fn render_file(file: str, context: context) -> str {
-    alt io::file_reader(file) {
-      ok(rdr) { render_reader(rdr, context) }
-      err(e) { fail e; }
-    }
-}
-
-#[doc = "Renders a template from a string."]
-fn render_str(template: str, context: context) -> str {
-    render(compile_str(template), context)
 }
 
 enum token {
@@ -82,13 +158,6 @@ enum token_class {
     whitespace(str, uint),
     newline_whitespace(str, uint),
 }
-
-type partial_map = hashmap<str, [token]>;
-
-type template = {
-    tokens: [token],
-    partials: partial_map,
-};
 
 type parser = {
     rdr: io::reader,
@@ -110,15 +179,6 @@ type parser = {
 mod parser {
     enum state { TEXT, OTAG, TAG, CTAG }
 }
-
-type context = hashmap<str, data>;
-
-type render_context = {
-    tokens: [token],
-    partials: partial_map,
-    stack: [data],
-    indent: str,
-};
 
 impl parser for parser {
     fn eof() -> bool { self.ch == -1 as char }
@@ -522,22 +582,28 @@ impl parser for parser {
     }
 }
 
-fn compile_helper(rdr: io::reader,
-                  partials: partial_map,
-                  otag: str,
-                  ctag: str) -> [token] {
+type compile_context = {
+    rdr: io::reader,
+    partials: hashmap<str, [token]>,
+    otag: str,
+    ctag: str,
+    template_path: str,
+    template_extension: str
+};
+
+fn compile_helper(ctx: compile_context) -> [token] {
     let parser = {
-        rdr: rdr,
-        mut ch: rdr.read_char(),
+        rdr: ctx.rdr,
+        mut ch: ctx.rdr.read_char(),
         mut lookahead: none,
         mut line: 1u,
         mut col: 1u,
         mut content: "",
         mut state: parser::TEXT,
-        mut otag: otag,
-        mut ctag: ctag,
-        mut otag_chars: str::chars(otag),
-        mut ctag_chars: str::chars(ctag),
+        mut otag: ctx.otag,
+        mut ctag: ctx.ctag,
+        mut otag_chars: str::chars(ctx.otag),
+        mut ctag_chars: str::chars(ctx.ctag),
         mut tag_position: 0u,
         mut tokens: [],
         mut partials: [],
@@ -547,17 +613,24 @@ fn compile_helper(rdr: io::reader,
 
     // Compile the partials if we haven't done so already.
     vec::iter(partial_names) { |name|
-        let path = name + ".mustache";
+        let path = path::connect(ctx.template_path,
+                                 name + ctx.template_extension);
 
-        if !partials.contains_key(name) {
+        if !ctx.partials.contains_key(name) {
             // Insert a placeholder so we don't recurse off to infinity.
-            partials.insert(name, []);
+            ctx.partials.insert(name, []);
 
             alt io::file_reader(path) {
               err(e) {}
               ok(rdr) {
-                partials.insert(name,
-                                compile_helper(rdr, partials, "{{", "}}"));
+                ctx.partials.insert(name, compile_helper({
+                    rdr: rdr,
+                    partials: ctx.partials,
+                    otag: "{{",
+                    ctag: "}}",
+                    template_path: ctx.template_path,
+                    template_extension: ctx.template_extension
+                }));
               }
             }
         }
@@ -566,14 +639,13 @@ fn compile_helper(rdr: io::reader,
     tokens
 }
 
-fn render(template: template, context: context) -> str {
-    render_helper({
-        tokens: template.tokens,
-        partials: template.partials,
-        stack: [map(context)],
-        indent: ""
-    })
-}
+type render_context = {
+    ctx: context,
+    tokens: [token],
+    partials: hashmap<str, [token]>,
+    stack: [data],
+    indent: str,
+};
 
 fn render_helper(ctx: render_context) -> str {
     fn find(stack: [data], path: [str]) -> option<data> {
@@ -635,12 +707,7 @@ fn render_helper(ctx: render_context) -> str {
             }
           }
           section(path, true, children, _, _, _, _, _) {
-            let ctx = {
-                tokens: children,
-                partials: ctx.partials,
-                stack: ctx.stack,
-                indent: ctx.indent,
-            };
+            let ctx = { tokens: children with ctx };
 
             alt find(ctx.stack, path) {
               none { render_helper(ctx) }
@@ -652,10 +719,8 @@ fn render_helper(ctx: render_context) -> str {
               none { "" }
               some(value) {
                 render_section(value, src, otag, ctag, {
-                    tokens: children,
-                    partials: ctx.partials,
-                    stack: ctx.stack,
-                    indent: ctx.indent,
+                    tokens: children
+                    with ctx
                 })
               }
             }
@@ -666,9 +731,8 @@ fn render_helper(ctx: render_context) -> str {
               some(tokens) {
                 render_helper({
                     tokens: tokens,
-                    partials: ctx.partials,
-                    stack: ctx.stack,
-                    indent: ctx.indent + ind,
+                    indent: ctx.indent + ind
+                    with ctx
                 })
               }
             }
@@ -755,22 +819,10 @@ fn render_section(value: data,
       bool(false) { "" }
       vec(vs) {
         str::concat(vec::map(vs) { |v|
-            render_helper({
-                tokens: ctx.tokens,
-                partials: ctx.partials,
-                stack: ctx.stack + [v],
-                indent: ctx.indent,
-            })
+            render_helper({ stack: ctx.stack + [v] with ctx })
         })
       }
-      map(_) {
-        render_helper({
-            tokens: ctx.tokens,
-            partials: ctx.partials,
-            stack: ctx.stack + [value],
-            indent: ctx.indent,
-        })
-      }
+      map(_) { render_helper({ stack: ctx.stack + [value] with ctx }) }
       fun(f) { render_fun(ctx, src, otag, ctag, f) }
       _ { fail }
     }
@@ -782,15 +834,17 @@ fn render_fun(ctx: render_context,
               ctag: str,
               f: fn(str) -> str) -> str {
     let tokens = io::with_str_reader(f(src)) { |rdr|
-        compile_helper(rdr, ctx.partials, otag, ctag)
+        compile_helper({
+            rdr: rdr,
+            partials: ctx.partials,
+            otag: otag,
+            ctag: ctag,
+            template_path: ctx.ctx.template_path,
+            template_extension: ctx.ctx.template_extension
+        })
     };
 
-    render_helper({
-        tokens: tokens,
-        partials: ctx.partials,
-        stack: ctx.stack,
-        indent: ctx.indent,
-    })
+    render_helper({ tokens: tokens with ctx })
 }
 
 #[cfg(test)]
@@ -976,11 +1030,11 @@ mod tests {
         let ctx = str_hash();
         ctx.insert("name", str("world"));
 
-        assert render(compile_str("hello world"), ctx) == "hello world";
-        assert render(compile_str("hello {world"), ctx) == "hello {world";
-        assert render(compile_str("hello world}"), ctx) == "hello world}";
-        assert render(compile_str("hello {world}"), ctx) == "hello {world}";
-        assert render(compile_str("hello world}}"), ctx) == "hello world}}";
+        assert render_str("hello world", ctx) == "hello world";
+        assert render_str("hello {world", ctx) == "hello {world";
+        assert render_str("hello world}", ctx) == "hello world}";
+        assert render_str("hello {world}", ctx) == "hello {world}";
+        assert render_str("hello world}}", ctx) == "hello world}}";
     }
 
     #[test]
@@ -988,7 +1042,7 @@ mod tests {
         let ctx = str_hash();
         ctx.insert("name", str("world"));
 
-        assert render(compile_str("hello {{name}}"), ctx) == "hello world";
+        assert render_str("hello {{name}}", ctx) == "hello world";
     }
 
     #[test]
@@ -996,7 +1050,7 @@ mod tests {
         let ctx = str_hash();
         ctx.insert("name", str("world"));
 
-        assert render(compile_str("hello {{{name}}}"), ctx) == "hello world";
+        assert render_str("hello {{{name}}}", ctx) == "hello world";
     }
 
     #[test]
@@ -1004,24 +1058,24 @@ mod tests {
         let ctx0 = str_hash();
         let template = compile_str("0{{#a}}1 {{n}} 3{{/a}}5");
 
-        assert render(template, ctx0) == "05";
+        assert template.render(ctx0) == "05";
 
         ctx0.insert("a", vec([]));
-        assert render(template, ctx0) == "05";
+        assert template.render(ctx0) == "05";
 
         let ctx1 = str_hash();
         ctx0.insert("a", vec([map(ctx1)]));
 
-        assert render(template, ctx0) == "01  35";
+        assert template.render(ctx0) == "01  35";
 
         ctx1.insert("n", str("a"));
-        assert render(template, ctx0) == "01 a 35";
+        assert template.render(ctx0) == "01 a 35";
 
         ctx0.insert("a", fun({|text|
             assert text == "1 {{n}} 3";
             "foo"
         }));
-        assert render(template, ctx0) == "0foo5";
+        assert template.render(ctx0) == "0foo5";
     }
 
     #[test]
@@ -1094,10 +1148,10 @@ mod tests {
         }
     }
 
-    fn convert_json_map(map: hashmap<str, json::json>) -> context {
-        let ctx = str_hash();
-        map.items { |key, value| ctx.insert(key, convert_json(value)); };
-        ctx
+    fn convert_json_map(map: hashmap<str, json::json>) -> hashmap<str, data> {
+        let d = str_hash();
+        map.items { |key, value| d.insert(key, convert_json(value)); };
+        d
     }
 
     fn convert_json(value: json::json) -> data {
@@ -1139,7 +1193,7 @@ mod tests {
         files
     }
 
-    fn run_test(test: hashmap<str, json::json>, ctx: context) {
+    fn run_test(test: hashmap<str, json::json>, data: hashmap<str, data>) {
         let template = alt test.get("template") {
           json::string(s) { s }
           _ { fail }
@@ -1155,8 +1209,7 @@ mod tests {
           none { [] }
         };
 
-        let compiled = compile_str(template);
-        let result = render(compiled, ctx);
+        let result = render_str(template, data);
 
         if result != expected {
             fn to_list(x: json::json) -> json::json {
@@ -1187,8 +1240,6 @@ mod tests {
             io::println(#fmt("template:\n%s", template));
             io::println(#fmt("expected:\n%s", expected));
             io::println(#fmt("result:  \n%s", result));
-            io::println("");
-            io::println(#fmt("compiled:\n%?", compiled));
         }
         assert result == expected;
 
@@ -1202,12 +1253,12 @@ mod tests {
               _ { fail }
             };
 
-            let ctx = alt test.get("data") {
+            let data = alt test.get("data") {
               json::dict(m) { convert_json_map(m) }
               _ { fail }
             };
 
-            run_test(test, ctx);
+            run_test(test, data);
         }
     }
 
