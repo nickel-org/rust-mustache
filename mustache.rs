@@ -7,6 +7,7 @@ import std::map::{hashmap, str_hash};
 export context;
 export default_context;
 export data;
+export to_mustache;
 export template;
 export compile_reader;
 export compile_file;
@@ -123,6 +124,38 @@ enum data {
     vec([data]),
     map(hashmap<str, data>),
     fun(fn@(str) -> str),
+}
+
+iface to_mustache {
+    fn to_mustache() -> data;
+}
+
+impl of to_mustache for data {
+    fn to_mustache() -> data { self }
+}
+
+impl of to_mustache for str {
+    fn to_mustache() -> data { str(self) }
+}
+
+impl of to_mustache for bool {
+    fn to_mustache() -> data { bool(self) }
+}
+
+impl <T:to_mustache> of to_mustache for [T] {
+    fn to_mustache() -> data { vec(self.map { |x| x.to_mustache() }) }
+}
+
+impl <T:to_mustache copy> of to_mustache for hashmap<str, T> {
+    fn to_mustache() -> data {
+        let m = str_hash();
+        self.items { |k, v| m.insert(k, v.to_mustache()); }
+        map(m)
+    }
+}
+
+impl of to_mustache for fn@(str) -> str {
+    fn to_mustache() -> data { fun(self) }
 }
 
 type template = {
@@ -1063,18 +1096,19 @@ mod tests {
         ctx0.insert("a", vec([]));
         assert template.render(ctx0) == "05";
 
-        let ctx1 = str_hash();
-        ctx0.insert("a", vec([map(ctx1)]));
+        let ctx1 : hashmap<str, data> = str_hash();
+        ctx0.insert("a", [ctx1].to_mustache());
 
         assert template.render(ctx0) == "01  35";
 
-        ctx1.insert("n", str("a"));
+        let ctx1 = str_hash();
+        ctx1.insert("n", "a".to_mustache());
+        ctx0.insert("a", [ctx1].to_mustache());
         assert template.render(ctx0) == "01 a 35";
 
-        ctx0.insert("a", fun({|text|
-            assert text == "1 {{n}} 3";
+        ctx0.insert("a", {|text| assert text == "1 {{n}} 3";
             "foo"
-        }));
+        }.to_mustache());
         assert template.render(ctx0) == "0foo5";
     }
 
@@ -1089,10 +1123,10 @@ mod tests {
         assert render_str(template, ctx0) == "01 35";
 
         let ctx1 = str_hash();
-        ctx0.insert("a", vec([map(ctx1)]));
+        ctx0.insert("a", [ctx1].to_mustache());
         assert render_str(template, ctx0) == "05";
 
-        ctx1.insert("n", str("a"));
+        ctx1.insert("n", "a".to_mustache());
         assert render_str(template, ctx0) == "05";
     }
 
