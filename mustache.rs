@@ -430,7 +430,7 @@ impl parser for parser {
             let name = str::split_char_nonempty(name, '.');
             let mut children = [];
 
-            while true {
+            loop {
                 if vec::len(self.tokens) == 0u {
                     fail "closing unopened section";
                 }
@@ -1098,7 +1098,7 @@ mod tests {
 
     #[test]
     fn test_render_partial() {
-        let path = "base.mustache";
+        let path = "base";
 
         let ctx0 = str_hash();
         assert render_file(path, ctx0) == "<h2>Names</h2>\n";
