@@ -149,7 +149,7 @@ impl <T:to_mustache> of to_mustache for [T] {
 impl <T:to_mustache copy> of to_mustache for hashmap<str, T> {
     fn to_mustache() -> data {
         let m = str_hash();
-        self.items { |k, v| m.insert(k, v.to_mustache()); }
+        for self.each { |k, v| m.insert(k, v.to_mustache()); }
         map(m)
     }
 }
@@ -1184,7 +1184,7 @@ mod tests {
 
     fn convert_json_map(map: hashmap<str, json::json>) -> hashmap<str, data> {
         let d = str_hash();
-        map.items { |key, value| d.insert(key, convert_json(value)); };
+        for map.each { |key, value| d.insert(key, convert_json(value)); }
         d
     }
 
@@ -1208,7 +1208,7 @@ mod tests {
 
         alt value {
           json::dict(d) {
-            d.items { |key, value|
+            for d.each { |key, value|
                 alt value {
                   json::string(s) {
                     let file = key + ".mustache";
@@ -1250,7 +1250,7 @@ mod tests {
                 alt x {
                   json::dict(d) {
                     let mut xs = [];
-                    d.items { |k,v|
+                    for d.each { |k,v|
                         let k = json::string(k);
                         let v = to_list(v);
                         vec::push(xs, json::list([k, v]));
