@@ -142,6 +142,14 @@ impl of to_mustache for bool {
     fn to_mustache() -> data { bool(self) }
 }
 
+impl of to_mustache for uint {
+    fn to_mustache() -> data { str(uint::str(self)) }
+}
+
+impl of to_mustache for int {
+    fn to_mustache() -> data { str(int::str(self)) }
+}
+
 impl <T:to_mustache> of to_mustache for [T] {
     fn to_mustache() -> data { vec(self.map { |x| x.to_mustache() }) }
 }
@@ -156,6 +164,15 @@ impl <T:to_mustache copy> of to_mustache for hashmap<str, T> {
 
 impl of to_mustache for fn@(str) -> str {
     fn to_mustache() -> data { fun(self) }
+}
+
+impl <T: to_mustache> of to_mustache for option<T> {
+    fn to_mustache() -> data {
+        alt self {
+          none { bool(false) }
+          some(v) { v.to_mustache() }
+        }
+    }
 }
 
 type template = {
