@@ -342,7 +342,7 @@ impl parser for parser {
         }
 
         // Check that we don't have any incomplete sections.
-        vec::iter(copy self.tokens) { |token|
+        vec::iter(self.tokens) { |token|
             alt token {
               incomplete_section(name, _, _, _) {
                   fail #fmt("Unclosed mustache section %s",
