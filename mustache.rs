@@ -128,7 +128,7 @@ fn render_str(template: str, data: hashmap<str, data>) -> str {
 enum data {
     str(@str),
     bool(bool),
-    vec(@[data]),
+    vec(@~[data]),
     map(hashmap<str, data>),
     fun(fn@(@str) -> str),
 }
@@ -161,14 +161,14 @@ impl of to_mustache for int {
     fn to_mustache() -> data { str(@int::str(self)) }
 }
 
-impl <T: to_mustache> of to_mustache for [T] {
-    fn to_mustache() -> data { vec(@self.map { |x| x.to_mustache() }) }
+impl <T: to_mustache> of to_mustache for ~[T] {
+    fn to_mustache() -> data { vec(@self.map(|x| x.to_mustache())) }
 }
 
 impl <T: to_mustache copy> of to_mustache for hashmap<str, T> {
     fn to_mustache() -> data {
         let m = str_hash();
-        for self.each { |k, v| m.insert(copy k, v.to_mustache()); }
+        for self.each |k, v| { m.insert(copy k, v.to_mustache()); }
         map(m)
     }
 }
@@ -188,8 +188,8 @@ impl <T: to_mustache> of to_mustache for option<T> {
 
 type template = {
     ctx: context,
-    tokens: @[token],
-    partials: hashmap<str, @[token]>
+    tokens: @~[token],
+    partials: hashmap<str, @~[token]>
 };
 
 impl template for template {
@@ -198,7 +198,7 @@ impl template for template {
             ctx: self.ctx,
             tokens: self.tokens,
             partials: self.partials,
-            stack: [map(data)],
+            stack: ~[map(data)],
             indent: @""
         })
     }
@@ -206,10 +206,10 @@ impl template for template {
 
 enum token {
     text(@str),
-    etag(@[str], @str),
-    utag(@[str], @str),
-    section(@[str], bool, @[token], @str, @str, @str, @str, @str),
-    incomplete_section(@[str], bool, @str, bool),
+    etag(@~[str], @str),
+    utag(@~[str], @str),
+    section(@~[str], bool, @~[token], @str, @str, @str, @str, @str),
+    incomplete_section(@~[str], bool, @str, bool),
     partial(@str, @str, @str),
 }
 
@@ -230,8 +230,8 @@ type parser = {
     mut state: parser::state,
     mut otag: @str,
     mut ctag: @str,
-    mut otag_chars: [char],
-    mut ctag_chars: [char],
+    mut otag_chars: ~[char],
+    mut ctag_chars: ~[char],
     mut tag_position: uint,
     tokens: dvec<token>,
     partials: dvec<@str>,
@@ -356,7 +356,7 @@ impl parser for parser {
         }
 
         // Check that we don't have any incomplete sections.
-        for self.tokens.each { |token|
+        for self.tokens.each |token| {
             alt token {
               incomplete_section(name, _, _, _) {
                   fail #fmt("Unclosed mustache section %s",
@@ -495,7 +495,7 @@ impl parser for parser {
 
             let name = self.check_content(content.slice(1u, len));
             let name = @str::split_char_nonempty(name, '.');
-            let mut children = [];
+            let mut children = ~[];
 
             loop {
                 if self.tokens.len() == 0u {
@@ -510,7 +510,7 @@ impl parser for parser {
 
                     // Collect all the children's sources.
                     let srcs = dvec();
-                    for children.each { |child: token|
+                    for children.each |child: token| {
                         alt child {
                           text(s)
                           | etag(_, s)
@@ -533,7 +533,7 @@ impl parser for parser {
                         // case the user uses a function to instantiate the
                         // tag.
                         let mut src = "";
-                        for srcs.each { |s| src += *s }
+                        for srcs.each |s| { src += *s; }
 
                         self.tokens.push(
                             section(
@@ -560,10 +560,8 @@ impl parser for parser {
 
             if (len > 2u && str::ends_with(content, "=")) {
                 let s = self.check_content(content.slice(1u, len - 1u));
-                let pos = str::find_from(s, 0u) { |c|
-                    char::is_whitespace(c)
-                };
 
+                let pos = str::find_from(s, 0u, char::is_whitespace);
                 let pos = alt pos {
                   none { fail "invalid change delimiter tag content"; }
                   some(pos) { pos }
@@ -572,10 +570,7 @@ impl parser for parser {
                 self.otag = @s.slice(0u, pos);
                 self.otag_chars = str::chars(*self.otag);
 
-                let pos = str::find_from(s, pos) { |c|
-                    !char::is_whitespace(c)
-                };
-
+                let pos = str::find_from(s, pos, |c| !char::is_whitespace(c));
                 let pos = alt pos {
                   none { fail "invalid change delimiter tag content"; }
                   some(pos) { pos }
@@ -655,14 +650,14 @@ impl parser for parser {
 
 type compile_context = {
     rdr: io::reader,
-    partials: hashmap<str, @[token]>,
+    partials: hashmap<str, @~[token]>,
     otag: @str,
     ctag: @str,
     template_path: @str,
     template_extension: @str,
 };
 
-fn compile_helper(ctx: compile_context) -> @[token] {
+fn compile_helper(ctx: compile_context) -> @~[token] {
     let parser: parser = {
         rdr: ctx.rdr,
         mut ch: ctx.rdr.read_char(),
@@ -683,13 +678,13 @@ fn compile_helper(ctx: compile_context) -> @[token] {
     parser.parse();
 
     // Compile the partials if we haven't done so already.
-    for parser.partials.each { |name|
+    for parser.partials.each |name| {
         let path = path::connect(*ctx.template_path,
                                  *name + *ctx.template_extension);
 
         if !ctx.partials.contains_key(*name) {
             // Insert a placeholder so we don't recurse off to infinity.
-            ctx.partials.insert(copy *name, @[]);
+            ctx.partials.insert(copy *name, @~[]);
 
             alt io::file_reader(path) {
               err(e) {}
@@ -717,14 +712,14 @@ fn compile_helper(ctx: compile_context) -> @[token] {
 
 type render_context = {
     ctx: context,
-    tokens: @[token],
-    partials: hashmap<str, @[token]>,
-    stack: [data],
+    tokens: @~[token],
+    partials: hashmap<str, @~[token]>,
+    stack: ~[data],
     indent: @str,
 };
 
 fn render_helper(ctx: render_context) -> str {
-    fn find(stack: [data], path: [str]) -> option<data> {
+    fn find(stack: ~[data], path: ~[str]) -> option<data> {
         // If we have an empty path, we just want the top value in our stack.
         if vec::is_empty(path) {
             ret alt vec::last_opt(stack) {
@@ -769,7 +764,7 @@ fn render_helper(ctx: render_context) -> str {
 
     let mut output = "";
     
-    for (*ctx.tokens).each { |token|
+    for (*ctx.tokens).each |token| {
         alt token {
           text(value) {
             // Indent the lines.
@@ -857,7 +852,7 @@ fn render_helper(ctx: render_context) -> str {
 
 fn render_etag(value: data, ctx: render_context) -> str {
     let mut escaped = "";
-    str::chars_iter(render_utag(value, ctx)) { |c|
+    do str::chars_iter(render_utag(value, ctx)) |c| {
         alt c {
           '<' { escaped += "&lt;" }
           '>' { escaped += "&gt;" }
@@ -898,11 +893,11 @@ fn render_section(value: data,
       bool(true) { render_helper(ctx) }
       bool(false) { "" }
       vec(vs) {
-        str::concat((*vs).map { |v|
-            render_helper({ stack: ctx.stack + [v] with ctx })
+        str::concat(do (*vs).map |v| {
+            render_helper({ stack: ctx.stack + ~[v] with ctx })
         })
       }
-      map(_) { render_helper({ stack: ctx.stack + [value] with ctx }) }
+      map(_) { render_helper({ stack: ctx.stack + ~[value] with ctx }) }
       fun(f) { render_fun(ctx, src, otag, ctag, f) }
       _ { fail }
     }
@@ -913,7 +908,7 @@ fn render_fun(ctx: render_context,
               otag: @str,
               ctag: @str,
               f: fn(@str) -> str) -> str {
-    let tokens = io::with_str_reader(f(src)) { |rdr|
+    let tokens = do io::with_str_reader(f(src)) |rdr| {
         compile_helper({
             rdr: rdr,
             partials: ctx.partials,
@@ -934,65 +929,65 @@ mod tests {
 
     #[test]
     fn test_compile_texts() {
-        assert compile_str("hello world").tokens == @[text(@"hello world")];
-        assert compile_str("hello {world").tokens == @[text(@"hello {world")];
-        assert compile_str("hello world}").tokens == @[text(@"hello world}")];
-        assert compile_str("hello world}}").tokens == @[text(@"hello world}}")];
+        assert compile_str("hello world").tokens == @~[text(@"hello world")];
+        assert compile_str("hello {world").tokens == @~[text(@"hello {world")];
+        assert compile_str("hello world}").tokens == @~[text(@"hello world}")];
+        assert compile_str("hello world}}").tokens == @~[text(@"hello world}}")];
     }
 
     #[test]
     fn test_compile_etags() {
-        assert compile_str("{{ name }}").tokens == @[
-            etag(@["name"], @"{{ name }}")
+        assert compile_str("{{ name }}").tokens == @~[
+            etag(@~["name"], @"{{ name }}")
         ];
 
-        assert compile_str("before {{name}} after").tokens == @[
+        assert compile_str("before {{name}} after").tokens == @~[
             text(@"before "),
-            etag(@["name"], @"{{name}}"),
+            etag(@~["name"], @"{{name}}"),
             text(@" after")
         ];
 
-        assert compile_str("before {{name}}").tokens == @[
+        assert compile_str("before {{name}}").tokens == @~[
             text(@"before "),
-            etag(@["name"], @"{{name}}")
+            etag(@~["name"], @"{{name}}")
         ];
 
-        assert compile_str("{{name}} after").tokens == @[
-            etag(@["name"], @"{{name}}"),
+        assert compile_str("{{name}} after").tokens == @~[
+            etag(@~["name"], @"{{name}}"),
             text(@" after")
         ];
     }
 
     #[test]
     fn test_compile_utags() {
-        assert compile_str("{{{name}}}").tokens == @[
-            utag(@["name"], @"{{{name}}}")
+        assert compile_str("{{{name}}}").tokens == @~[
+            utag(@~["name"], @"{{{name}}}")
         ];
 
-        assert compile_str("before {{{name}}} after").tokens == @[
+        assert compile_str("before {{{name}}} after").tokens == @~[
             text(@"before "),
-            utag(@["name"], @"{{{name}}}"),
+            utag(@~["name"], @"{{{name}}}"),
             text(@" after")
         ];
 
-        assert compile_str("before {{{name}}}").tokens == @[
+        assert compile_str("before {{{name}}}").tokens == @~[
             text(@"before "),
-            utag(@["name"], @"{{{name}}}")
+            utag(@~["name"], @"{{{name}}}")
         ];
 
-        assert compile_str("{{{name}}} after").tokens == @[
-            utag(@["name"], @"{{{name}}}"),
+        assert compile_str("{{{name}}} after").tokens == @~[
+            utag(@~["name"], @"{{{name}}}"),
             text(@" after")
         ];
     }
 
     #[test]
     fn test_compile_sections() {
-        assert compile_str("{{# name}}{{/name}}").tokens == @[
+        assert compile_str("{{# name}}{{/name}}").tokens == @~[
             section(
-                @["name"],
+                @~["name"],
                 false,
-                @[],
+                @~[],
                 @"{{",
                 @"{{# name}}",
                 @"",
@@ -1001,12 +996,12 @@ mod tests {
             )
         ];
 
-        assert compile_str("before {{^name}}{{/name}} after").tokens == @[
+        assert compile_str("before {{^name}}{{/name}} after").tokens == @~[
             text(@"before "),
             section(
-                @["name"],
+                @~["name"],
                 true,
-                @[],
+                @~[],
                 @"{{",
                 @"{{^name}}",
                 @"",
@@ -1016,12 +1011,12 @@ mod tests {
             text(@" after")
         ];
 
-        assert compile_str("before {{#name}}{{/name}}").tokens == @[
+        assert compile_str("before {{#name}}{{/name}}").tokens == @~[
             text(@"before "),
             section(
-                @["name"],
+                @~["name"],
                 false,
-                @[],
+                @~[],
                 @"{{",
                 @"{{#name}}",
                 @"",
@@ -1030,11 +1025,11 @@ mod tests {
             )
         ];
 
-        assert compile_str("{{#name}}{{/name}} after").tokens == @[
+        assert compile_str("{{#name}}{{/name}} after").tokens == @~[
             section(
-                @["name"],
+                @~["name"],
                 false,
-                @[],
+                @~[],
                 @"{{",
                 @"{{#name}}",
                 @"",
@@ -1045,17 +1040,17 @@ mod tests {
         ];
 
         assert compile_str(
-                "before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after").tokens == @[
+                "before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after").tokens == @~[
             text(@"before "),
             section(
-                @["a"],
+                @~["a"],
                 false,
-                @[
+                @~[
                     text(@" 1 "),
                     section(
-                        @["b"],
+                        @~["b"],
                         true,
-                        @[text(@" 2 ")],
+                        @~[text(@" 2 ")],
                         @"{{",
                         @"{{^b}}",
                         @" 2 ",
@@ -1076,22 +1071,22 @@ mod tests {
 
     #[test]
     fn test_compile_partials() {
-        assert compile_str("{{> test}}").tokens == @[
+        assert compile_str("{{> test}}").tokens == @~[
             partial(@"test", @"", @"{{> test}}")
         ];
 
-        assert compile_str("before {{>test}} after").tokens == @[
+        assert compile_str("before {{>test}} after").tokens == @~[
             text(@"before "),
             partial(@"test", @"", @"{{>test}}"),
             text(@" after")
         ];
 
-        assert compile_str("before {{> test}}").tokens == @[
+        assert compile_str("before {{> test}}").tokens == @~[
             text(@"before "),
             partial(@"test", @"", @"{{> test}}")
         ];
 
-        assert compile_str("{{>test}} after").tokens == @[
+        assert compile_str("{{>test}} after").tokens == @~[
             partial(@"test", @"", @"{{>test}}"),
             text(@" after")
         ];
@@ -1099,9 +1094,9 @@ mod tests {
 
     #[test]
     fn test_compile_delimiters() {
-        assert compile_str("before {{=<% %>=}}<%name%> after").tokens == @[
+        assert compile_str("before {{=<% %>=}}<%name%> after").tokens == @~[
             text(@"before "),
-            etag(@["name"], @"<%name%>"),
+            etag(@~["name"], @"<%name%>"),
             text(@" after")
         ];
     }
@@ -1141,17 +1136,17 @@ mod tests {
 
         assert template.render(ctx0) == "05";
 
-        ctx0.insert("a", vec(@[]));
+        ctx0.insert("a", vec(@~[]));
         assert template.render(ctx0) == "05";
 
         let ctx1: hashmap<str, data> = str_hash();
-        ctx0.insert("a", [ctx1].to_mustache());
+        ctx0.insert("a", (~[ctx1]).to_mustache());
 
         assert template.render(ctx0) == "01  35";
 
         let ctx1 = str_hash();
         ctx1.insert("n", "a".to_mustache());
-        ctx0.insert("a", [ctx1].to_mustache());
+        ctx0.insert("a", (~[ctx1]).to_mustache());
         assert template.render(ctx0) == "01 a 35";
 
         ctx0.insert("a", { |_text| "foo" }.to_mustache());
@@ -1165,11 +1160,11 @@ mod tests {
         let ctx0 = str_hash();
         assert render_str(template, ctx0) == "01 35";
 
-        ctx0.insert("a", vec(@[]));
+        ctx0.insert("a", vec(@~[]));
         assert render_str(template, ctx0) == "01 35";
 
         let ctx1 = str_hash();
-        ctx0.insert("a", [ctx1].to_mustache());
+        ctx0.insert("a", (~[ctx1]).to_mustache());
         assert render_str(template, ctx0) == "05";
 
         ctx1.insert("n", "a".to_mustache());
@@ -1183,11 +1178,11 @@ mod tests {
         let ctx0 = str_hash();
         assert render_file(path, ctx0) == "<h2>Names</h2>\n";
 
-        ctx0.insert("names", vec(@[]));
+        ctx0.insert("names", vec(@~[]));
         assert render_file(path, ctx0) == "<h2>Names</h2>\n";
 
         let ctx1 = str_hash();
-        ctx0.insert("names", vec(@[map(ctx1)]));
+        ctx0.insert("names", vec(@~[map(ctx1)]));
         assert render_file(path, ctx0) ==
             "<h2>Names</h2>\n" +
             "  <strong></strong>\n\n";
@@ -1199,14 +1194,14 @@ mod tests {
 
         let ctx2 = str_hash();
         ctx2.insert("name", str(@"<b>"));
-        ctx0.insert("names", vec(@[map(ctx1), map(ctx2)]));
+        ctx0.insert("names", vec(@~[map(ctx1), map(ctx2)]));
         assert render_file(path, ctx0) ==
             "<h2>Names</h2>\n" +
             "  <strong>a</strong>\n\n" +
             "  <strong>&lt;b&gt;</strong>\n\n";
     }
 
-    fn parse_spec_tests(src: str) -> @[json::json] {
+    fn parse_spec_tests(src: str) -> @~[json::json] {
         alt io::read_whole_file_str(src) {
           err(e) { fail e }
           ok(s) {
@@ -1230,7 +1225,7 @@ mod tests {
 
     fn convert_json_map(map: hashmap<str, json::json>) -> hashmap<str, data> {
         let d = str_hash();
-        for map.each { |key, value| d.insert(copy key, convert_json(value)); }
+        for map.each |key, value| { d.insert(copy key, convert_json(value)); }
         d
     }
 
@@ -1249,16 +1244,16 @@ mod tests {
         }
     }
 
-    fn write_partials(value: json::json) -> [str] {
-        let mut files = [];
+    fn write_partials(value: json::json) -> ~[str] {
+        let mut files = ~[];
 
         alt value {
           json::dict(d) {
-            for d.each { |key, value|
+            for d.each |key, value| {
                 alt value {
                   json::string(s) {
                     let file = key + ".mustache";
-                    alt io::file_writer(file, [io::create, io::truncate]) {
+                    alt io::file_writer(file, ~[io::create, io::truncate]) {
                       ok(wr) { vec::push(files, file); wr.write_str(*s); }
                       err(e) { fail e; }
                     }
@@ -1286,7 +1281,7 @@ mod tests {
 
         let partials = alt test.find("partials") {
           some(value) { write_partials(value) }
-          none { [] }
+          none { ~[] }
         };
 
         let result = render_str(*template, data);
@@ -1295,11 +1290,11 @@ mod tests {
             fn to_list(x: json::json) -> json::json {
                 alt x {
                   json::dict(d) {
-                    let mut xs = [];
-                    for d.each { |k,v|
+                    let mut xs = ~[];
+                    for d.each |k, v| {
                         let k = json::string(@copy k);
                         let v = to_list(v);
-                        vec::push(xs, json::list(@[k, v]));
+                        vec::push(xs, json::list(@~[k, v]));
                     }
                     json::list(@xs)
                   }
@@ -1323,11 +1318,11 @@ mod tests {
         }
         assert result == *expected;
 
-        vec::iter(partials) { |file| os::remove_file(file); }
+        for partials.each |file| { os::remove_file(file); }
     }
 
     fn run_tests(spec: str) {
-        for (*parse_spec_tests(spec)).each { |json|
+        for (*parse_spec_tests(spec)).each |json| {
             let test = alt json {
               json::dict(m) { m }
               _ { fail }
@@ -1374,8 +1369,8 @@ mod tests {
 
     #[test]
     fn test_spec_lambdas() {
-        for (*parse_spec_tests("spec/specs/~lambdas.json")).each { |json|
-            let test =  alt json {
+        for (*parse_spec_tests("spec/specs/~lambdas.json")).each |json| {
+            let test = alt json {
               json::dict(m) { m }
               _ { fail }
             };
@@ -1388,35 +1383,35 @@ mod tests {
 
             let f = alt test.get("name") {
               json::string(@"Interpolation") {
-                  { |_text| "world" }
+                  |_text| {"world" }
               }
               json::string(@"Interpolation - Expansion") {
-                  { |_text| "{{planet}}" }
+                  |_text| {"{{planet}}" }
               }
               json::string(@"Interpolation - Alternate Delimiters") {
-                  { |_text| "|planet| => {{planet}}" }
+                  |_text| {"|planet| => {{planet}}" }
               }
               json::string(@"Interpolation - Multiple Calls") {
                   let calls = @mut 0;
-                  { |_text| *calls += 1; int::str(*calls) }
+                  |_text| {*calls += 1; int::str(*calls) }
               }
               json::string(@"Escaping") {
-                  { |_text| ">" }
+                  |_text| {">" }
               }
               json::string(@"Section") {
-                  { |text: @str| if *text == "{{x}}" { "yes" } else { "no" } }
+                  |text: @str| {if *text == "{{x}}" { "yes" } else { "no" } }
               }
               json::string(@"Section - Expansion") {
-                  { |text: @str| *text + "{{planet}}" + *text }
+                  |text: @str| {*text + "{{planet}}" + *text }
               }
               json::string(@"Section - Alternate Delimiters") {
-                  { |text: @str| *text + "{{planet}} => |planet|" + *text }
+                  |text: @str| {*text + "{{planet}} => |planet|" + *text }
               }
               json::string(@"Section - Multiple Calls") {
-                  { |text: @str| "__" + *text + "__" }
+                  |text: @str| {"__" + *text + "__" }
               }
               json::string(@"Inverted Section") {
-                  { |_text| "" }
+                  |_text| {"" }
               }
               value { fail #fmt("%?", value) }
             };
