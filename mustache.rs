@@ -75,7 +75,7 @@ impl context for context {
 
     #[doc = "Compiles a template from a string."]
     fn compile_str(src: str) -> template {
-        io::with_str_reader(src, self.compile_reader)
+        io::with_str_reader(src, |rdr| self.compile_reader(rdr))
     }
 
     #[doc = "Renders a template from an io::reader."]
