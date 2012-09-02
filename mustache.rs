@@ -60,18 +60,18 @@ fn default_context() -> Context { context(@~".", @~".mustache") }
 
 trait ContextTrait {
     fn compile_reader(rdr: io::Reader) -> Template;
-    fn compile_file(file: ~str) -> Template;
-    fn compile_str(src: ~str) -> Template;
+    fn compile_file(file: &str) -> Template;
+    fn compile_str(src: &str) -> Template;
     fn render_reader(rdr: io::Reader, data: hashmap<@~str, Data>) -> ~str;
-    fn render_file(file: ~str, data: hashmap<@~str, Data>) -> ~str;
-    fn render_str(template: ~str, data: hashmap<@~str, Data>) -> ~str;
+    fn render_file(file: &str, data: hashmap<@~str, Data>) -> ~str;
+    fn render_str(template: &str, data: hashmap<@~str, Data>) -> ~str;
 }
 
 impl  Context : ContextTrait {
     #[doc = "Compiles a template from an io::Reader."]
     fn compile_reader(rdr: io::Reader) -> Template {
         let partials = box_str_hash();
-        let tokens = compile_helper({
+        let tokens = compile_helper(&{
             rdr: rdr,
             partials: partials,
             otag: @~"{{",
@@ -88,9 +88,9 @@ impl  Context : ContextTrait {
     }
 
     #[doc = "Compiles a template from a file."]
-    fn compile_file(file: ~str) -> Template {
+    fn compile_file(file: &str) -> Template {
     	let path: Path = path::from_str(*self.template_path);
-    	let path = path.push(file + *self.template_extension);
+    	let path = path.push(file.to_unique() + *self.template_extension);
 
         match io::file_reader(&path) {
           Ok(rdr) => { self.compile_reader(rdr) }
@@ -99,7 +99,7 @@ impl  Context : ContextTrait {
     }
 
     #[doc = "Compiles a template from a string."]
-    fn compile_str(src: ~str) -> Template {
+    fn compile_str(src: &str) -> Template {
         io::with_str_reader(src, |rdr| self.compile_reader(rdr))
     }
 
@@ -109,12 +109,12 @@ impl  Context : ContextTrait {
     }
 
     #[doc = "Renders a template from a file."]
-    fn render_file(file: ~str, data: hashmap<@~str, Data>) -> ~str {
+    fn render_file(file: &str, data: hashmap<@~str, Data>) -> ~str {
         self.compile_file(file).render(data)
     }
 
     #[doc = "Renders a template from a string."]
-    fn render_str(template: ~str, data: hashmap<@~str, Data>) -> ~str {
+    fn render_str(template: &str, data: hashmap<@~str, Data>) -> ~str {
         self.compile_str(template).render(data)
     }
 }
@@ -125,12 +125,12 @@ fn compile_reader(rdr: io::Reader) -> Template {
 }
 
 #[doc = "Compiles a template from a file."]
-fn compile_file(file: ~str) -> Template {
+fn compile_file(file: &str) -> Template {
     default_context().compile_file(file)
 }
 
 #[doc = "Compiles a template from a string."]
-fn compile_str(template: ~str) -> Template {
+fn compile_str(template: &str) -> Template {
     default_context().compile_str(template)
 }
 
@@ -140,12 +140,12 @@ fn render_reader(rdr: io::Reader, data: hashmap<@~str, Data>) -> ~str {
 }
 
 #[doc = "Renders a template from a file."]
-fn render_file(file: ~str, data: hashmap<@~str, Data>) -> ~str {
+fn render_file(file: &str, data: hashmap<@~str, Data>) -> ~str {
     default_context().compile_file(file).render(data)
 }
 
 #[doc = "Renders a template from a string."]
-fn render_str(template: ~str, data: hashmap<@~str, Data>) -> ~str {
+fn render_str(template: &str, data: hashmap<@~str, Data>) -> ~str {
     default_context().compile_str(template).render(data)
 }
 
@@ -208,7 +208,7 @@ trait TemplateTrait {
 
 impl  Template : TemplateTrait {
     fn render(data: hashmap<@~str, Data>) -> ~str {
-        render_helper({
+        render_helper(&{
             ctx: self.ctx,
             tokens: self.tokens,
             partials: self.partials,
@@ -686,7 +686,7 @@ type CompileContext = {
     template_extension: @~str,
 };
 
-fn compile_helper(ctx: CompileContext) -> @~[Token] {
+fn compile_helper(ctx: &CompileContext) -> @~[Token] {
     let parser: Parser = {
         rdr: ctx.rdr,
         mut ch: ctx.rdr.read_char(),
@@ -718,7 +718,7 @@ fn compile_helper(ctx: CompileContext) -> @~[Token] {
             match io::file_reader(&path) {
               Err(_e) => {}
               Ok(rdr) => {
-                let tokens = compile_helper({
+                let tokens = compile_helper(&{
                     rdr: rdr,
                     partials: ctx.partials,
                     otag: @~"{{",
@@ -747,8 +747,8 @@ type RenderContext = {
     indent: @~str,
 };
 
-fn render_helper(ctx: RenderContext) -> ~str {
-    fn find(stack: ~[Data], path: ~[~str]) -> Option<Data> {
+fn render_helper(ctx: &RenderContext) -> ~str {
+    fn find(stack: &[Data], path: &[~str]) -> Option<Data> {
         // If we have an empty path, we just want the top value in our stack.
         if vec::is_empty(path) {
             return match vec::last_opt(stack) {
@@ -842,20 +842,20 @@ fn render_helper(ctx: RenderContext) -> ~str {
             }
           }
           Section(path, true, children, _, _, _, _, _) => {
-            let ctx = { tokens: children ,.. ctx };
+            let ctx = { tokens: children ,.. *ctx };
 
             output += match find(*ctx.stack, *path) {
-              None => { render_helper(ctx) }
-              Some(value) => { render_inverted_section(value, ctx) }
+              None => { render_helper(&ctx) }
+              Some(value) => { render_inverted_section(value, &ctx) }
             };
           }
           Section(path, false, children, otag, _, src, _, ctag) => {
             match find(*ctx.stack, *path) {
               None => { }
               Some(value) => {
-                output += render_section(value, src, otag, ctag, {
+                output += render_section(value, src, otag, ctag, &{
                     tokens: children
-                    ,.. ctx
+                    ,.. *ctx
                 });
               }
             }
@@ -864,10 +864,10 @@ fn render_helper(ctx: RenderContext) -> ~str {
             match ctx.partials.find(@*name) {
               None => { }
               Some(tokens) => {
-                output += render_helper({
+                output += render_helper(&{
                     tokens: tokens,
                     indent: @(*ctx.indent + *ind)
-                    ,.. ctx
+                    ,.. *ctx
                 });
               }
             }
@@ -879,7 +879,7 @@ fn render_helper(ctx: RenderContext) -> ~str {
     output
 }
 
-fn render_etag(value: Data, ctx: RenderContext) -> ~str {
+fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
     let mut escaped = ~"";
     do str::chars_iter(render_utag(value, ctx)) |c| {
         match c {
@@ -894,7 +894,7 @@ fn render_etag(value: Data, ctx: RenderContext) -> ~str {
     escaped
 }
 
-fn render_utag(value: Data, ctx: RenderContext) -> ~str {
+fn render_utag(value: Data, ctx: &RenderContext) -> ~str {
     match value {
       Str(s) => { copy *s }
       Fun(f) => {
@@ -905,7 +905,7 @@ fn render_utag(value: Data, ctx: RenderContext) -> ~str {
     }
 }
 
-fn render_inverted_section(value: Data, ctx: RenderContext) -> ~str {
+fn render_inverted_section(value: Data, ctx: &RenderContext) -> ~str {
     match value {
       Bool(false) => { render_helper(ctx) }
       Vec(xs) if (*xs).is_empty() => { render_helper(ctx) }
@@ -917,28 +917,28 @@ fn render_section(value: Data,
                   src: @~str,
                   otag: @~str,
                   ctag: @~str,
-                  ctx: RenderContext) -> ~str {
+                  ctx: &RenderContext) -> ~str {
     match value {
       Bool(true) => { render_helper(ctx) }
       Bool(false) => { ~"" }
       Vec(vs) => {
         str::concat(do (*vs).map |v| {
-            render_helper({ stack: @(ctx.stack + ~[v]) ,.. ctx })
+            render_helper(&{ stack: @(ctx.stack + ~[v]) ,.. *ctx })
         })
       }
-      Map(_) => { render_helper({ stack: @(ctx.stack + ~[value]) ,.. ctx }) }
+      Map(_) => { render_helper(&{ stack: @(ctx.stack + ~[value]) ,.. *ctx }) }
       Fun(f) => { render_fun(ctx, src, otag, ctag, f) }
       _ => { fail }
     }
 }
 
-fn render_fun(ctx: RenderContext,
+fn render_fun(ctx: &RenderContext,
               src: @~str,
               otag: @~str,
               ctag: @~str,
               f: fn(@~str) -> ~str) -> ~str {
     let tokens = do io::with_str_reader(f(src)) |rdr| {
-        compile_helper({
+        compile_helper(&{
             rdr: rdr,
             partials: ctx.partials,
             otag: otag,
@@ -948,7 +948,7 @@ fn render_fun(ctx: RenderContext,
         })
     };
 
-    render_helper({ tokens: tokens ,.. ctx })
+    render_helper(&{ tokens: tokens ,.. *ctx })
 }
 
 #[cfg(test)]
@@ -1230,7 +1230,7 @@ mod tests {
             ~"  <strong>&lt;b&gt;</strong>\n\n";
     }
 
-    fn parse_spec_tests(src: ~str) -> @~[json::Json] {
+    fn parse_spec_tests(src: &str) -> @~[json::Json] {
     	let path: Path = path::from_str(src);
         match io::read_whole_file_str(&path) {
           Err(e) => { fail e }
@@ -1351,7 +1351,7 @@ mod tests {
         for partials.each |file| { os::remove_file(&file); }
     }
 
-    fn run_tests(spec: ~str) {
+    fn run_tests(spec: &str) {
         for (*parse_spec_tests(spec)).each |json| {
             let test = match json {
               json::Dict(m) => { m }
