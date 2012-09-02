@@ -6,11 +6,11 @@ import std::map::{hashmap, str_hash, box_str_hash};
 import core::to_str::{ToStr};
 import std::json::{to_str};
 
-export context;
+export Context;
 export default_context;
-export data;
+export Data;
 export to_mustache;
-export template;
+export Template;
 export compile_reader;
 export compile_file;
 export compile_str;
@@ -19,33 +19,33 @@ export render_file;
 export render_str;
 
 #[doc = "Represents template data."]
-enum data {
-    str(@~str),
-    bool(bool),
-    vec(@~[data]),
-    map(hashmap<@~str, data>),
-    fun(fn@(@~str) -> ~str),
+enum Data {
+    Str(@~str),
+    Bool(bool),
+    Vec(@~[Data]),
+    Map(hashmap<@~str, Data>),
+    Fun(fn@(@~str) -> ~str),
 }
 
 #[doc = "
 Represents the shared metadata needed to compile and render a mustache
 template.
 "]
-type context = {
+type Context = {
     template_path: @~str,
     template_extension: @~str,
 };
 
-type template = {
-    ctx: context,
-    tokens: @~[token],
-    partials: hashmap<@~str, @~[token]>
+type Template = {
+    ctx: Context,
+    tokens: @~[Token],
+    partials: hashmap<@~str, @~[Token]>
 };
 
 #[doc = "
 Configures a mustache context with the partial template path and extension.
 "]
-fn context(template_path: @~str, template_extension: @~str) -> context {
+fn context(template_path: @~str, template_extension: @~str) -> Context {
     {
         template_path: template_path,
         template_extension: template_extension,
@@ -56,20 +56,20 @@ fn context(template_path: @~str, template_extension: @~str) -> context {
 Configures a mustache context looking for partial files in the current
 directory.
 "]
-fn default_context() -> context { context(@~".", @~".mustache") }
+fn default_context() -> Context { context(@~".", @~".mustache") }
 
-trait context_trait {
-    fn compile_reader(rdr: io::Reader) -> template;
-    fn compile_file(file: ~str) -> template;
-    fn compile_str(src: ~str) -> template;
-    fn render_reader(rdr: io::Reader, data: hashmap<@~str, data>) -> ~str;
-    fn render_file(file: ~str, data: hashmap<@~str, data>) -> ~str;
-    fn render_str(template: ~str, data: hashmap<@~str, data>) -> ~str;
+trait ContextTrait {
+    fn compile_reader(rdr: io::Reader) -> Template;
+    fn compile_file(file: ~str) -> Template;
+    fn compile_str(src: ~str) -> Template;
+    fn render_reader(rdr: io::Reader, data: hashmap<@~str, Data>) -> ~str;
+    fn render_file(file: ~str, data: hashmap<@~str, Data>) -> ~str;
+    fn render_str(template: ~str, data: hashmap<@~str, Data>) -> ~str;
 }
 
-impl  context : context_trait {
+impl  Context : ContextTrait {
     #[doc = "Compiles a template from an io::Reader."]
-    fn compile_reader(rdr: io::Reader) -> template {
+    fn compile_reader(rdr: io::Reader) -> Template {
         let partials = box_str_hash();
         let tokens = compile_helper({
             rdr: rdr,
@@ -88,7 +88,7 @@ impl  context : context_trait {
     }
 
     #[doc = "Compiles a template from a file."]
-    fn compile_file(file: ~str) -> template {
+    fn compile_file(file: ~str) -> Template {
     	let path: Path = path::from_str(*self.template_path);
     	let path = path.push(file + *self.template_extension);
 
@@ -99,169 +99,169 @@ impl  context : context_trait {
     }
 
     #[doc = "Compiles a template from a string."]
-    fn compile_str(src: ~str) -> template {
+    fn compile_str(src: ~str) -> Template {
         io::with_str_reader(src, |rdr| self.compile_reader(rdr))
     }
 
     #[doc = "Renders a template from an io::Reader."]
-    fn render_reader(rdr: io::Reader, data: hashmap<@~str, data>) -> ~str {
+    fn render_reader(rdr: io::Reader, data: hashmap<@~str, Data>) -> ~str {
         self.compile_reader(rdr).render(data)
     }
 
     #[doc = "Renders a template from a file."]
-    fn render_file(file: ~str, data: hashmap<@~str, data>) -> ~str {
+    fn render_file(file: ~str, data: hashmap<@~str, Data>) -> ~str {
         self.compile_file(file).render(data)
     }
 
     #[doc = "Renders a template from a string."]
-    fn render_str(template: ~str, data: hashmap<@~str, data>) -> ~str {
+    fn render_str(template: ~str, data: hashmap<@~str, Data>) -> ~str {
         self.compile_str(template).render(data)
     }
 }
 
 #[doc = "Compiles a template from an io::Reader."]
-fn compile_reader(rdr: io::Reader) -> template {
+fn compile_reader(rdr: io::Reader) -> Template {
     default_context().compile_reader(rdr)
 }
 
 #[doc = "Compiles a template from a file."]
-fn compile_file(file: ~str) -> template {
+fn compile_file(file: ~str) -> Template {
     default_context().compile_file(file)
 }
 
 #[doc = "Compiles a template from a string."]
-fn compile_str(template: ~str) -> template {
+fn compile_str(template: ~str) -> Template {
     default_context().compile_str(template)
 }
 
 #[doc = "Renders a template from an io::Reader."]
-fn render_reader(rdr: io::Reader, data: hashmap<@~str, data>) -> ~str {
+fn render_reader(rdr: io::Reader, data: hashmap<@~str, Data>) -> ~str {
     default_context().compile_reader(rdr).render(data)
 }
 
 #[doc = "Renders a template from a file."]
-fn render_file(file: ~str, data: hashmap<@~str, data>) -> ~str {
+fn render_file(file: ~str, data: hashmap<@~str, Data>) -> ~str {
     default_context().compile_file(file).render(data)
 }
 
 #[doc = "Renders a template from a string."]
-fn render_str(template: ~str, data: hashmap<@~str, data>) -> ~str {
+fn render_str(template: ~str, data: hashmap<@~str, Data>) -> ~str {
     default_context().compile_str(template).render(data)
 }
 
-trait to_mustache {
-    fn to_mustache() -> data;
+trait ToMustache {
+    fn to_mustache() -> Data;
 }
 
-impl  data : to_mustache {
-    fn to_mustache() -> data { self }
+impl  Data : ToMustache {
+    fn to_mustache() -> Data { self }
 }
 
-impl  ~str : to_mustache {
-    fn to_mustache() -> data { str(@copy self) }
+impl  ~str : ToMustache {
+    fn to_mustache() -> Data { Str(@copy self) }
 }
 
-impl  @~str : to_mustache {
-    fn to_mustache() -> data { str(self) }
+impl  @~str : ToMustache {
+    fn to_mustache() -> Data { Str(self) }
 }
 
-impl  bool : to_mustache {
-    fn to_mustache() -> data { bool(self) }
+impl  bool : ToMustache {
+    fn to_mustache() -> Data { Bool(self) }
 }
 
-impl  uint : to_mustache {
-    fn to_mustache() -> data { str(@uint::str(self)) }
+impl  uint : ToMustache {
+    fn to_mustache() -> Data { Str(@uint::str(self)) }
 }
 
-impl  int : to_mustache {
-    fn to_mustache() -> data { str(@int::str(self)) }
+impl  int : ToMustache {
+    fn to_mustache() -> Data { Str(@int::str(self)) }
 }
 
-impl <T: to_mustache> ~[T] : to_mustache {
-    fn to_mustache() -> data { vec(@self.map(|x| x.to_mustache())) }
+impl <T: ToMustache> ~[T] : ToMustache {
+    fn to_mustache() -> Data { Vec(@self.map(|x| x.to_mustache())) }
 }
 
-impl <T: to_mustache copy> hashmap<@~str, T> : to_mustache {
-    fn to_mustache() -> data {
+impl <T: ToMustache copy> hashmap<@~str, T> : ToMustache {
+    fn to_mustache() -> Data {
         let m = box_str_hash();
         for self.each |k, v| { m.insert(k, v.to_mustache()); }
-        map(m)
+        Map(m)
     }
 }
 
-impl  fn@(@~str) -> ~str : to_mustache {
-    fn to_mustache() -> data { fun(self) }
+impl  fn@(@~str) -> ~str : ToMustache {
+    fn to_mustache() -> Data { Fun(self) }
 }
 
-impl <T: to_mustache> Option<T> : to_mustache {
-    fn to_mustache() -> data {
+impl <T: ToMustache> Option<T> : ToMustache {
+    fn to_mustache() -> Data {
         match self {
-          None => { bool(false) }
+          None => { Bool(false) }
           Some(v) => { v.to_mustache() }
         }
     }
 }
 
-trait template_trait {
-    fn render(data: hashmap<@~str, data>) -> ~str;
+trait TemplateTrait {
+    fn render(data: hashmap<@~str, Data>) -> ~str;
 }
 
-impl  template : template_trait {
-    fn render(data: hashmap<@~str, data>) -> ~str {
+impl  Template : TemplateTrait {
+    fn render(data: hashmap<@~str, Data>) -> ~str {
         render_helper({
             ctx: self.ctx,
             tokens: self.tokens,
             partials: self.partials,
-            stack: @~[map(data)],
+            stack: @~[Map(data)],
             indent: @~""
         })
     }
 }
 
-enum token {
-    text(@~str),
-    etag(@~[~str], @~str),
-    utag(@~[~str], @~str),
-    section(@~[~str], bool, @~[token], @~str, @~str, @~str, @~str, @~str),
-    incomplete_section(@~[~str], bool, @~str, bool),
-    partial(@~str, @~str, @~str),
+enum Token {
+    Text(@~str),
+    ETag(@~[~str], @~str),
+    UTag(@~[~str], @~str),
+    Section(@~[~str], bool, @~[Token], @~str, @~str, @~str, @~str, @~str),
+    IncompleteSection(@~[~str], bool, @~str, bool),
+    Partial(@~str, @~str, @~str),
 }
 
-enum token_class {
-    normal,
-    standalone,
-    whitespace(@~str, uint),
-    newline_whitespace(@~str, uint),
+enum TokenClass {
+    Normal,
+    StandAlone,
+    WhiteSpace(@~str, uint),
+    NewLineWhiteSpace(@~str, uint),
 }
 
-type parser = {
+type Parser = {
     rdr: io::Reader,
     mut ch: char,
     mut lookahead: Option<char>,
     mut line: uint,
     mut col: uint,
     mut content: @ mut ~str,
-    mut state: parser::state,
+    mut state: parser::State,
     mut otag: @~str,
     mut ctag: @~str,
     mut otag_chars:@ ~[char],
     mut ctag_chars: @~[char],
     mut tag_position: uint,
-    tokens: DVec<token>,
+    tokens: DVec<Token>,
     partials: DVec<@~str>,
 };
 
 mod parser {
-    enum state { TEXT, OTAG, TAG, CTAG }
+    enum State { TEXT, OTAG, TAG, CTAG }
 }
 
-trait parser_trait {
+trait ParserTrait {
     fn eof() -> bool;
     fn bump();
     fn peek() -> char;
     fn parse();
     fn add_text();
-    fn classify_token() -> token_class;
+    fn classify_token() -> TokenClass;
     fn eat_whitespace() -> bool;
     fn add_tag();
     fn add_partial(content: ~str, tag: @~str);
@@ -270,7 +270,7 @@ trait parser_trait {
     fn check_content(content: ~str) -> ~str;
 }
 
-impl  parser : parser_trait {
+impl  Parser : ParserTrait {
     fn eof() -> bool { self.ch == -1 as char }
 
     fn bump() {
@@ -387,7 +387,7 @@ impl  parser : parser_trait {
         // Check that we don't have any incomplete sections.
         for self.tokens.each |token| {
             match token {
-              incomplete_section(name, _, _, _) => {
+              IncompleteSection(name, _, _, _) => {
                   fail #fmt("Unclosed mustache section %s",
                     str::connect(*name, ~"."));
               }
@@ -401,7 +401,7 @@ impl  parser : parser_trait {
             let mut content = ~"";
             content <-> *self.content;
 
-            self.tokens.push(text(@content));
+            self.tokens.push(Text(@content));
         }
     }
 
@@ -410,7 +410,7 @@ impl  parser : parser_trait {
     //
     //   ("\n" | "\r\n") whitespace* token ("\n" | "\r\n")
     //
-    fn classify_token() -> token_class {
+    fn classify_token() -> TokenClass {
         // Exit early if the next character is not '\n' or '\r\n'.
         if self.eof() ||
            self.ch == '\n' ||
@@ -418,12 +418,12 @@ impl  parser : parser_trait {
 
             // If the last token ends with a newline (or there is no previous
             // token), then this token is standalone.
-            if self.tokens.len() == 0u { return standalone; }
+            if self.tokens.len() == 0u { return StandAlone; }
 
             match self.tokens[self.tokens.len() - 1u] {
-              incomplete_section(_, _, _, true) => { standalone }
+              IncompleteSection(_, _, _, true) => { StandAlone }
 
-              text(s) if *s != ~"" => {
+              Text(s) if *s != ~"" => {
                 // Look for the last newline character that may have whitespace
                 // following it.
                 match str::rfind(*s,
@@ -431,25 +431,25 @@ impl  parser : parser_trait {
                   // It's all whitespace.
                   None => {
                     if self.tokens.len() == 1u {
-                        whitespace(s, 0u)
+                        WhiteSpace(s, 0u)
                     } else {
-                        normal
+                        Normal
                     }
                   }
                   Some(pos) => {
                     if str::char_at(*s, pos) == '\n' {
                         if pos == (*s).len() - 1u {
-                            standalone
+                            StandAlone
                         } else {
-                            whitespace(s, pos + 1u)
+                            WhiteSpace(s, pos + 1u)
                         }
-                    } else { normal }
+                    } else { Normal }
                   }
                 }
               }
-              _ => { normal }
+              _ => { Normal }
             }
-        } else { normal }
+        } else { Normal }
     }
 
     fn eat_whitespace() -> bool {
@@ -457,19 +457,19 @@ impl  parser : parser_trait {
         // newline and whitespace, clear out the whitespace.
 
         match self.classify_token() {
-          normal => { false }
-          standalone => {
+          Normal => { false }
+          StandAlone => {
               if self.ch == '\r' { self.bump(); }
               self.bump();
               true
           }
-          whitespace(s, pos) | newline_whitespace(s, pos) => {
+          WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
               if self.ch == '\r' { self.bump(); }
               self.bump();
 
               // Trim the whitespace from the last token.
               self.tokens.pop();
-              self.tokens.push(text(@(*s).slice(0u, pos)));
+              self.tokens.push(Text(@(*s).slice(0u, pos)));
 
               true
           }
@@ -495,14 +495,14 @@ impl  parser : parser_trait {
             let name = content.slice(1u, len);
             let name = self.check_content(name);
             let name = @str::split_char_nonempty(name, '.');
-            self.tokens.push(utag(name, tag));
+            self.tokens.push(UTag(name, tag));
           }
           '{' => {
             if str::ends_with(content, "}") {
                 let name = content.slice(1u, len - 1u);
                 let name = self.check_content(name);
                 let name = @str::split_char_nonempty(name, '.');
-                self.tokens.push(utag(name, tag));
+                self.tokens.push(UTag(name, tag));
             } else { fail ~"unbalanced \"{\" in tag"; }
           }
           '#' => {
@@ -510,14 +510,14 @@ impl  parser : parser_trait {
 
             let name = self.check_content(content.slice(1u, len));
             let name = @str::split_char_nonempty(name, '.');
-            self.tokens.push(incomplete_section(name, false, tag, newlined));
+            self.tokens.push(IncompleteSection(name, false, tag, newlined));
           }
           '^' => {
             let newlined = self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
             let name = @str::split_char_nonempty(name, '.');
-            self.tokens.push(incomplete_section(name, true, tag, newlined));
+            self.tokens.push(IncompleteSection(name, true, tag, newlined));
           }
           '/' => {
             self.eat_whitespace();
@@ -534,20 +534,20 @@ impl  parser : parser_trait {
                 let last = self.tokens.pop();
 
                 match last {
-                  incomplete_section(section_name, inverted, osection, _) => {
+                  IncompleteSection(section_name, inverted, osection, _) => {
                     let children = vec::reversed(children);
 
                     // Collect all the children's sources.
                     let srcs = DVec();
-                    for children.each |child: token| {
+                    for children.each |child: Token| {
                         match child {
-                          text(s)
-                          | etag(_, s)
-                          | utag(_, s)
-                          | partial(_, _, s) => {
+                          Text(s)
+                          | ETag(_, s)
+                          | UTag(_, s)
+                          | Partial(_, _, s) => {
                             srcs.push(s);
                           }
-                          section(_, _, _, _, osection, src, csection, _) => {
+                          Section(_, _, _, _, osection, src, csection, _) => {
                             srcs.push(osection);
                             srcs.push(src);
                             srcs.push(csection);
@@ -565,7 +565,7 @@ impl  parser : parser_trait {
                         for srcs.each |s| { src += *s; }
 
                         self.tokens.push(
-                            section(
+                            Section(
                                 name,
                                 inverted,
                                 @children,
@@ -614,7 +614,7 @@ impl  parser : parser_trait {
           _ => {
             let name = self.check_content(content);
             let name = @str::split_char_nonempty(name, '.');
-            self.tokens.push(etag(name, tag));
+            self.tokens.push(ETag(name, tag));
           }
         }
     }
@@ -622,13 +622,13 @@ impl  parser : parser_trait {
     fn add_partial(content: ~str, tag: @~str) {
         let token_class = self.classify_token();
         let indent = match token_class {
-          normal => { ~"" }
-          standalone => {
+          Normal => { ~"" }
+          StandAlone => {
             if self.ch == '\r' { self.bump(); }
             self.bump();
             ~""
           }
-          whitespace(s, pos) | newline_whitespace(s, pos) => {
+          WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
             if self.ch == '\r' { self.bump(); }
             self.bump();
 
@@ -636,7 +636,7 @@ impl  parser : parser_trait {
 
             // Trim the whitespace from the last token.
             self.tokens.pop();
-            self.tokens.push(text(@(*s).slice(0u, pos)));
+            self.tokens.push(Text(@(*s).slice(0u, pos)));
 
             ws
           }
@@ -648,7 +648,7 @@ impl  parser : parser_trait {
         let name = content.slice(1u, content.len());
         let name = @self.check_content(name);
 
-        self.tokens.push(partial(name, @indent, tag));
+        self.tokens.push(Partial(name, @indent, tag));
         self.partials.push(name);
     }
 
@@ -677,17 +677,17 @@ impl  parser : parser_trait {
     }
 }
 
-type compile_context = {
+type CompileContext = {
     rdr: io::Reader,
-    partials: hashmap<@~str, @~[token]>,
+    partials: hashmap<@~str, @~[Token]>,
     otag: @~str,
     ctag: @~str,
     template_path: @~str,
     template_extension: @~str,
 };
 
-fn compile_helper(ctx: compile_context) -> @~[token] {
-    let parser: parser = {
+fn compile_helper(ctx: CompileContext) -> @~[Token] {
+    let parser: Parser = {
         rdr: ctx.rdr,
         mut ch: ctx.rdr.read_char(),
         mut lookahead: None,
@@ -739,16 +739,16 @@ fn compile_helper(ctx: compile_context) -> @~[token] {
     @vec::from_mut(dvec::unwrap(tokens))
 }
 
-type render_context = {
-    ctx: context,
-    tokens: @~[token],
-    partials: hashmap<@~str, @~[token]>,
-    stack: @~[data],
+type RenderContext = {
+    ctx: Context,
+    tokens: @~[Token],
+    partials: hashmap<@~str, @~[Token]>,
+    stack: @~[Data],
     indent: @~str,
 };
 
-fn render_helper(ctx: render_context) -> ~str {
-    fn find(stack: ~[data], path: ~[~str]) -> Option<data> {
+fn render_helper(ctx: RenderContext) -> ~str {
+    fn find(stack: ~[Data], path: ~[~str]) -> Option<Data> {
         // If we have an empty path, we just want the top value in our stack.
         if vec::is_empty(path) {
             return match vec::last_opt(stack) {
@@ -763,7 +763,7 @@ fn render_helper(ctx: render_context) -> ~str {
         let mut i = vec::len(stack);
         while i > 0u {
             match stack[i - 1u] {
-              map(ctx) => {
+              Map(ctx) => {
                 match ctx.find(@path[0u]) {
                   Some(v) => { value = Some(v); break; }
                   None => {}
@@ -782,7 +782,7 @@ fn render_helper(ctx: render_context) -> ~str {
 
         while i < len {
             match copy value {
-              Some(map(v)) => { value = v.find(@path[i]); }
+              Some(Map(v)) => { value = v.find(@path[i]); }
               _ => { break; }
             }
             i += 1u;
@@ -795,7 +795,7 @@ fn render_helper(ctx: render_context) -> ~str {
     
     for (*ctx.tokens).each |token| {
         match token {
-          text(value) => {
+          Text(value) => {
             // Indent the lines.
             if *ctx.indent == ~"" {
                 output += *value;
@@ -825,7 +825,7 @@ fn render_helper(ctx: render_context) -> ~str {
                 }
             }
           }
-          etag(path, _) => {
+          ETag(path, _) => {
             match find(*ctx.stack, *path) {
               None => { }
               Some(value) => {
@@ -833,7 +833,7 @@ fn render_helper(ctx: render_context) -> ~str {
               }
             }
           }
-          utag(path, _) => {
+          UTag(path, _) => {
             match find(*ctx.stack, *path) {
               None => { }
               Some(value) => {
@@ -841,7 +841,7 @@ fn render_helper(ctx: render_context) -> ~str {
               }
             }
           }
-          section(path, true, children, _, _, _, _, _) => {
+          Section(path, true, children, _, _, _, _, _) => {
             let ctx = { tokens: children ,.. ctx };
 
             output += match find(*ctx.stack, *path) {
@@ -849,7 +849,7 @@ fn render_helper(ctx: render_context) -> ~str {
               Some(value) => { render_inverted_section(value, ctx) }
             };
           }
-          section(path, false, children, otag, _, src, _, ctag) => {
+          Section(path, false, children, otag, _, src, _, ctag) => {
             match find(*ctx.stack, *path) {
               None => { }
               Some(value) => {
@@ -860,7 +860,7 @@ fn render_helper(ctx: render_context) -> ~str {
               }
             }
           }
-          partial(name, ind, _) => {
+          Partial(name, ind, _) => {
             match ctx.partials.find(@*name) {
               None => { }
               Some(tokens) => {
@@ -879,7 +879,7 @@ fn render_helper(ctx: render_context) -> ~str {
     output
 }
 
-fn render_etag(value: data, ctx: render_context) -> ~str {
+fn render_etag(value: Data, ctx: RenderContext) -> ~str {
     let mut escaped = ~"";
     do str::chars_iter(render_utag(value, ctx)) |c| {
         match c {
@@ -894,10 +894,10 @@ fn render_etag(value: data, ctx: render_context) -> ~str {
     escaped
 }
 
-fn render_utag(value: data, ctx: render_context) -> ~str {
+fn render_utag(value: Data, ctx: RenderContext) -> ~str {
     match value {
-      str(s) => { copy *s }
-      fun(f) => {
+      Str(s) => { copy *s }
+      Fun(f) => {
           // etags and utags use the default delimiter.
           render_fun(ctx, @~"", @~"{{", @~"}}", f)
       }
@@ -905,34 +905,34 @@ fn render_utag(value: data, ctx: render_context) -> ~str {
     }
 }
 
-fn render_inverted_section(value: data, ctx: render_context) -> ~str {
+fn render_inverted_section(value: Data, ctx: RenderContext) -> ~str {
     match value {
-      bool(false) => { render_helper(ctx) }
-      vec(xs) if (*xs).is_empty() => { render_helper(ctx) }
+      Bool(false) => { render_helper(ctx) }
+      Vec(xs) if (*xs).is_empty() => { render_helper(ctx) }
       _ => { ~"" }
     }
 }
 
-fn render_section(value: data,
+fn render_section(value: Data,
                   src: @~str,
                   otag: @~str,
                   ctag: @~str,
-                  ctx: render_context) -> ~str {
+                  ctx: RenderContext) -> ~str {
     match value {
-      bool(true) => { render_helper(ctx) }
-      bool(false) => { ~"" }
-      vec(vs) => {
+      Bool(true) => { render_helper(ctx) }
+      Bool(false) => { ~"" }
+      Vec(vs) => {
         str::concat(do (*vs).map |v| {
             render_helper({ stack: @(ctx.stack + ~[v]) ,.. ctx })
         })
       }
-      map(_) => { render_helper({ stack: @(ctx.stack + ~[value]) ,.. ctx }) }
-      fun(f) => { render_fun(ctx, src, otag, ctag, f) }
+      Map(_) => { render_helper({ stack: @(ctx.stack + ~[value]) ,.. ctx }) }
+      Fun(f) => { render_fun(ctx, src, otag, ctag, f) }
       _ => { fail }
     }
 }
 
-fn render_fun(ctx: render_context,
+fn render_fun(ctx: RenderContext,
               src: @~str,
               otag: @~str,
               ctag: @~str,
@@ -958,62 +958,62 @@ mod tests {
 
     #[test]
     fn test_compile_texts() {
-        assert compile_str(~"hello world").tokens == @~[text(@~"hello world")];
-        assert compile_str(~"hello {world").tokens == @~[text(@~"hello {world")];
-        assert compile_str(~"hello world}").tokens == @~[text(@~"hello world}")];
-        assert compile_str(~"hello world}}").tokens == @~[text(@~"hello world}}")];
+        assert compile_str(~"hello world").tokens == @~[Text(@~"hello world")];
+        assert compile_str(~"hello {world").tokens == @~[Text(@~"hello {world")];
+        assert compile_str(~"hello world}").tokens == @~[Text(@~"hello world}")];
+        assert compile_str(~"hello world}}").tokens == @~[Text(@~"hello world}}")];
     }
 
     #[test]
     fn test_compile_etags() {
         assert compile_str(~"{{ name }}").tokens == @~[
-            etag(@~[~"name"], @~"{{ name }}")
+            ETag(@~[~"name"], @~"{{ name }}")
         ];
 
         assert compile_str(~"before {{name}} after").tokens == @~[
-            text(@~"before "),
-            etag(@~[~"name"], @~"{{name}}"),
-            text(@~" after")
+            Text(@~"before "),
+            ETag(@~[~"name"], @~"{{name}}"),
+            Text(@~" after")
         ];
 
         assert compile_str(~"before {{name}}").tokens == @~[
-            text(@~"before "),
-            etag(@~[~"name"], @~"{{name}}")
+            Text(@~"before "),
+            ETag(@~[~"name"], @~"{{name}}")
         ];
 
         assert compile_str(~"{{name}} after").tokens == @~[
-            etag(@~[~"name"], @~"{{name}}"),
-            text(@~" after")
+            ETag(@~[~"name"], @~"{{name}}"),
+            Text(@~" after")
         ];
     }
 
     #[test]
     fn test_compile_utags() {
         assert compile_str(~"{{{name}}}").tokens == @~[
-            utag(@~[~"name"], @~"{{{name}}}")
+            UTag(@~[~"name"], @~"{{{name}}}")
         ];
 
         assert compile_str(~"before {{{name}}} after").tokens == @~[
-            text(@~"before "),
-            utag(@~[~"name"], @~"{{{name}}}"),
-            text(@~" after")
+            Text(@~"before "),
+            UTag(@~[~"name"], @~"{{{name}}}"),
+            Text(@~" after")
         ];
 
         assert compile_str(~"before {{{name}}}").tokens == @~[
-            text(@~"before "),
-            utag(@~[~"name"], @~"{{{name}}}")
+            Text(@~"before "),
+            UTag(@~[~"name"], @~"{{{name}}}")
         ];
 
         assert compile_str(~"{{{name}}} after").tokens == @~[
-            utag(@~[~"name"], @~"{{{name}}}"),
-            text(@~" after")
+            UTag(@~[~"name"], @~"{{{name}}}"),
+            Text(@~" after")
         ];
     }
 
     #[test]
     fn test_compile_sections() {
         assert compile_str(~"{{# name}}{{/name}}").tokens == @~[
-            section(
+            Section(
                 @~[~"name"],
                 false,
                 @~[],
@@ -1026,8 +1026,8 @@ mod tests {
         ];
 
         assert compile_str(~"before {{^name}}{{/name}} after").tokens == @~[
-            text(@~"before "),
-            section(
+            Text(@~"before "),
+            Section(
                 @~[~"name"],
                 true,
                 @~[],
@@ -1037,12 +1037,12 @@ mod tests {
                 @~"{{/name}}",
                 @~"}}"
             ),
-            text(@~" after")
+            Text(@~" after")
         ];
 
         assert compile_str(~"before {{#name}}{{/name}}").tokens == @~[
-            text(@~"before "),
-            section(
+            Text(@~"before "),
+            Section(
                 @~[~"name"],
                 false,
                 @~[],
@@ -1055,7 +1055,7 @@ mod tests {
         ];
 
         assert compile_str(~"{{#name}}{{/name}} after").tokens == @~[
-            section(
+            Section(
                 @~[~"name"],
                 false,
                 @~[],
@@ -1065,28 +1065,28 @@ mod tests {
                 @~"{{/name}}",
                 @~"}}"
             ),
-            text(@~" after")
+            Text(@~" after")
         ];
 
         assert compile_str(
                 ~"before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after").tokens == @~[
-            text(@~"before "),
-            section(
+            Text(@~"before "),
+            Section(
                 @~[~"a"],
                 false,
                 @~[
-                    text(@~" 1 "),
-                    section(
+                    Text(@~" 1 "),
+                    Section(
                         @~[~"b"],
                         true,
-                        @~[text(@~" 2 ")],
+                        @~[Text(@~" 2 ")],
                         @~"{{",
                         @~"{{^b}}",
                         @~" 2 ",
                         @~"{{/b}}",
                         @~"}}"
                     ),
-                    text(@~" ")
+                    Text(@~" ")
                 ],
                 @~"{{",
                 @~"{{#a}}",
@@ -1094,46 +1094,46 @@ mod tests {
                 @~"{{/a}}",
                 @~"}}"
             ),
-            text(@~" after")
+            Text(@~" after")
         ];
     }
 
     #[test]
     fn test_compile_partials() {
         assert compile_str(~"{{> test}}").tokens == @~[
-            partial(@~"test", @~"", @~"{{> test}}")
+            Partial(@~"test", @~"", @~"{{> test}}")
         ];
 
         assert compile_str(~"before {{>test}} after").tokens == @~[
-            text(@~"before "),
-            partial(@~"test", @~"", @~"{{>test}}"),
-            text(@~" after")
+            Text(@~"before "),
+            Partial(@~"test", @~"", @~"{{>test}}"),
+            Text(@~" after")
         ];
 
         assert compile_str(~"before {{> test}}").tokens == @~[
-            text(@~"before "),
-            partial(@~"test", @~"", @~"{{> test}}")
+            Text(@~"before "),
+            Partial(@~"test", @~"", @~"{{> test}}")
         ];
 
         assert compile_str(~"{{>test}} after").tokens == @~[
-            partial(@~"test", @~"", @~"{{>test}}"),
-            text(@~" after")
+            Partial(@~"test", @~"", @~"{{>test}}"),
+            Text(@~" after")
         ];
     }
 
     #[test]
     fn test_compile_delimiters() {
         assert compile_str(~"before {{=<% %>=}}<%name%> after").tokens == @~[
-            text(@~"before "),
-            etag(@~[~"name"], @~"<%name%>"),
-            text(@~" after")
+            Text(@~"before "),
+            ETag(@~[~"name"], @~"<%name%>"),
+            Text(@~" after")
         ];
     }
 
     #[test]
     fn test_render_texts() {
         let ctx = box_str_hash();
-        ctx.insert(@~"name", str(@~"world"));
+        ctx.insert(@~"name", Str(@~"world"));
 
         assert render_str(~"hello world", ctx) == ~"hello world";
         assert render_str(~"hello {world", ctx) == ~"hello {world";
@@ -1145,7 +1145,7 @@ mod tests {
     #[test]
     fn test_render_etags() {
         let ctx = box_str_hash();
-        ctx.insert(@~"name", str(@~"world"));
+        ctx.insert(@~"name", Str(@~"world"));
 
         assert render_str(~"hello {{name}}", ctx) == ~"hello world";
     }
@@ -1153,7 +1153,7 @@ mod tests {
     #[test]
     fn test_render_utags() {
         let ctx = box_str_hash();
-        ctx.insert(@~"name", str(@~"world"));
+        ctx.insert(@~"name", Str(@~"world"));
 
         assert render_str(~"hello {{{name}}}", ctx) == ~"hello world";
     }
@@ -1165,10 +1165,10 @@ mod tests {
 
         assert template.render(ctx0) == ~"05";
 
-        ctx0.insert(@~"a", vec(@~[]));
+        ctx0.insert(@~"a", Vec(@~[]));
         assert template.render(ctx0) == ~"05";
 
-        let ctx1: hashmap<@~str, data> = box_str_hash();
+        let ctx1: hashmap<@~str, Data> = box_str_hash();
         ctx0.insert(@~"a", (~[ctx1]).to_mustache());
 
         assert template.render(ctx0) == ~"01  35";
@@ -1189,7 +1189,7 @@ mod tests {
         let ctx0 = box_str_hash();
         assert render_str(template, ctx0) == ~"01 35";
 
-        ctx0.insert(@~"a", vec(@~[]));
+        ctx0.insert(@~"a", Vec(@~[]));
         assert render_str(template, ctx0) == ~"01 35";
 
         let ctx1 = box_str_hash();
@@ -1207,23 +1207,23 @@ mod tests {
         let ctx0 = box_str_hash();
         assert render_file(path, ctx0) == ~"<h2>Names</h2>\n";
 
-        ctx0.insert(@~"names", vec(@~[]));
+        ctx0.insert(@~"names", Vec(@~[]));
         assert render_file(path, ctx0) == ~"<h2>Names</h2>\n";
 
         let ctx1 = box_str_hash();
-        ctx0.insert(@~"names", vec(@~[map(ctx1)]));
+        ctx0.insert(@~"names", Vec(@~[Map(ctx1)]));
         assert render_file(path, ctx0) ==
            ~ "<h2>Names</h2>\n" +
             ~"  <strong></strong>\n\n";
 
-        ctx1.insert(@~"name", str(@~"a"));
+        ctx1.insert(@~"name", Str(@~"a"));
         assert render_file(path, ctx0) ==
             ~"<h2>Names</h2>\n" +
             ~"  <strong>a</strong>\n\n";
 
         let ctx2 = box_str_hash();
-        ctx2.insert(@~"name", str(@~"<b>"));
-        ctx0.insert(@~"names", vec(@~[map(ctx1), map(ctx2)]));
+        ctx2.insert(@~"name", Str(@~"<b>"));
+        ctx0.insert(@~"names", Vec(@~[Map(ctx1), Map(ctx2)]));
         assert render_file(path, ctx0) ==
             ~"<h2>Names</h2>\n" +
             ~"  <strong>a</strong>\n\n" +
@@ -1253,23 +1253,23 @@ mod tests {
         }
     }
 
-    fn convert_json_map(map: hashmap<~str, json::Json>) -> hashmap<@~str, data> {
+    fn convert_json_map(map: hashmap<~str, json::Json>) -> hashmap<@~str, Data> {
         let d = box_str_hash();
         for map.each |key, value| { d.insert(@key, convert_json(value)); }
         d
     }
 
-    fn convert_json(value: json::Json) -> data {
+    fn convert_json(value: json::Json) -> Data {
         match value {
           json::Num(n) => {
             // We have to cheat and use %? because %f doesn't convert 3.3 to
             // 3.3.
-            str(@fmt!("%?", n))
+            Str(@fmt!("%?", n))
           }
-          json::String(s) => { str(s) }
-          json::Boolean(b) => { bool(b) }
-          json::List(v) => { vec(@(*v).map(convert_json)) }
-          json::Dict(d) => { map(convert_json_map(d)) }
+          json::String(s) => { Str(s) }
+          json::Boolean(b) => { Bool(b) }
+          json::List(v) => { Vec(@(*v).map(convert_json)) }
+          json::Dict(d) => { Map(convert_json_map(d)) }
           _ => { fail fmt!("%?", value) }
         }
     }
@@ -1298,7 +1298,7 @@ mod tests {
         files
     }
 
-    fn run_test(test: hashmap<~str, json::Json>, data: hashmap<@~str, data>) {
+    fn run_test(test: hashmap<~str, json::Json>, data: hashmap<@~str, Data>) {
         let template = match test.get(~"template") {
           json::String(s) => { s }
           _ => { fail }
@@ -1446,7 +1446,7 @@ mod tests {
               value => { fail fmt!("%?", value) }
             };
 
-            ctx.insert(@~"lambda", fun(f));
+            ctx.insert(@~"lambda", Fun(f));
 
             run_test(test, ctx);
         }

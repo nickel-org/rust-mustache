@@ -7,6 +7,7 @@ use std;
 
 //#[warn(deprecated_mode)]		// TODO: enable this one once he other warnings are cleared up
 #[allow(implicit_copies)]
+#[allow(non_implicitly_copyable_typarams)]	// json is all whacked
 #[forbid(non_camel_case_types)]
 
 mod mustache;
