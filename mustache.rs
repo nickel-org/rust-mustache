@@ -764,7 +764,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
         while i > 0u {
             match stack[i - 1u] {
               Map(ctx) => {
-                match ctx.find(@path[0u]) {
+                match ctx.find(@copy path[0u]) {
                   Some(v) => { value = Some(v); break; }
                   None => {}
                 }
@@ -782,7 +782,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
 
         while i < len {
             match copy value {
-              Some(Map(v)) => { value = v.find(@path[i]); }
+              Some(Map(v)) => { value = v.find(@copy path[i]); }
               _ => { break; }
             }
             i += 1u;
@@ -861,7 +861,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
             }
           }
           Partial(name, ind, _) => {
-            match ctx.partials.find(@*name) {
+            match ctx.partials.find(name) {
               None => { }
               Some(tokens) => {
                 output += render_helper(&{
