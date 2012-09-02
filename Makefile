@@ -1,8 +1,8 @@
 all:
-	rustc mustache.rc
+	rustc crate.rc
 
 test:
-	rustc --test mustache.rc && ./mustache
+	rustc --test crate.rc && ./mustache
 
 clean:
 	rm -rf *.dylib *.dSYM

@@ -1,11 +1,9 @@
 // Last built using rust commit ee2ce036ccd53d8c19689d86cf8b3bd5cf37f40f
-use std;
-
 import result::{Ok, Err};
 import io::{ReaderUtil, WriterUtil};
 import dvec::{DVec};
 import std::map::{hashmap, str_hash, box_str_hash};
-import core::to_str::{to_str};
+import core::to_str::{ToStr};
 import std::json::{to_str};
 
 export context;
