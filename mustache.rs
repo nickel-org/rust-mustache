@@ -4,7 +4,7 @@ use std;
 import result::{Ok, Err};
 import io::{ReaderUtil, WriterUtil};
 import dvec::{DVec};
-import std::map::{hashmap, str_hash};
+import std::map::{hashmap, str_hash, box_str_hash};
 import core::to_str::{to_str};
 import std::json::{to_str};
 
@@ -49,15 +49,15 @@ trait context_trait {
     fn compile_reader(rdr: io::Reader) -> template;
     fn compile_file(file: ~str) -> template;
     fn compile_str(src: ~str) -> template;
-    fn render_reader(rdr: io::Reader, data: hashmap<~str, data>) -> ~str;
-    fn render_file(file: ~str, data: hashmap<~str, data>) -> ~str;
-    fn render_str(template: ~str, data: hashmap<~str, data>) -> ~str;
+    fn render_reader(rdr: io::Reader, data: hashmap<@~str, data>) -> ~str;
+    fn render_file(file: ~str, data: hashmap<@~str, data>) -> ~str;
+    fn render_str(template: ~str, data: hashmap<@~str, data>) -> ~str;
 }
 
 impl  context : context_trait {
     #[doc = "Compiles a template from an io::Reader."]
     fn compile_reader(rdr: io::Reader) -> template {
-        let partials = str_hash();
+        let partials = box_str_hash();
         let tokens = compile_helper({
             rdr: rdr,
             partials: partials,
@@ -91,17 +91,17 @@ impl  context : context_trait {
     }
 
     #[doc = "Renders a template from an io::Reader."]
-    fn render_reader(rdr: io::Reader, data: hashmap<~str, data>) -> ~str {
+    fn render_reader(rdr: io::Reader, data: hashmap<@~str, data>) -> ~str {
         self.compile_reader(rdr).render(data)
     }
 
     #[doc = "Renders a template from a file."]
-    fn render_file(file: ~str, data: hashmap<~str, data>) -> ~str {
+    fn render_file(file: ~str, data: hashmap<@~str, data>) -> ~str {
         self.compile_file(file).render(data)
     }
 
     #[doc = "Renders a template from a string."]
-    fn render_str(template: ~str, data: hashmap<~str, data>) -> ~str {
+    fn render_str(template: ~str, data: hashmap<@~str, data>) -> ~str {
         self.compile_str(template).render(data)
     }
 }
@@ -122,17 +122,17 @@ fn compile_str(template: ~str) -> template {
 }
 
 #[doc = "Renders a template from an io::Reader."]
-fn render_reader(rdr: io::Reader, data: hashmap<~str, data>) -> ~str {
+fn render_reader(rdr: io::Reader, data: hashmap<@~str, data>) -> ~str {
     default_context().compile_reader(rdr).render(data)
 }
 
 #[doc = "Renders a template from a file."]
-fn render_file(file: ~str, data: hashmap<~str, data>) -> ~str {
+fn render_file(file: ~str, data: hashmap<@~str, data>) -> ~str {
     default_context().compile_file(file).render(data)
 }
 
 #[doc = "Renders a template from a string."]
-fn render_str(template: ~str, data: hashmap<~str, data>) -> ~str {
+fn render_str(template: ~str, data: hashmap<@~str, data>) -> ~str {
     default_context().compile_str(template).render(data)
 }
 
@@ -141,7 +141,7 @@ enum data {
     str(@~str),
     bool(bool),
     vec(@~[data]),
-    map(hashmap<~str, data>),
+    map(hashmap<@~str, data>),
     fun(fn@(@~str) -> ~str),
 }
 
@@ -177,10 +177,10 @@ impl <T: to_mustache> ~[T] : to_mustache {
     fn to_mustache() -> data { vec(@self.map(|x| x.to_mustache())) }
 }
 
-impl <T: to_mustache copy> hashmap<~str, T> : to_mustache {
+impl <T: to_mustache copy> hashmap<@~str, T> : to_mustache {
     fn to_mustache() -> data {
-        let m = str_hash();
-        for self.each |k, v| { m.insert(copy k, v.to_mustache()); }
+        let m = box_str_hash();
+        for self.each |k, v| { m.insert(k, v.to_mustache()); }
         map(m)
     }
 }
@@ -201,15 +201,15 @@ impl <T: to_mustache> Option<T> : to_mustache {
 type template = {
     ctx: context,
     tokens: @~[token],
-    partials: hashmap<~str, @~[token]>
+    partials: hashmap<@~str, @~[token]>
 };
 
 trait template_trait {
-    fn render(data: hashmap<~str, data>) -> ~str;
+    fn render(data: hashmap<@~str, data>) -> ~str;
 }
 
 impl  template : template_trait {
-    fn render(data: hashmap<~str, data>) -> ~str {
+    fn render(data: hashmap<@~str, data>) -> ~str {
         render_helper({
             ctx: self.ctx,
             tokens: self.tokens,
@@ -681,7 +681,7 @@ impl  parser : parser_trait {
 
 type compile_context = {
     rdr: io::Reader,
-    partials: hashmap<~str, @~[token]>,
+    partials: hashmap<@~str, @~[token]>,
     otag: @~str,
     ctag: @~str,
     template_path: @~str,
@@ -713,9 +713,9 @@ fn compile_helper(ctx: compile_context) -> @~[token] {
     	let path: Path = path::from_str(*ctx.template_path);
     	let path = path.push(*name + *ctx.template_extension);
 
-        if !ctx.partials.contains_key(*name) {
+        if !ctx.partials.contains_key(@*name) {
             // Insert a placeholder so we don't recurse off to infinity.
-            ctx.partials.insert(copy *name, @~[]);
+            ctx.partials.insert(@*name, @~[]);
 
             match io::file_reader(&path) {
               Err(_e) => {}
@@ -729,7 +729,7 @@ fn compile_helper(ctx: compile_context) -> @~[token] {
                     template_extension: ctx.template_extension
                 });
 
-                ctx.partials.insert(copy *name, tokens);
+                ctx.partials.insert(@*name, tokens);
               }
             }
         }
@@ -744,7 +744,7 @@ fn compile_helper(ctx: compile_context) -> @~[token] {
 type render_context = {
     ctx: context,
     tokens: @~[token],
-    partials: hashmap<~str, @~[token]>,
+    partials: hashmap<@~str, @~[token]>,
     stack: @~[data],
     indent: @~str,
 };
@@ -766,7 +766,7 @@ fn render_helper(ctx: render_context) -> ~str {
         while i > 0u {
             match stack[i - 1u] {
               map(ctx) => {
-                match ctx.find(path[0u]) {
+                match ctx.find(@path[0u]) {
                   Some(v) => { value = Some(v); break; }
                   None => {}
                 }
@@ -784,7 +784,7 @@ fn render_helper(ctx: render_context) -> ~str {
 
         while i < len {
             match copy value {
-              Some(map(v)) => { value = v.find(path[i]); }
+              Some(map(v)) => { value = v.find(@path[i]); }
               _ => { break; }
             }
             i += 1u;
@@ -863,7 +863,7 @@ fn render_helper(ctx: render_context) -> ~str {
             }
           }
           partial(name, ind, _) => {
-            match ctx.partials.find(*name) {
+            match ctx.partials.find(@*name) {
               None => { }
               Some(tokens) => {
                 output += render_helper({
@@ -1134,8 +1134,8 @@ mod tests {
 
     #[test]
     fn test_render_texts() {
-        let ctx = str_hash();
-        ctx.insert(~"name", str(@~"world"));
+        let ctx = box_str_hash();
+        ctx.insert(@~"name", str(@~"world"));
 
         assert render_str(~"hello world", ctx) == ~"hello world";
         assert render_str(~"hello {world", ctx) == ~"hello {world";
@@ -1146,41 +1146,41 @@ mod tests {
 
     #[test]
     fn test_render_etags() {
-        let ctx = str_hash();
-        ctx.insert(~"name", str(@~"world"));
+        let ctx = box_str_hash();
+        ctx.insert(@~"name", str(@~"world"));
 
         assert render_str(~"hello {{name}}", ctx) == ~"hello world";
     }
 
     #[test]
     fn test_render_utags() {
-        let ctx = str_hash();
-        ctx.insert(~"name", str(@~"world"));
+        let ctx = box_str_hash();
+        ctx.insert(@~"name", str(@~"world"));
 
         assert render_str(~"hello {{{name}}}", ctx) == ~"hello world";
     }
 
     #[test]
     fn test_render_sections() {
-        let ctx0 = str_hash();
+        let ctx0 = box_str_hash();
         let template = compile_str(~"0{{#a}}1 {{n}} 3{{/a}}5");
 
         assert template.render(ctx0) == ~"05";
 
-        ctx0.insert(~"a", vec(@~[]));
+        ctx0.insert(@~"a", vec(@~[]));
         assert template.render(ctx0) == ~"05";
 
-        let ctx1: hashmap<~str, data> = str_hash();
-        ctx0.insert(~"a", (~[ctx1]).to_mustache());
+        let ctx1: hashmap<@~str, data> = box_str_hash();
+        ctx0.insert(@~"a", (~[ctx1]).to_mustache());
 
         assert template.render(ctx0) == ~"01  35";
 
-        let ctx1 = str_hash();
-        ctx1.insert(~"n", (~"a").to_mustache());
-        ctx0.insert(~"a", (~[ctx1]).to_mustache());
+        let ctx1 = box_str_hash();
+        ctx1.insert(@~"n", (~"a").to_mustache());
+        ctx0.insert(@~"a", (~[ctx1]).to_mustache());
         assert template.render(ctx0) == ~"01 a 35";
 
-        ctx0.insert(~"a", (|_text| {~"foo"}).to_mustache());
+        ctx0.insert(@~"a", (|_text| {~"foo"}).to_mustache());
         assert template.render(ctx0) == ~"0foo5";
     }
 
@@ -1188,17 +1188,17 @@ mod tests {
     fn test_render_inverted_sections() {
         let template = ~"0{{^a}}1 3{{/a}}5";
 
-        let ctx0 = str_hash();
+        let ctx0 = box_str_hash();
         assert render_str(template, ctx0) == ~"01 35";
 
-        ctx0.insert(~"a", vec(@~[]));
+        ctx0.insert(@~"a", vec(@~[]));
         assert render_str(template, ctx0) == ~"01 35";
 
-        let ctx1 = str_hash();
-        ctx0.insert(~"a", (~[ctx1]).to_mustache());
+        let ctx1 = box_str_hash();
+        ctx0.insert(@~"a", (~[ctx1]).to_mustache());
         assert render_str(template, ctx0) == ~"05";
 
-        ctx1.insert(~"n", (~"a").to_mustache());
+        ctx1.insert(@~"n", (~"a").to_mustache());
         assert render_str(template, ctx0) == ~"05";
     }
 
@@ -1206,26 +1206,26 @@ mod tests {
     fn test_render_partial() {
         let path = ~"base";
 
-        let ctx0 = str_hash();
+        let ctx0 = box_str_hash();
         assert render_file(path, ctx0) == ~"<h2>Names</h2>\n";
 
-        ctx0.insert(~"names", vec(@~[]));
+        ctx0.insert(@~"names", vec(@~[]));
         assert render_file(path, ctx0) == ~"<h2>Names</h2>\n";
 
-        let ctx1 = str_hash();
-        ctx0.insert(~"names", vec(@~[map(ctx1)]));
+        let ctx1 = box_str_hash();
+        ctx0.insert(@~"names", vec(@~[map(ctx1)]));
         assert render_file(path, ctx0) ==
            ~ "<h2>Names</h2>\n" +
             ~"  <strong></strong>\n\n";
 
-        ctx1.insert(~"name", str(@~"a"));
+        ctx1.insert(@~"name", str(@~"a"));
         assert render_file(path, ctx0) ==
             ~"<h2>Names</h2>\n" +
             ~"  <strong>a</strong>\n\n";
 
-        let ctx2 = str_hash();
-        ctx2.insert(~"name", str(@~"<b>"));
-        ctx0.insert(~"names", vec(@~[map(ctx1), map(ctx2)]));
+        let ctx2 = box_str_hash();
+        ctx2.insert(@~"name", str(@~"<b>"));
+        ctx0.insert(@~"names", vec(@~[map(ctx1), map(ctx2)]));
         assert render_file(path, ctx0) ==
             ~"<h2>Names</h2>\n" +
             ~"  <strong>a</strong>\n\n" +
@@ -1255,9 +1255,9 @@ mod tests {
         }
     }
 
-    fn convert_json_map(map: hashmap<~str, json::Json>) -> hashmap<~str, data> {
-        let d = str_hash();
-        for map.each |key, value| { d.insert(copy key, convert_json(value)); }
+    fn convert_json_map(map: hashmap<~str, json::Json>) -> hashmap<@~str, data> {
+        let d = box_str_hash();
+        for map.each |key, value| { d.insert(@key, convert_json(value)); }
         d
     }
 
@@ -1300,7 +1300,7 @@ mod tests {
         files
     }
 
-    fn run_test(test: hashmap<~str, json::Json>, data: hashmap<~str, data>) {
+    fn run_test(test: hashmap<~str, json::Json>, data: hashmap<@~str, data>) {
         let template = match test.get(~"template") {
           json::String(s) => { s }
           _ => { fail }
@@ -1448,7 +1448,7 @@ mod tests {
               value => { fail fmt!("%?", value) }
             };
 
-            ctx.insert(~"lambda", fun(f));
+            ctx.insert(@~"lambda", fun(f));
 
             run_test(test, ctx);
         }
