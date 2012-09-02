@@ -7,7 +7,7 @@ use std;
 
 #[forbid(deprecated_mode)]
 #[forbid(implicit_copies)]
-#[allow(non_implicitly_copyable_typarams)]	// json is all whacked
+#[allow(non_implicitly_copyable_typarams)]	// TODO: forbid these (once json is fixed)
 #[forbid(non_camel_case_types)]
 
 mod mustache;
