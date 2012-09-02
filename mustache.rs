@@ -18,6 +18,15 @@ export render_reader;
 export render_file;
 export render_str;
 
+#[doc = "Represents template data."]
+enum data {
+    str(@~str),
+    bool(bool),
+    vec(@~[data]),
+    map(hashmap<@~str, data>),
+    fun(fn@(@~str) -> ~str),
+}
+
 #[doc = "
 Represents the shared metadata needed to compile and render a mustache
 template.
@@ -25,6 +34,12 @@ template.
 type context = {
     template_path: @~str,
     template_extension: @~str,
+};
+
+type template = {
+    ctx: context,
+    tokens: @~[token],
+    partials: hashmap<@~str, @~[token]>
 };
 
 #[doc = "
@@ -134,15 +149,6 @@ fn render_str(template: ~str, data: hashmap<@~str, data>) -> ~str {
     default_context().compile_str(template).render(data)
 }
 
-#[doc = "Represents template data."]
-enum data {
-    str(@~str),
-    bool(bool),
-    vec(@~[data]),
-    map(hashmap<@~str, data>),
-    fun(fn@(@~str) -> ~str),
-}
-
 trait to_mustache {
     fn to_mustache() -> data;
 }
@@ -195,12 +201,6 @@ impl <T: to_mustache> Option<T> : to_mustache {
         }
     }
 }
-
-type template = {
-    ctx: context,
-    tokens: @~[token],
-    partials: hashmap<@~str, @~[token]>
-};
 
 trait template_trait {
     fn render(data: hashmap<@~str, data>) -> ~str;

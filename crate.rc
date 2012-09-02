@@ -5,4 +5,8 @@ use std;
        uuid = "afecaa07-75c5-466c-b3a3-fae5d32e04aa")]
 #[crate_type = "lib"]
 
+//#[warn(deprecated_mode)]		// TODO: enable this one once he other warnings are cleared up
+#[allow(implicit_copies)]
+#[forbid(non_camel_case_types)]
+
 mod mustache;
