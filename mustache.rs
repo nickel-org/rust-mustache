@@ -1,8 +1,9 @@
+// Last built using rust commit ee2ce036ccd53d8c19689d86cf8b3bd5cf37f40f
 use std;
 
-import result::{ok, err};
-import io::{reader_util, writer_util};
-import dvec::{dvec, extensions};
+import result::{Ok, Err};
+import io::{ReaderUtil, WriterUtil};
+import dvec::{DVec};
 import std::map::{hashmap, str_hash};
 import core::to_str::{to_str};
 import std::json::{to_str};
@@ -45,17 +46,17 @@ directory.
 fn default_context() -> context { context(@~".", @~".mustache") }
 
 trait context_trait {
-    fn compile_reader(rdr: io::reader) -> template;
+    fn compile_reader(rdr: io::Reader) -> template;
     fn compile_file(file: ~str) -> template;
     fn compile_str(src: ~str) -> template;
-    fn render_reader(rdr: io::reader, data: hashmap<~str, data>) -> ~str;
+    fn render_reader(rdr: io::Reader, data: hashmap<~str, data>) -> ~str;
     fn render_file(file: ~str, data: hashmap<~str, data>) -> ~str;
     fn render_str(template: ~str, data: hashmap<~str, data>) -> ~str;
 }
 
-impl context of context_trait for context {
-    #[doc = "Compiles a template from an io::reader."]
-    fn compile_reader(rdr: io::reader) -> template {
+impl  context : context_trait {
+    #[doc = "Compiles a template from an io::Reader."]
+    fn compile_reader(rdr: io::Reader) -> template {
         let partials = str_hash();
         let tokens = compile_helper({
             rdr: rdr,
@@ -75,12 +76,12 @@ impl context of context_trait for context {
 
     #[doc = "Compiles a template from a file."]
     fn compile_file(file: ~str) -> template {
-        let path = path::connect(*self.template_path,
-                                 file + *self.template_extension);
+    	let path: Path = path::from_str(*self.template_path);
+    	let path = path.push(file + *self.template_extension);
 
-        alt io::file_reader(path) {
-          ok(rdr) { self.compile_reader(rdr) }
-          err(e) { fail e; }
+        match io::file_reader(&path) {
+          Ok(rdr) => { self.compile_reader(rdr) }
+          Err(e) => { fail e; }
         }
     }
 
@@ -89,8 +90,8 @@ impl context of context_trait for context {
         io::with_str_reader(src, |rdr| self.compile_reader(rdr))
     }
 
-    #[doc = "Renders a template from an io::reader."]
-    fn render_reader(rdr: io::reader, data: hashmap<~str, data>) -> ~str {
+    #[doc = "Renders a template from an io::Reader."]
+    fn render_reader(rdr: io::Reader, data: hashmap<~str, data>) -> ~str {
         self.compile_reader(rdr).render(data)
     }
 
@@ -105,8 +106,8 @@ impl context of context_trait for context {
     }
 }
 
-#[doc = "Compiles a template from an io::reader."]
-fn compile_reader(rdr: io::reader) -> template {
+#[doc = "Compiles a template from an io::Reader."]
+fn compile_reader(rdr: io::Reader) -> template {
     default_context().compile_reader(rdr)
 }
 
@@ -120,8 +121,8 @@ fn compile_str(template: ~str) -> template {
     default_context().compile_str(template)
 }
 
-#[doc = "Renders a template from an io::reader."]
-fn render_reader(rdr: io::reader, data: hashmap<~str, data>) -> ~str {
+#[doc = "Renders a template from an io::Reader."]
+fn render_reader(rdr: io::Reader, data: hashmap<~str, data>) -> ~str {
     default_context().compile_reader(rdr).render(data)
 }
 
@@ -144,39 +145,39 @@ enum data {
     fun(fn@(@~str) -> ~str),
 }
 
-iface to_mustache {
+trait to_mustache {
     fn to_mustache() -> data;
 }
 
-impl of to_mustache for data {
+impl  data : to_mustache {
     fn to_mustache() -> data { self }
 }
 
-impl of to_mustache for ~str {
+impl  ~str : to_mustache {
     fn to_mustache() -> data { str(@copy self) }
 }
 
-impl of to_mustache for @~str {
+impl  @~str : to_mustache {
     fn to_mustache() -> data { str(self) }
 }
 
-impl of to_mustache for bool {
+impl  bool : to_mustache {
     fn to_mustache() -> data { bool(self) }
 }
 
-impl of to_mustache for uint {
+impl  uint : to_mustache {
     fn to_mustache() -> data { str(@uint::str(self)) }
 }
 
-impl of to_mustache for int {
+impl  int : to_mustache {
     fn to_mustache() -> data { str(@int::str(self)) }
 }
 
-impl <T: to_mustache> of to_mustache for ~[T] {
+impl <T: to_mustache> ~[T] : to_mustache {
     fn to_mustache() -> data { vec(@self.map(|x| x.to_mustache())) }
 }
 
-impl <T: to_mustache copy> of to_mustache for hashmap<~str, T> {
+impl <T: to_mustache copy> hashmap<~str, T> : to_mustache {
     fn to_mustache() -> data {
         let m = str_hash();
         for self.each |k, v| { m.insert(copy k, v.to_mustache()); }
@@ -184,15 +185,15 @@ impl <T: to_mustache copy> of to_mustache for hashmap<~str, T> {
     }
 }
 
-impl of to_mustache for fn@(@~str) -> ~str {
+impl  fn@(@~str) -> ~str : to_mustache {
     fn to_mustache() -> data { fun(self) }
 }
 
-impl <T: to_mustache> of to_mustache for option<T> {
+impl <T: to_mustache> Option<T> : to_mustache {
     fn to_mustache() -> data {
-        alt self {
-          none { bool(false) }
-          some(v) { v.to_mustache() }
+        match self {
+          None => { bool(false) }
+          Some(v) => { v.to_mustache() }
         }
     }
 }
@@ -207,7 +208,7 @@ trait template_trait {
     fn render(data: hashmap<~str, data>) -> ~str;
 }
 
-impl template of template_trait for template {
+impl  template : template_trait {
     fn render(data: hashmap<~str, data>) -> ~str {
         render_helper({
             ctx: self.ctx,
@@ -236,9 +237,9 @@ enum token_class {
 }
 
 type parser = {
-    rdr: io::reader,
+    rdr: io::Reader,
     mut ch: char,
-    mut lookahead: option<char>,
+    mut lookahead: Option<char>,
     mut line: uint,
     mut col: uint,
     mut content: @ mut ~str,
@@ -248,8 +249,8 @@ type parser = {
     mut otag_chars:@ ~[char],
     mut ctag_chars: @~[char],
     mut tag_position: uint,
-    tokens: dvec<token>,
-    partials: dvec<@~str>,
+    tokens: DVec<token>,
+    partials: DVec<@~str>,
 };
 
 mod parser {
@@ -271,16 +272,16 @@ trait parser_trait {
     fn check_content(content: ~str) -> ~str;
 }
 
-impl parser of parser_trait for parser {
+impl  parser : parser_trait {
     fn eof() -> bool { self.ch == -1 as char }
 
     fn bump() {
-        let mut lookahead = none;
+        let mut lookahead = None;
         lookahead <-> self.lookahead;
 
-        alt lookahead {
-          none { self.ch = self.rdr.read_char(); }
-          some(ch) { self.ch = ch; }
+        match lookahead {
+          None => { self.ch = self.rdr.read_char(); }
+          Some(ch) => { self.ch = ch; }
         }
 
         if self.ch == '\n' {
@@ -292,13 +293,13 @@ impl parser of parser_trait for parser {
     }
 
     fn peek() -> char {
-        alt self.lookahead {
-          none {
+        match self.lookahead {
+          None => {
             let ch = self.rdr.read_char();
-            self.lookahead = some(ch);
+            self.lookahead = Some(ch);
             ch
           }
-          some(ch) { ch }
+          Some(ch) => { ch }
         }
     }
 
@@ -306,8 +307,8 @@ impl parser of parser_trait for parser {
         let mut curly_brace_tag = false;
 
         while !self.eof() {
-            alt self.state {
-              parser::TEXT {
+            match self.state {
+              parser::TEXT => {
                 if self.ch == self.otag_chars[0] {
                     if vec::len(*self.otag_chars) > 1u {
                         self.tag_position = 1u;
@@ -321,7 +322,7 @@ impl parser of parser_trait for parser {
                 }
                 self.bump();
               }
-              parser::OTAG {
+              parser::OTAG => {
                 if self.ch == self.otag_chars[self.tag_position] {
                     if self.tag_position == vec::len(*self.otag_chars) - 1u {
                         self.add_text();
@@ -339,7 +340,7 @@ impl parser of parser_trait for parser {
                 }
                 self.bump();
               }
-              parser::TAG {
+              parser::TAG => {
                 if self.content == @~"" && self.ch == '{' {
                     curly_brace_tag = true;
                     unsafe { str::push_char(*self.content, self.ch) };
@@ -362,7 +363,7 @@ impl parser of parser_trait for parser {
                     self.bump();
                 }
               }
-              parser::CTAG {
+              parser::CTAG => {
                 if self.ch == self.ctag_chars[self.tag_position] {
                     if self.tag_position == vec::len(*self.ctag_chars) - 1u {
                         self.add_tag();
@@ -378,21 +379,21 @@ impl parser of parser_trait for parser {
             }
         }
 
-        alt self.state {
-          parser::TEXT { self.add_text() }
-          parser::OTAG { self.not_otag(); self.add_text() }
-          parser::TAG { fail ~"unclosed tag" }
-          parser::CTAG { self.not_ctag(); self.add_text() }
+        match self.state {
+          parser::TEXT => { self.add_text() }
+          parser::OTAG => { self.not_otag(); self.add_text() }
+          parser::TAG => { fail ~"unclosed tag" }
+          parser::CTAG => { self.not_ctag(); self.add_text() }
         }
 
         // Check that we don't have any incomplete sections.
         for self.tokens.each |token| {
-            alt token {
-              incomplete_section(name, _, _, _) {
+            match token {
+              incomplete_section(name, _, _, _) => {
                   fail #fmt("Unclosed mustache section %s",
                     str::connect(*name, ~"."));
               }
-              _ {}
+              _ => {}
             }
         };
     }
@@ -419,25 +420,25 @@ impl parser of parser_trait for parser {
 
             // If the last token ends with a newline (or there is no previous
             // token), then this token is standalone.
-            if self.tokens.len() == 0u { ret standalone; }
+            if self.tokens.len() == 0u { return standalone; }
 
-            alt self.tokens[self.tokens.len() - 1u] {
-              incomplete_section(_, _, _, true) { standalone }
+            match self.tokens[self.tokens.len() - 1u] {
+              incomplete_section(_, _, _, true) => { standalone }
 
-              text(s) if *s != ~"" {
+              text(s) if *s != ~"" => {
                 // Look for the last newline character that may have whitespace
                 // following it.
-                alt str::rfind(*s,
+                match str::rfind(*s,
                               { |c| c == '\n' || !char::is_whitespace(c) }) {
                   // It's all whitespace.
-                  none {
+                  None => {
                     if self.tokens.len() == 1u {
                         whitespace(s, 0u)
                     } else {
                         normal
                     }
                   }
-                  some(pos) {
+                  Some(pos) => {
                     if str::char_at(*s, pos) == '\n' {
                         if pos == (*s).len() - 1u {
                             standalone
@@ -448,7 +449,7 @@ impl parser of parser_trait for parser {
                   }
                 }
               }
-              _ { normal }
+              _ => { normal }
             }
         } else { normal }
     }
@@ -457,14 +458,14 @@ impl parser of parser_trait for parser {
         // If the next character is a newline, and the last token ends with a
         // newline and whitespace, clear out the whitespace.
 
-        alt self.classify_token() {
-          normal { false }
-          standalone {
+        match self.classify_token() {
+          normal => { false }
+          standalone => {
               if self.ch == '\r' { self.bump(); }
               self.bump();
               true
           }
-          whitespace(s, pos) | newline_whitespace(s, pos) {
+          whitespace(s, pos) | newline_whitespace(s, pos) => {
               if self.ch == '\r' { self.bump(); }
               self.bump();
 
@@ -487,18 +488,18 @@ impl parser of parser_trait for parser {
         content <-> *self.content;
         let len = content.len();
 
-        alt content[0] as char {
-          '!' {
+        match content[0] as char {
+          '!' => {
             // ignore comments
             self.eat_whitespace();
           }
-          '&' {
+          '&' => {
             let name = content.slice(1u, len);
             let name = self.check_content(name);
             let name = @str::split_char_nonempty(name, '.');
             self.tokens.push(utag(name, tag));
           }
-          '{' {
+          '{' => {
             if str::ends_with(content, "}") {
                 let name = content.slice(1u, len - 1u);
                 let name = self.check_content(name);
@@ -506,21 +507,21 @@ impl parser of parser_trait for parser {
                 self.tokens.push(utag(name, tag));
             } else { fail ~"unbalanced \"{\" in tag"; }
           }
-          '#' {
+          '#' => {
             let newlined = self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
             let name = @str::split_char_nonempty(name, '.');
             self.tokens.push(incomplete_section(name, false, tag, newlined));
           }
-          '^' {
+          '^' => {
             let newlined = self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
             let name = @str::split_char_nonempty(name, '.');
             self.tokens.push(incomplete_section(name, true, tag, newlined));
           }
-          '/' {
+          '/' => {
             self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
@@ -534,26 +535,26 @@ impl parser of parser_trait for parser {
 
                 let last = self.tokens.pop();
 
-                alt last {
-                  incomplete_section(section_name, inverted, osection, _) {
+                match last {
+                  incomplete_section(section_name, inverted, osection, _) => {
                     let children = vec::reversed(children);
 
                     // Collect all the children's sources.
-                    let srcs = dvec();
+                    let srcs = DVec();
                     for children.each |child: token| {
-                        alt child {
+                        match child {
                           text(s)
                           | etag(_, s)
                           | utag(_, s)
-                          | partial(_, _, s) {
+                          | partial(_, _, s) => {
                             srcs.push(s);
                           }
-                          section(_, _, _, _, osection, src, csection, _) {
+                          section(_, _, _, _, osection, src, csection, _) => {
                             srcs.push(osection);
                             srcs.push(src);
                             srcs.push(csection);
                           }
-                          _ { fail; }
+                          _ => { fail; }
                         }
                     }
 
@@ -580,30 +581,30 @@ impl parser of parser_trait for parser {
                         fail ~"Unclosed section";
                     }
                   }
-                  _ { vec::push(children, last); }
+                  _ => { vec::push(children, last); }
                 }
             }
           }
-          '>' { self.add_partial(content, tag); }
-          '=' {
+          '>' => { self.add_partial(content, tag); }
+          '=' => {
             self.eat_whitespace();
 
             if (len > 2u && str::ends_with(content, "=")) {
                 let s = self.check_content(content.slice(1u, len - 1u));
 
                 let pos = str::find_from(s, 0u, char::is_whitespace);
-                let pos = alt pos {
-                  none { fail ~"invalid change delimiter tag content"; }
-                  some(pos) { pos }
+                let pos = match pos {
+                  None => { fail ~"invalid change delimiter tag content"; }
+                  Some(pos) => { pos }
                 };
 
                 self.otag = @s.slice(0u, pos);
                 self.otag_chars = @str::chars(*self.otag);
 
                 let pos = str::find_from(s, pos, |c| !char::is_whitespace(c));
-                let pos = alt pos {
-                  none { fail ~"invalid change delimiter tag content"; }
-                  some(pos) { pos }
+                let pos = match pos {
+                  None => { fail ~"invalid change delimiter tag content"; }
+                  Some(pos) => { pos }
                 };
 
                 self.ctag = @s.slice(pos, s.len());
@@ -612,7 +613,7 @@ impl parser of parser_trait for parser {
                 fail ~"invalid change delimiter tag content";
             }
           }
-          _ {
+          _ => {
             let name = self.check_content(content);
             let name = @str::split_char_nonempty(name, '.');
             self.tokens.push(etag(name, tag));
@@ -622,14 +623,14 @@ impl parser of parser_trait for parser {
 
     fn add_partial(content: ~str, tag: @~str) {
         let token_class = self.classify_token();
-        let indent = alt token_class {
-          normal { ~"" }
-          standalone {
+        let indent = match token_class {
+          normal => { ~"" }
+          standalone => {
             if self.ch == '\r' { self.bump(); }
             self.bump();
             ~""
           }
-          whitespace(s, pos) | newline_whitespace(s, pos) {
+          whitespace(s, pos) | newline_whitespace(s, pos) => {
             if self.ch == '\r' { self.bump(); }
             self.bump();
 
@@ -679,7 +680,7 @@ impl parser of parser_trait for parser {
 }
 
 type compile_context = {
-    rdr: io::reader,
+    rdr: io::Reader,
     partials: hashmap<~str, @~[token]>,
     otag: @~str,
     ctag: @~str,
@@ -691,7 +692,7 @@ fn compile_helper(ctx: compile_context) -> @~[token] {
     let parser: parser = {
         rdr: ctx.rdr,
         mut ch: ctx.rdr.read_char(),
-        mut lookahead: none,
+        mut lookahead: None,
         mut line: 1u,
         mut col: 1u,
         mut content: @ mut ~"",
@@ -701,24 +702,24 @@ fn compile_helper(ctx: compile_context) -> @~[token] {
         mut otag_chars: @str::chars(*ctx.otag),
         mut ctag_chars: @str::chars(*ctx.ctag),
         mut tag_position: 0u,
-        tokens: dvec(),
-        partials: dvec(),
+        tokens: DVec(),
+        partials: DVec(),
     };
 
     parser.parse();
 
     // Compile the partials if we haven't done so already.
     for parser.partials.each |name| {
-        let path = path::connect(*ctx.template_path,
-                                 *name + *ctx.template_extension);
+    	let path: Path = path::from_str(*ctx.template_path);
+    	let path = path.push(*name + *ctx.template_extension);
 
         if !ctx.partials.contains_key(*name) {
             // Insert a placeholder so we don't recurse off to infinity.
             ctx.partials.insert(copy *name, @~[]);
 
-            alt io::file_reader(path) {
-              err(e) {}
-              ok(rdr) {
+            match io::file_reader(&path) {
+              Err(_e) => {}
+              Ok(rdr) => {
                 let tokens = compile_helper({
                     rdr: rdr,
                     partials: ctx.partials,
@@ -749,29 +750,29 @@ type render_context = {
 };
 
 fn render_helper(ctx: render_context) -> ~str {
-    fn find(stack: ~[data], path: ~[~str]) -> option<data> {
+    fn find(stack: ~[data], path: ~[~str]) -> Option<data> {
         // If we have an empty path, we just want the top value in our stack.
         if vec::is_empty(path) {
-            ret alt vec::last_opt(stack) {
-              none { none }
-              some(value) { some(value) }
+            return match vec::last_opt(stack) {
+              None => { None }
+              Some(value) => { Some(value) }
             };
         }
 
         // Otherwise, find the stack that has the first part of our path.
-        let mut value = none;
+        let mut value = None;
 
         let mut i = vec::len(stack);
         while i > 0u {
-            alt stack[i - 1u] {
-              map(ctx) {
-                alt ctx.find(path[0u]) {
-                  some(v) { value = some(v); break; }
-                  none {}
+            match stack[i - 1u] {
+              map(ctx) => {
+                match ctx.find(path[0u]) {
+                  Some(v) => { value = Some(v); break; }
+                  None => {}
                 }
                 i -= 1u;
               }
-              _ { fail #fmt("%? %?", stack, path) }
+              _ => { fail fmt!("%? %?", stack, path) }
             }
         }
 
@@ -782,9 +783,9 @@ fn render_helper(ctx: render_context) -> ~str {
         let len = vec::len(path);
 
         while i < len {
-            alt copy value {
-              some(map(v)) { value = v.find(path[i]); }
-              _ { break; }
+            match copy value {
+              Some(map(v)) => { value = v.find(path[i]); }
+              _ => { break; }
             }
             i += 1u;
         }
@@ -795,8 +796,8 @@ fn render_helper(ctx: render_context) -> ~str {
     let mut output = ~"";
     
     for (*ctx.tokens).each |token| {
-        alt token {
-          text(value) {
+        match token {
+          text(value) => {
             // Indent the lines.
             if *ctx.indent == ~"" {
                 output += *value;
@@ -805,13 +806,13 @@ fn render_helper(ctx: render_context) -> ~str {
                 let len = (*value).len();
 
                 while pos < len {
-                    let line = alt str::find_char_from(*value, '\n', pos) {
-                      none {
+                    let line = match str::find_char_from(*value, '\n', pos) {
+                      None => {
                         let line = (*value).slice(pos, len);
                         pos = len;
                         line
                       }
-                      some(i) {
+                      Some(i) => {
                         let line = (*value).slice(pos, i + 1u);
                         pos = i + 1u;
                         line
@@ -826,54 +827,54 @@ fn render_helper(ctx: render_context) -> ~str {
                 }
             }
           }
-          etag(path, _) {
-            alt find(*ctx.stack, *path) {
-              none { }
-              some(value) {
+          etag(path, _) => {
+            match find(*ctx.stack, *path) {
+              None => { }
+              Some(value) => {
                 output += *ctx.indent + render_etag(value, ctx);
               }
             }
           }
-          utag(path, _) {
-            alt find(*ctx.stack, *path) {
-              none { }
-              some(value) {
+          utag(path, _) => {
+            match find(*ctx.stack, *path) {
+              None => { }
+              Some(value) => {
                 output += *ctx.indent + render_utag(value, ctx);
               }
             }
           }
-          section(path, true, children, _, _, _, _, _) {
-            let ctx = { tokens: children with ctx };
+          section(path, true, children, _, _, _, _, _) => {
+            let ctx = { tokens: children ,.. ctx };
 
-            output += alt find(*ctx.stack, *path) {
-              none { render_helper(ctx) }
-              some(value) { render_inverted_section(value, ctx) }
+            output += match find(*ctx.stack, *path) {
+              None => { render_helper(ctx) }
+              Some(value) => { render_inverted_section(value, ctx) }
             };
           }
-          section(path, false, children, otag, _, src, _, ctag) {
-            alt find(*ctx.stack, *path) {
-              none { }
-              some(value) {
+          section(path, false, children, otag, _, src, _, ctag) => {
+            match find(*ctx.stack, *path) {
+              None => { }
+              Some(value) => {
                 output += render_section(value, src, otag, ctag, {
                     tokens: children
-                    with ctx
+                    ,.. ctx
                 });
               }
             }
           }
-          partial(name, ind, _) {
-            alt ctx.partials.find(*name) {
-              none { }
-              some(tokens) {
+          partial(name, ind, _) => {
+            match ctx.partials.find(*name) {
+              None => { }
+              Some(tokens) => {
                 output += render_helper({
                     tokens: tokens,
                     indent: @(*ctx.indent + *ind)
-                    with ctx
+                    ,.. ctx
                 });
               }
             }
           }
-          _ { fail }
+          _ => { fail }
         };
     };
 
@@ -883,34 +884,34 @@ fn render_helper(ctx: render_context) -> ~str {
 fn render_etag(value: data, ctx: render_context) -> ~str {
     let mut escaped = ~"";
     do str::chars_iter(render_utag(value, ctx)) |c| {
-        alt c {
-          '<' { escaped += "&lt;" }
-          '>' { escaped += "&gt;" }
-          '&' { escaped += "&amp;" }
-          '"' { escaped += "&quot;" }
-          '\'' { escaped += "&#39;" }
-          _ { str::push_char(escaped, c); }
+        match c {
+          '<' => { escaped += "&lt;" }
+          '>' => { escaped += "&gt;" }
+          '&' => { escaped += "&amp;" }
+          '"' => { escaped += "&quot;" }
+          '\'' => { escaped += "&#39;" }
+          _ => { str::push_char(escaped, c); }
         }
     }
     escaped
 }
 
 fn render_utag(value: data, ctx: render_context) -> ~str {
-    alt value {
-      str(s) { copy *s }
-      fun(f) {
+    match value {
+      str(s) => { copy *s }
+      fun(f) => {
           // etags and utags use the default delimiter.
           render_fun(ctx, @~"", @~"{{", @~"}}", f)
       }
-      _ { fail }
+      _ => { fail }
     }
 }
 
 fn render_inverted_section(value: data, ctx: render_context) -> ~str {
-    alt value {
-      bool(false) { render_helper(ctx) }
-      vec(xs) if (*xs).is_empty() { render_helper(ctx) }
-      _ { ~"" }
+    match value {
+      bool(false) => { render_helper(ctx) }
+      vec(xs) if (*xs).is_empty() => { render_helper(ctx) }
+      _ => { ~"" }
     }
 }
 
@@ -919,17 +920,17 @@ fn render_section(value: data,
                   otag: @~str,
                   ctag: @~str,
                   ctx: render_context) -> ~str {
-    alt value {
-      bool(true) { render_helper(ctx) }
-      bool(false) { ~"" }
-      vec(vs) {
+    match value {
+      bool(true) => { render_helper(ctx) }
+      bool(false) => { ~"" }
+      vec(vs) => {
         str::concat(do (*vs).map |v| {
-            render_helper({ stack: @(ctx.stack + ~[v]) with ctx })
+            render_helper({ stack: @(ctx.stack + ~[v]) ,.. ctx })
         })
       }
-      map(_) { render_helper({ stack: @(ctx.stack + ~[value]) with ctx }) }
-      fun(f) { render_fun(ctx, src, otag, ctag, f) }
-      _ { fail }
+      map(_) => { render_helper({ stack: @(ctx.stack + ~[value]) ,.. ctx }) }
+      fun(f) => { render_fun(ctx, src, otag, ctag, f) }
+      _ => { fail }
     }
 }
 
@@ -949,7 +950,7 @@ fn render_fun(ctx: render_context,
         })
     };
 
-    render_helper({ tokens: tokens with ctx })
+    render_helper({ tokens: tokens ,.. ctx })
 }
 
 #[cfg(test)]
@@ -1231,21 +1232,22 @@ mod tests {
             ~"  <strong>&lt;b&gt;</strong>\n\n";
     }
 
-    fn parse_spec_tests(src: ~str) -> @~[json::json] {
-        alt io::read_whole_file_str(src) {
-          err(e) { fail e }
-          ok(s) {
-            alt json::from_str(s) {
-              err(e) { fail e.to_str() }
-              ok(json) {
-                alt json {
-                  json::dict(d) {
-                    alt d.find(~"tests") {
-                      some(json::list(tests)) { tests }
-                      _ { fail #fmt("%s: tests key not a list", src) }
+    fn parse_spec_tests(src: ~str) -> @~[json::Json] {
+    	let path: Path = path::from_str(src);
+        match io::read_whole_file_str(&path) {
+          Err(e) => { fail e }
+          Ok(s) => {
+            match json::from_str(s) {
+              Err(e) => { fail e.to_str() }
+              Ok(json) => {
+                match json {
+                  json::Dict(d) => {
+                    match d.find(~"tests") {
+                      Some(json::List(tests)) => { tests }
+                      _ => { fail fmt!("%s: tests key not a list", src) }
                     }
                   }
-                  _ { fail #fmt("%s: JSON value not a map", src) }
+                  _ => { fail fmt!("%s: JSON value not a map", src) }
                 }
               }
             }
@@ -1253,114 +1255,114 @@ mod tests {
         }
     }
 
-    fn convert_json_map(map: hashmap<~str, json::json>) -> hashmap<~str, data> {
+    fn convert_json_map(map: hashmap<~str, json::Json>) -> hashmap<~str, data> {
         let d = str_hash();
         for map.each |key, value| { d.insert(copy key, convert_json(value)); }
         d
     }
 
-    fn convert_json(value: json::json) -> data {
-        alt value {
-          json::num(n) {
+    fn convert_json(value: json::Json) -> data {
+        match value {
+          json::Num(n) => {
             // We have to cheat and use %? because %f doesn't convert 3.3 to
             // 3.3.
-            str(@#fmt("%?", n))
+            str(@fmt!("%?", n))
           }
-          json::string(s) { str(s) }
-          json::boolean(b) { bool(b) }
-          json::list(v) { vec(@(*v).map(convert_json)) }
-          json::dict(d) { map(convert_json_map(d)) }
-          _ { fail #fmt("%?", value) }
+          json::String(s) => { str(s) }
+          json::Boolean(b) => { bool(b) }
+          json::List(v) => { vec(@(*v).map(convert_json)) }
+          json::Dict(d) => { map(convert_json_map(d)) }
+          _ => { fail fmt!("%?", value) }
         }
     }
 
-    fn write_partials(value: json::json) -> ~[~str] {
+    fn write_partials(value: json::Json) -> ~[Path] {
         let mut files = ~[];
 
-        alt value {
-          json::dict(d) {
+        match value {
+          json::Dict(d) => {
             for d.each |key, value| {
-                alt value {
-                  json::string(s) {
-                    let file = key + ".mustache";
-                    alt io::file_writer(file, ~[io::create, io::truncate]) {
-                      ok(wr) { vec::push(files, file); wr.write_str(*s); }
-                      err(e) { fail e; }
+                match value {
+                  json::String(s) => {
+                    let file: Path = path::from_str(key + ".mustache");
+                    match io::file_writer(&file, ~[io::Create, io::Truncate]) {
+                      Ok(wr) => { vec::push(files, file); wr.write_str(*s); }
+                      Err(e) => { fail e; }
                     }
                   }
-                  _ { fail; }
+                  _ => { fail; }
                 }
             }
           }
-          _ { fail; }
+          _ => { fail; }
         }
 
         files
     }
 
-    fn run_test(test: hashmap<~str, json::json>, data: hashmap<~str, data>) {
-        let template = alt test.get(~"template") {
-          json::string(s) { s }
-          _ { fail }
+    fn run_test(test: hashmap<~str, json::Json>, data: hashmap<~str, data>) {
+        let template = match test.get(~"template") {
+          json::String(s) => { s }
+          _ => { fail }
         };
 
-        let expected = alt test.get(~"expected") {
-          json::string(s) { s }
-          _ { fail }
+        let expected = match test.get(~"expected") {
+          json::String(s) => { s }
+          _ => { fail }
         };
 
-        let partials = alt test.find(~"partials") {
-          some(value) { write_partials(value) }
-          none { ~[] }
+        let partials = match test.find(~"partials") {
+          Some(value) => { write_partials(value) }
+          None => { ~[] }
         };
 
         let result = render_str(*template, data);
 
         if result != *expected {
-            fn to_list(x: json::json) -> json::json {
-                alt x {
-                  json::dict(d) {
+            fn to_list(x: json::Json) -> json::Json {
+                match x {
+                  json::Dict(d) => {
                     let mut xs = ~[];
                     for d.each |k, v| {
-                        let k = json::string(@copy k);
+                        let k = json::String(@copy k);
                         let v = to_list(v);
-                        vec::push(xs, json::list(@~[k, v]));
+                        vec::push(xs, json::List(@~[k, v]));
                     }
-                    json::list(@xs)
+                    json::List(@xs)
                   }
-                  json::list(xs) { json::list(@vec::map(*xs, to_list)) }
-                  _ { x }
+                  json::List(xs) => { json::List(@vec::map(*xs, to_list)) }
+                  _ => { x }
                 }
             }
 
-            io::println(#fmt("desc:     %?", test.get(~"desc")));
-            io::println(#fmt("context:  %?", to_list(test.get(~"data"))));
-            io::println(#fmt("partials: %?", partials));
-            io::println(#fmt("partials: %?", test.find(~"partials")));
+            io::println(fmt!("desc:     %?", test.get(~"desc")));
+            io::println(fmt!("context:  %?", to_list(test.get(~"data"))));
+            io::println(fmt!("partials: %?", partials));
+            io::println(fmt!("partials: %?", test.find(~"partials")));
             io::println(~"");
-            io::println(#fmt("template:\n%?", template));
-            io::println(#fmt("expected:\n%?", expected));
-            io::println(#fmt("result:  \n%?", result));
+            io::println(fmt!("template:\n%?", template));
+            io::println(fmt!("expected:\n%?", expected));
+            io::println(fmt!("result:  \n%?", result));
             io::println(~"");
-            io::println(#fmt("template:\n%s", *template));
-            io::println(#fmt("expected:\n%s", *expected));
-            io::println(#fmt("result:  \n%s", result));
+            io::println(fmt!("template:\n%s", *template));
+            io::println(fmt!("expected:\n%s", *expected));
+            io::println(fmt!("result:  \n%s", result));
         }
         assert result == *expected;
 
-        for partials.each |file| { os::remove_file(file); }
+        for partials.each |file| { os::remove_file(&file); }
     }
 
     fn run_tests(spec: ~str) {
         for (*parse_spec_tests(spec)).each |json| {
-            let test = alt json {
-              json::dict(m) { m }
-              _ { fail }
+            let test = match json {
+              json::Dict(m) => { m }
+              _ => { fail }
             };
 
-            let data = alt test.get(~"data") {
-              json::dict(m) { convert_json_map(m) }
-              _ { fail }
+            let data = match test.get(~"data") {
+              json::Dict(m) => { convert_json_map(m) }
+              _ => { fail }
             };
 
             run_test(test, data);
@@ -1400,50 +1402,50 @@ mod tests {
     #[test]
     fn test_spec_lambdas() {
         for (*parse_spec_tests(~"spec/specs/~lambdas.json")).each |json| {
-            let test = alt json {
-              json::dict(m) { m }
-              _ { fail }
+            let test = match json {
+              json::Dict(m) => { m }
+              _ => { fail }
             };
 
             // Replace the lambda with rust code.
-            let ctx = alt test.get(~"data") {
-              json::dict(m) { convert_json_map(m) }
-              _ { fail }
+            let ctx = match test.get(~"data") {
+              json::Dict(m) => { convert_json_map(m) }
+              _ => { fail }
             };
 
-            let f = alt test.get(~"name") {
-              json::string(@~"Interpolation") {
+            let f = match test.get(~"name") {
+              json::String(@~"Interpolation") => {
                   |_text| {~"world" }
               }
-              json::string(@~"Interpolation - Expansion") {
+              json::String(@~"Interpolation - Expansion") => {
                   |_text| {~"{{planet}}" }
               }
-              json::string(@~"Interpolation - Alternate Delimiters") {
+              json::String(@~"Interpolation - Alternate Delimiters") => {
                   |_text| {~"|planet| => {{planet}}" }
               }
-              json::string(@~"Interpolation - Multiple Calls") {
+              json::String(@~"Interpolation - Multiple Calls") => {
                   let calls = @mut 0;
                   |_text| {*calls += 1; int::str(*calls) }
               }
-              json::string(@~"Escaping") {
+              json::String(@~"Escaping") => {
                   |_text| {~">" }
               }
-              json::string(@~"Section") {
+              json::String(@~"Section") => {
                   |text: @~str| {if *text == ~"{{x}}" { ~"yes" } else { ~"no" } }
               }
-              json::string(@~"Section - Expansion") {
+              json::String(@~"Section - Expansion") => {
                   |text: @~str| {*text + "{{planet}}" + *text }
               }
-              json::string(@~"Section - Alternate Delimiters") {
+              json::String(@~"Section - Alternate Delimiters") => {
                   |text: @~str| {*text + "{{planet}} => |planet|" + *text }
               }
-              json::string(@~"Section - Multiple Calls") {
+              json::String(@~"Section - Multiple Calls") => {
                   |text: @~str| {~"__" + *text + ~"__" }
               }
-              json::string(@~"Inverted Section") {
+              json::String(@~"Inverted Section") => {
                   |_text| {~"" }
               }
-              value { fail #fmt("%?", value) }
+              value => { fail fmt!("%?", value) }
             };
 
             ctx.insert(~"lambda", fun(f));
