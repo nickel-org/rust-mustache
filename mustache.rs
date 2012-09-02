@@ -713,9 +713,9 @@ fn compile_helper(ctx: compile_context) -> @~[token] {
     	let path: Path = path::from_str(*ctx.template_path);
     	let path = path.push(*name + *ctx.template_extension);
 
-        if !ctx.partials.contains_key(@*name) {
+        if !ctx.partials.contains_key(name) {
             // Insert a placeholder so we don't recurse off to infinity.
-            ctx.partials.insert(@*name, @~[]);
+            ctx.partials.insert(name, @~[]);
 
             match io::file_reader(&path) {
               Err(_e) => {}
@@ -729,7 +729,7 @@ fn compile_helper(ctx: compile_context) -> @~[token] {
                     template_extension: ctx.template_extension
                 });
 
-                ctx.partials.insert(@*name, tokens);
+                ctx.partials.insert(name, tokens);
               }
             }
         }
