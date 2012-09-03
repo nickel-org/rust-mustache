@@ -1,13 +1,13 @@
-use std;
-
 #[link(name = "mustache",
        vers = "0.1",
-       uuid = "afecaa07-75c5-466c-b3a3-fae5d32e04aa")]
-#[crate_type = "lib"]
+       uuid = "afecaa07-75c5-466c-b3a3-fae5d32e04aa")];
+#[crate_type = "lib"];
 
-#[forbid(deprecated_mode)]
-#[forbid(implicit_copies)]
-#[allow(non_implicitly_copyable_typarams)]	// TODO: forbid these (once json is fixed)
-#[forbid(non_camel_case_types)]
+//#[forbid(deprecated_mode)];					// TODO: enable this
+#[forbid(implicit_copies)];
+#[allow(non_implicitly_copyable_typarams)];	// TODO: forbid these (once json is fixed)
+#[warn(non_camel_case_types)];				
+
+use std;
 
 mod mustache;
