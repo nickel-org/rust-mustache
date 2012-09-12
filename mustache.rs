@@ -1,4 +1,4 @@
-// Last built using rust commit ee2ce036ccd53d8c19689d86cf8b3bd5cf37f40f
+// Last built using rust commit 9c98d0f99b44e1c57bdd60881518140e2593a5a4
 use result::{Ok, Err};
 use io::{ReaderUtil, WriterUtil};
 use dvec::{DVec};
@@ -181,7 +181,7 @@ impl <T: ToMustache> ~[T] : ToMustache {
     fn to_mustache() -> Data { Vec(@self.map(|x| x.to_mustache())) }
 }
 
-impl <T: ToMustache copy> hashmap<@~str, T> : ToMustache {
+impl <T: ToMustache Copy> hashmap<@~str, T> : ToMustache {
     fn to_mustache() -> Data {
         let m = box_str_hash();
         for self.each |k, v| { m.insert(k, v.to_mustache()); }
@@ -339,7 +339,7 @@ impl  Parser : ParserTrait {
                 self.bump();
               }
               parser::TAG => {
-                if self.content == @~"" && self.ch == '{' {
+                if *self.content == ~"" && self.ch == '{' {
                     curly_brace_tag = true;
                     unsafe { str::push_char(*self.content, self.ch) };
                     self.bump();
@@ -951,6 +951,18 @@ fn render_fun(ctx: &RenderContext,
     render_helper(&{ tokens: tokens ,.. *ctx })
 }
 
+// TODO: atm == does not work with enums so we'll cheat using this function
+#[cfg(test)]
+fn check_tokens(actual: &[Token], expected: &[Token]) -> bool
+{
+	if fmt!("%?", actual) != fmt!("%?", expected)
+	{
+		io::stderr().write_line(fmt!("Found %?, but expected %?", actual, expected));
+		return false;
+	}
+	return true;
+}
+
 #[cfg(test)]
 mod tests {
     import std::json;
@@ -958,61 +970,61 @@ mod tests {
 
     #[test]
     fn test_compile_texts() {
-        assert compile_str(~"hello world").tokens == @~[Text(@~"hello world")];
-        assert compile_str(~"hello {world").tokens == @~[Text(@~"hello {world")];
-        assert compile_str(~"hello world}").tokens == @~[Text(@~"hello world}")];
-        assert compile_str(~"hello world}}").tokens == @~[Text(@~"hello world}}")];
+        assert check_tokens(*compile_str(~"hello world").tokens, ~[Text(@~"hello world")]);
+        assert check_tokens(*compile_str(~"hello {world").tokens, ~[Text(@~"hello {world")]);
+        assert check_tokens(*compile_str(~"hello world}").tokens, ~[Text(@~"hello world}")]);
+        assert check_tokens(*compile_str(~"hello world}}").tokens, ~[Text(@~"hello world}}")]);
     }
 
     #[test]
     fn test_compile_etags() {
-        assert compile_str(~"{{ name }}").tokens == @~[
+        assert check_tokens(*compile_str(~"{{ name }}").tokens, ~[
             ETag(@~[~"name"], @~"{{ name }}")
-        ];
+        ]);
 
-        assert compile_str(~"before {{name}} after").tokens == @~[
+        assert check_tokens(*compile_str(~"before {{name}} after").tokens, ~[
             Text(@~"before "),
             ETag(@~[~"name"], @~"{{name}}"),
             Text(@~" after")
-        ];
+        ]);
 
-        assert compile_str(~"before {{name}}").tokens == @~[
+        assert check_tokens(*compile_str(~"before {{name}}").tokens, ~[
             Text(@~"before "),
             ETag(@~[~"name"], @~"{{name}}")
-        ];
+        ]);
 
-        assert compile_str(~"{{name}} after").tokens == @~[
+        assert check_tokens(*compile_str(~"{{name}} after").tokens, ~[
             ETag(@~[~"name"], @~"{{name}}"),
             Text(@~" after")
-        ];
+        ]);
     }
 
     #[test]
     fn test_compile_utags() {
-        assert compile_str(~"{{{name}}}").tokens == @~[
+        assert check_tokens(*compile_str(~"{{{name}}}").tokens, ~[
             UTag(@~[~"name"], @~"{{{name}}}")
-        ];
+        ]);
 
-        assert compile_str(~"before {{{name}}} after").tokens == @~[
+        assert check_tokens(*compile_str(~"before {{{name}}} after").tokens, ~[
             Text(@~"before "),
             UTag(@~[~"name"], @~"{{{name}}}"),
             Text(@~" after")
-        ];
+        ]);
 
-        assert compile_str(~"before {{{name}}}").tokens == @~[
+        assert check_tokens(*compile_str(~"before {{{name}}}").tokens, ~[
             Text(@~"before "),
             UTag(@~[~"name"], @~"{{{name}}}")
-        ];
+        ]);
 
-        assert compile_str(~"{{{name}}} after").tokens == @~[
+        assert check_tokens(*compile_str(~"{{{name}}} after").tokens, ~[
             UTag(@~[~"name"], @~"{{{name}}}"),
             Text(@~" after")
-        ];
+        ]);
     }
 
     #[test]
     fn test_compile_sections() {
-        assert compile_str(~"{{# name}}{{/name}}").tokens == @~[
+        assert check_tokens(*compile_str(~"{{# name}}{{/name}}").tokens, ~[
             Section(
                 @~[~"name"],
                 false,
@@ -1023,9 +1035,9 @@ mod tests {
                 @~"{{/name}}",
                 @~"}}"
             )
-        ];
+        ]);
 
-        assert compile_str(~"before {{^name}}{{/name}} after").tokens == @~[
+        assert check_tokens(*compile_str(~"before {{^name}}{{/name}} after").tokens, ~[
             Text(@~"before "),
             Section(
                 @~[~"name"],
@@ -1038,9 +1050,9 @@ mod tests {
                 @~"}}"
             ),
             Text(@~" after")
-        ];
+        ]);
 
-        assert compile_str(~"before {{#name}}{{/name}}").tokens == @~[
+        assert check_tokens(*compile_str(~"before {{#name}}{{/name}}").tokens, ~[
             Text(@~"before "),
             Section(
                 @~[~"name"],
@@ -1052,9 +1064,9 @@ mod tests {
                 @~"{{/name}}",
                 @~"}}"
             )
-        ];
+        ]);
 
-        assert compile_str(~"{{#name}}{{/name}} after").tokens == @~[
+        assert check_tokens(*compile_str(~"{{#name}}{{/name}} after").tokens, ~[
             Section(
                 @~[~"name"],
                 false,
@@ -1066,10 +1078,10 @@ mod tests {
                 @~"}}"
             ),
             Text(@~" after")
-        ];
+        ]);
 
-        assert compile_str(
-                ~"before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after").tokens == @~[
+        assert check_tokens(*compile_str(
+                ~"before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after").tokens, ~[
             Text(@~"before "),
             Section(
                 @~[~"a"],
@@ -1095,39 +1107,39 @@ mod tests {
                 @~"}}"
             ),
             Text(@~" after")
-        ];
+        ]);
     }
 
     #[test]
     fn test_compile_partials() {
-        assert compile_str(~"{{> test}}").tokens == @~[
+        assert check_tokens(*compile_str(~"{{> test}}").tokens, ~[
             Partial(@~"test", @~"", @~"{{> test}}")
-        ];
+        ]);
 
-        assert compile_str(~"before {{>test}} after").tokens == @~[
+        assert check_tokens(*compile_str(~"before {{>test}} after").tokens, ~[
             Text(@~"before "),
             Partial(@~"test", @~"", @~"{{>test}}"),
             Text(@~" after")
-        ];
+        ]);
 
-        assert compile_str(~"before {{> test}}").tokens == @~[
+        assert check_tokens(*compile_str(~"before {{> test}}").tokens, ~[
             Text(@~"before "),
             Partial(@~"test", @~"", @~"{{> test}}")
-        ];
+        ]);
 
-        assert compile_str(~"{{>test}} after").tokens == @~[
+        assert check_tokens(*compile_str(~"{{>test}} after").tokens, ~[
             Partial(@~"test", @~"", @~"{{>test}}"),
             Text(@~" after")
-        ];
+        ]);
     }
 
     #[test]
     fn test_compile_delimiters() {
-        assert compile_str(~"before {{=<% %>=}}<%name%> after").tokens == @~[
+        assert check_tokens(*compile_str(~"before {{=<% %>=}}<%name%> after").tokens, ~[
             Text(@~"before "),
             ETag(@~[~"name"], @~"<%name%>"),
             Text(@~" after")
-        ];
+        ]);
     }
 
     #[test]
