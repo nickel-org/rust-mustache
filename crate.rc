@@ -3,10 +3,13 @@
        uuid = "afecaa07-75c5-466c-b3a3-fae5d32e04aa")];
 #[crate_type = "lib"];
 
-//#[forbid(deprecated_mode)];					// TODO: enable this
-#[forbid(implicit_copies)];
-#[allow(non_implicitly_copyable_typarams)];	// TODO: forbid these (once json is fixed)
-#[warn(non_camel_case_types)];				
+#[warn(non_camel_case_types)]; 
+#[forbid(implicit_copies)];							// TODO: enable more of these
+#[allow(non_implicitly_copyable_typarams)];
+#[allow(deprecated_mode)];
+#[allow(deprecated_pattern)];
+#[allow(unused_imports)];
+#[allow(structural_records)];
 
 use std;
 
