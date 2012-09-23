@@ -3,14 +3,12 @@
        uuid = "afecaa07-75c5-466c-b3a3-fae5d32e04aa")];
 #[crate_type = "lib"];
 
-#[warn(non_camel_case_types)]; 
-#[forbid(implicit_copies)];							// TODO: enable more of these
-#[allow(non_implicitly_copyable_typarams)];
+#[warn(unused_imports)];
+#[allow(structural_records)];	// TODO: enable more of these
 #[allow(deprecated_mode)];
-#[allow(deprecated_pattern)];
-#[allow(unused_imports)];
-#[allow(structural_records)];
+#[allow(deprecated_pattern)];	
+#[allow(non_implicitly_copyable_typarams)];
 
-use std;
+extern mod std;
 
 mod mustache;

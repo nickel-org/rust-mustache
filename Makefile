@@ -8,5 +8,8 @@ all:
 check:
 	$(RUSTC) --test -o bin/test-mustache crate.rc && ./bin/test-mustache
 
+check1:
+	$(RUSTC) --test -o bin/test-mustache crate.rc && ./bin/test-mustache test_spec_interpolation
+
 clean:
 	rm -rf bin
