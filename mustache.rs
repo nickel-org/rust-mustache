@@ -81,8 +81,8 @@ impl  Context : ContextTrait {
     	let path = path.push(file.to_unique() + *self.template_extension);
 
         match io::file_reader(&path) {
-          Ok(rdr) => { self.compile_reader(rdr) }
-          Err(e) => { fail e; }
+          Ok(move rdr) => self.compile_reader(rdr),
+          Err(move e) => fail e,
         }
     }
 
@@ -185,7 +185,7 @@ impl <T: ToMustache> Option<T> : ToMustache {
     fn to_mustache() -> Data {
         match self {
           None => { Bool(false) }
-          Some(v) => { v.to_mustache() }
+          Some(ref v) => { v.to_mustache() }
         }
     }
 }
@@ -222,14 +222,14 @@ enum TokenClass {
     NewLineWhiteSpace(@~str, uint),
 }
 
-type Parser = {
+pub struct Parser {
     rdr: io::Reader,
     mut ch: char,
     mut lookahead: Option<char>,
     mut line: uint,
     mut col: uint,
-    mut content: @ mut ~str,
-    mut state: parser::State,
+    mut content: ~str,
+    mut state: ParserState,
     mut otag: @~str,
     mut ctag: @~str,
     mut otag_chars:@ ~[char],
@@ -237,28 +237,11 @@ type Parser = {
     mut tag_position: uint,
     tokens: DVec<Token>,
     partials: DVec<@~str>,
-};
-
-mod parser {
-    enum State { TEXT, OTAG, TAG, CTAG }
 }
 
-trait ParserTrait {
-    fn eof() -> bool;
-    fn bump();
-    fn peek() -> char;
-    fn parse();
-    fn add_text();
-    fn classify_token() -> TokenClass;
-    fn eat_whitespace() -> bool;
-    fn add_tag();
-    fn add_partial(content: ~str, tag: @~str);
-    fn not_otag();
-    fn not_ctag();
-    fn check_content(content: ~str) -> ~str;
-}
+enum ParserState { TEXT, OTAG, TAG, CTAG }
 
-impl  Parser : ParserTrait {
+impl Parser {
     fn eof() -> bool { self.ch == -1 as char }
 
     fn bump() {
@@ -294,70 +277,70 @@ impl  Parser : ParserTrait {
 
         while !self.eof() {
             match self.state {
-              parser::TEXT => {
+              TEXT => {
                 if self.ch == self.otag_chars[0] {
                     if vec::len(*self.otag_chars) > 1u {
                         self.tag_position = 1u;
-                        self.state = parser::OTAG;
+                        self.state = OTAG;
                     } else {
                         self.add_text();
-                        self.state = parser::TAG;
+                        self.state = TAG;
                     }
                 } else {
-                    unsafe { str::push_char(*self.content, self.ch) };
+                    unsafe { str::push_char(&mut self.content, self.ch) };
                 }
                 self.bump();
               }
-              parser::OTAG => {
+              OTAG => {
                 if self.ch == self.otag_chars[self.tag_position] {
                     if self.tag_position == vec::len(*self.otag_chars) - 1u {
                         self.add_text();
                         curly_brace_tag = false;
-                        self.state = parser::TAG;
+                        self.state = TAG;
                     } else {
                         self.tag_position += 1u;
                     }
                 } else {
                     // We don't have a tag, so add all the tag parts we've seen
                     // so far to the string.
-                    self.state = parser::TEXT;
+                    self.state = TEXT;
                     self.not_otag();
-                    unsafe { str::push_char(*self.content, self.ch) };
+                    unsafe { str::push_char(&mut self.content, self.ch) };
                 }
                 self.bump();
               }
-              parser::TAG => {
-                if *self.content == ~"" && self.ch == '{' {
+              TAG => {
+                if self.content == ~"" && self.ch == '{' {
                     curly_brace_tag = true;
-                    unsafe { str::push_char(*self.content, self.ch) };
+                    unsafe { str::push_char(&mut self.content, self.ch) };
                     self.bump();
                 } else if curly_brace_tag && self.ch == '}' {
                     curly_brace_tag = false;
-                    unsafe { str::push_char(*self.content, self.ch) };
+                    unsafe { str::push_char(&mut self.content, self.ch) };
                     self.bump();
                 } else if self.ch == self.ctag_chars[0u] {
                     if vec::len(*self.ctag_chars) > 1u {
                         self.tag_position = 1u;
-                        self.state = parser::CTAG;
+                        self.state = CTAG;
                         self.bump();
                     } else {
                         self.add_tag();
-                        self.state = parser::TEXT;
+                        self.state = TEXT;
                     }
                 } else {
-                    unsafe { str::push_char(*self.content, self.ch) };
+                    unsafe { str::push_char(&mut self.content, self.ch) };
                     self.bump();
                 }
               }
-              parser::CTAG => {
+              CTAG => {
                 if self.ch == self.ctag_chars[self.tag_position] {
                     if self.tag_position == vec::len(*self.ctag_chars) - 1u {
                         self.add_tag();
-                        self.state = parser::TEXT;
+                        self.state = TEXT;
                     } else {
-                        self.state = parser::TAG;
+                        self.state = TAG;
                         self.not_ctag();
-                        unsafe { str::push_char(*self.content, self.ch) };
+                        unsafe { str::push_char(&mut self.content, self.ch) };
                         self.bump();
                     }
                 }
@@ -366,10 +349,10 @@ impl  Parser : ParserTrait {
         }
 
         match self.state {
-          parser::TEXT => { self.add_text() }
-          parser::OTAG => { self.not_otag(); self.add_text() }
-          parser::TAG => { fail ~"unclosed tag" }
-          parser::CTAG => { self.not_ctag(); self.add_text() }
+          TEXT => { self.add_text() }
+          OTAG => { self.not_otag(); self.add_text() }
+          TAG => { fail ~"unclosed tag" }
+          CTAG => { self.not_ctag(); self.add_text() }
         }
 
         // Check that we don't have any incomplete sections.
@@ -385,9 +368,9 @@ impl  Parser : ParserTrait {
     }
 
     fn add_text() {
-        if self.content != @~"" {
+        if self.content != ~"" {
             let mut content = ~"";
-            content <-> *self.content;
+            content <-> self.content;
 
             self.tokens.push(Text(@content));
         }
@@ -414,8 +397,7 @@ impl  Parser : ParserTrait {
               Text(s) if *s != ~"" => {
                 // Look for the last newline character that may have whitespace
                 // following it.
-                match str::rfind(*s,
-                              { |c: char| c == '\n' || !char::is_whitespace(c) }) {
+                match str::rfind(*s, |c| c == '\n' || !char::is_whitespace(c)) {
                   // It's all whitespace.
                   None => {
                     if self.tokens.len() == 1u {
@@ -467,11 +449,11 @@ impl  Parser : ParserTrait {
     fn add_tag() {
         self.bump();
 
-        let tag = @(*self.otag + *self.content + *self.ctag);
+        let tag = @(*self.otag + self.content + *self.ctag);
 
         // Move the content to avoid a copy.
         let mut content = ~"";
-        content <-> *self.content;
+        content <-> self.content;
         let len = content.len();
 
         match content[0] as char {
@@ -643,7 +625,7 @@ impl  Parser : ParserTrait {
     fn not_otag() {
         let mut i = 0u;
         while i < self.tag_position {
-            unsafe { str::push_char(*self.content, self.otag_chars[i]) };
+            unsafe { str::push_char(&self.content, self.otag_chars[i]) };
             i += 1u;
         }
     }
@@ -651,7 +633,7 @@ impl  Parser : ParserTrait {
     fn not_ctag() {
         let mut i = 0u;
         while i < self.tag_position {
-            unsafe { str::push_char(*self.content, self.ctag_chars[i]) };
+            unsafe { str::push_char(&self.content, self.ctag_chars[i]) };
             i += 1u;
         }
     }
@@ -675,14 +657,14 @@ type CompileContext = {
 };
 
 fn compile_helper(ctx: &CompileContext) -> @~[Token] {
-    let parser: Parser = {
+    let parser = Parser {
         rdr: ctx.rdr,
         mut ch: ctx.rdr.read_char(),
         mut lookahead: None,
         mut line: 1u,
         mut col: 1u,
-        mut content: @ mut ~"",
-        mut state: parser::TEXT,
+        mut content: ~"",
+        mut state: TEXT,
         mut otag: ctx.otag,
         mut ctag: ctx.ctag,
         mut otag_chars: @str::chars(*ctx.otag),
@@ -704,8 +686,8 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
             ctx.partials.insert(*name, @~[]);
 
             match io::file_reader(&path) {
-              Err(_e) => {}
-              Ok(rdr) => {
+              Err(move _e) => {}
+              Ok(move rdr) => {
                 let tokens = compile_helper(&{
                     rdr: rdr,
                     partials: ctx.partials,
@@ -722,7 +704,7 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
     }
 
     // Destructure the parser so we get get at the tokens without a copy.
-    let { tokens, _ } = parser;
+    let Parser { tokens: move tokens, _ } = move parser;
 
     @dvec::unwrap(tokens)
 }
@@ -876,7 +858,7 @@ fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
           '&' => { escaped += "&amp;" }
           '"' => { escaped += "&quot;" }
           '\'' => { escaped += "&#39;" }
-          _ => { str::push_char(escaped, c); }
+          _ => { str::push_char(&escaped, c); }
         }
     }
     escaped
@@ -911,7 +893,7 @@ fn render_section(value: Data,
       Bool(false) => { ~"" }
       Vec(vs) => {
         str::concat(do (*vs).map |v| {
-            render_helper(&{ stack: @(ctx.stack + ~[v]) ,.. *ctx })
+            render_helper(&{ stack: @(ctx.stack + ~[*v]) ,.. *ctx })
         })
       }
       Map(_) => { render_helper(&{ stack: @(ctx.stack + ~[value]) ,.. *ctx }) }
@@ -939,15 +921,22 @@ fn render_fun(ctx: &RenderContext,
     render_helper(&{ tokens: tokens ,.. *ctx })
 }
 
-pure fn token_to_str(token: Token) -> ~str
+pure fn token_to_str(token: &Token) -> ~str
 {
-	match token
-	{
+	match *token {
 		// recursive enums crash %?
 		Section(name, inverted, children, otag, osection, src, tag, ctag) =>
 		{
-			let children = do children.map |x| {token_to_str(x)};
-			fmt!("Section(%?, %?, %?, %?, %?, %?, %?, %?)", name, inverted, children, otag, osection, src, tag, ctag)
+			let children = children.map(|x| token_to_str(x));
+			fmt!("Section(%?, %?, %?, %?, %?, %?, %?, %?)",
+                name,
+                inverted,
+                children,
+                otag,
+                osection,
+                src,
+                tag,
+                ctag)
 		}
 		_ =>
 		{
@@ -1251,8 +1240,8 @@ mod tests {
     fn parse_spec_tests(src: &str) -> @~[json::Json] {
     	let path: Path = path::from_str(src);
         match io::read_whole_file_str(&path) {
-          Err(e) => { fail e }
-          Ok(s) => {
+          Err(move e) => { fail e }
+          Ok(move s) => {
             match json::from_str(s) {
               Err(e) => { fail e.to_str() }
               Ok(json) => {
@@ -1273,12 +1262,12 @@ mod tests {
 
     fn convert_json_map(map: HashMap<~str, json::Json>) -> HashMap<@~str, Data> {
         let d = HashMap();
-        for map.each |key, value| { d.insert(@key, convert_json(value)); }
+        for map.each |key, value| { d.insert(@key, convert_json(&value)); }
         d
     }
 
-    fn convert_json(&&value: json::Json) -> Data {
-        match value {
+    fn convert_json(value: &json::Json) -> Data {
+        match *value {
           json::Num(n) => {
             // We have to cheat and use %? because %f doesn't convert 3.3 to
             // 3.3.
@@ -1296,21 +1285,24 @@ mod tests {
         let mut files = ~[];
 
         match value {
-          json::Dict(d) => {
-            for d.each |key, value| {
-                match value {
-                  json::String(s) => {
-                    let file: Path = path::from_str(key + ".mustache");
-                    match io::file_writer(&file, ~[io::Create, io::Truncate]) {
-                      Ok(wr) => { vec::push(files, file); wr.write_str(*s); }
-                      Err(e) => { fail e; }
+            json::Dict(d) => {
+                for d.each |key, value| {
+                    match value {
+                        json::String(s) => {
+                            let file = path::from_str(key + ".mustache");
+                            match io::file_writer(&file, ~[io::Create, io::Truncate]) {
+                                Ok(move wr) => {
+                                    vec::push(files, file);
+                                    wr.write_str(*s)
+                                },
+                                Err(move e) => fail e,
+                            }
+                        }
+                        _ => fail,
                     }
-                  }
-                  _ => { fail; }
                 }
-            }
-          }
-          _ => { fail; }
+            },
+            _ => fail,
         }
 
         files
@@ -1335,19 +1327,21 @@ mod tests {
         let result = render_str(*template, data);
 
         if result != *expected {
-            fn to_list(&&x: json::Json) -> json::Json {
+            fn to_list(x: json::Json) -> json::Json {
                 match x {
-                  json::Dict(d) => {
-                    let mut xs = ~[];
-                    for d.each |k, v| {
-                        let k = json::String(@copy k);
-                        let v = to_list(v);
-                        vec::push(xs, json::List(@~[k, v]));
-                    }
-                    json::List(@xs)
-                  }
-                  json::List(xs) => { json::List(@vec::map(*xs, to_list)) }
-                  _ => { x }
+                    json::Dict(d) => {
+                        let mut xs = ~[];
+                        for d.each |k, v| {
+                            let k = json::String(@copy k);
+                            let v = to_list(v);
+                            vec::push(xs, json::List(@~[k, v]));
+                        }
+                        json::List(@xs)
+                    },
+                    json::List(xs) => {
+                        json::List(@vec::map(*xs, |x| to_list(*x)))
+                    },
+                    _ => { x }
                 }
             }
 
