@@ -1,3 +1,9 @@
+#[forbid(deprecated_mode)];
+#[allow(structural_records)];  // TODO: enable more of these
+#[warn(unused_imports)];
+#[forbid(deprecated_pattern)];
+#[allow(non_implicitly_copyable_typarams)];
+
 // Last built using rust commit 6b670c306b8de545afcbcea81bcd592c644409d7
 use result::{Ok, Err};
 use io::{ReaderUtil, WriterUtil};
@@ -19,22 +25,22 @@ pub enum Data {
 Represents the shared metadata needed to compile and render a mustache
 template.
 "]
-pub type Context = {
+pub struct Context {
     template_path: @~str,
     template_extension: @~str,
-};
+}
 
-pub type Template = {
+pub struct Template {
     ctx: Context,
     tokens: @~[Token],
     partials: HashMap<@~str, @~[Token]>
-};
+}
 
 #[doc = "
 Configures a mustache context with the partial template path and extension.
 "]
 pub fn context(template_path: @~str, template_extension: @~str) -> Context {
-    {
+    Context {
         template_path: template_path,
         template_extension: template_extension,
     }
@@ -46,20 +52,11 @@ directory.
 "]
 pub fn default_context() -> Context { context(@~".", @~".mustache") }
 
-pub trait ContextTrait {
-    fn compile_reader(rdr: io::Reader) -> Template;
-    fn compile_file(file: &str) -> Template;
-    fn compile_str(src: &str) -> Template;
-    fn render_reader(rdr: io::Reader, data: HashMap<@~str, Data>) -> ~str;
-    fn render_file(file: &str, data: HashMap<@~str, Data>) -> ~str;
-    fn render_str(template: &str, data: HashMap<@~str, Data>) -> ~str;
-}
-
-impl  Context : ContextTrait {
+impl Context {
     #[doc = "Compiles a template from an io::Reader."]
     fn compile_reader(rdr: io::Reader) -> Template {
         let partials = HashMap();
-        let tokens = compile_helper(&{
+        let tokens = compile_helper(&CompileContext {
             rdr: rdr,
             partials: partials,
             otag: @~"{{",
@@ -68,7 +65,7 @@ impl  Context : ContextTrait {
             template_extension: self.template_extension
         });
 
-        {
+        Template {
             ctx: self,
             tokens: tokens,
             partials: partials
@@ -196,7 +193,7 @@ pub trait TemplateTrait {
 
 impl  Template : TemplateTrait {
     fn render(data: HashMap<@~str, Data>) -> ~str {
-        render_helper(&{
+        render_helper(&RenderContext {
             ctx: self.ctx,
             tokens: self.tokens,
             partials: self.partials,
@@ -589,7 +586,7 @@ impl Parser {
         }
     }
 
-    fn add_partial(content: ~str, tag: @~str) {
+    fn add_partial(content: &str, tag: @~str) {
         let token_class = self.classify_token();
         let indent = match token_class {
           Normal => { ~"" }
@@ -638,7 +635,7 @@ impl Parser {
         }
     }
 
-    fn check_content(content: ~str) -> ~str {
+    fn check_content(+content: ~str) -> ~str {
         let trimmed = content.trim();
         if trimmed.len() == 0u {
             fail ~"empty tag";
@@ -647,14 +644,14 @@ impl Parser {
     }
 }
 
-type CompileContext = {
+struct CompileContext {
     rdr: io::Reader,
     partials: HashMap<@~str, @~[Token]>,
     otag: @~str,
     ctag: @~str,
     template_path: @~str,
     template_extension: @~str,
-};
+}
 
 fn compile_helper(ctx: &CompileContext) -> @~[Token] {
     let parser = Parser {
@@ -688,7 +685,7 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
             match io::file_reader(&path) {
               Err(move _e) => {}
               Ok(move rdr) => {
-                let tokens = compile_helper(&{
+                let tokens = compile_helper(&CompileContext {
                     rdr: rdr,
                     partials: ctx.partials,
                     otag: @~"{{",
@@ -709,13 +706,13 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
     @dvec::unwrap(tokens)
 }
 
-type RenderContext = {
+struct RenderContext {
     ctx: Context,
     tokens: @~[Token],
     partials: HashMap<@~str, @~[Token]>,
     stack: @~[Data],
     indent: @~str,
-};
+}
 
 fn render_helper(ctx: &RenderContext) -> ~str {
     fn find(stack: &[Data], path: &[~str]) -> Option<Data> {
@@ -812,7 +809,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
             }
           }
           Section(path, true, children, _, _, _, _, _) => {
-            let ctx = { tokens: children ,.. *ctx };
+            let ctx = RenderContext { tokens: children ,.. *ctx };
 
             output += match find(*ctx.stack, *path) {
               None => { render_helper(&ctx) }
@@ -823,10 +820,13 @@ fn render_helper(ctx: &RenderContext) -> ~str {
             match find(*ctx.stack, *path) {
               None => { }
               Some(value) => {
-                output += render_section(value, src, otag, ctag, &{
-                    tokens: children
-                    ,.. *ctx
-                });
+                output += render_section(
+                    value,
+                    src,
+                    otag,
+                    ctag,
+                    &RenderContext { tokens: children ,.. *ctx }
+                );
               }
             }
           }
@@ -834,7 +834,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
             match ctx.partials.find(name) {
               None => { }
               Some(tokens) => {
-                output += render_helper(&{
+                output += render_helper(&RenderContext {
                     tokens: tokens,
                     indent: @(*ctx.indent + *ind)
                     ,.. *ctx
@@ -889,16 +889,22 @@ fn render_section(value: Data,
                   ctag: @~str,
                   ctx: &RenderContext) -> ~str {
     match value {
-      Bool(true) => { render_helper(ctx) }
-      Bool(false) => { ~"" }
-      Vec(vs) => {
-        str::concat(do (*vs).map |v| {
-            render_helper(&{ stack: @(ctx.stack + ~[*v]) ,.. *ctx })
-        })
-      }
-      Map(_) => { render_helper(&{ stack: @(ctx.stack + ~[value]) ,.. *ctx }) }
-      Fun(f) => { render_fun(ctx, src, otag, ctag, f) }
-      _ => { fail }
+        Bool(true) => render_helper(ctx),
+        Bool(false) => ~"",
+        Vec(vs) =>
+            str::concat(do (*vs).map |v| {
+                render_helper(&RenderContext {
+                    stack: @(ctx.stack + ~[*v]),
+                    .. *ctx
+                })
+            }),
+        Map(_) =>
+            render_helper(&RenderContext {
+                stack: @(ctx.stack + ~[value]),
+                .. *ctx
+            }),
+        Fun(f) => render_fun(ctx, src, otag, ctag, f),
+        _ => fail,
     }
 }
 
@@ -908,7 +914,7 @@ fn render_fun(ctx: &RenderContext,
               ctag: @~str,
               f: fn(@~str) -> ~str) -> ~str {
     let tokens = do io::with_str_reader(f(src)) |rdr| {
-        compile_helper(&{
+        compile_helper(&CompileContext {
             rdr: rdr,
             partials: ctx.partials,
             otag: otag,
@@ -918,7 +924,7 @@ fn render_fun(ctx: &RenderContext,
         })
     };
 
-    render_helper(&{ tokens: tokens ,.. *ctx })
+    render_helper(&RenderContext { tokens: tokens ,.. *ctx })
 }
 
 pure fn token_to_str(token: &Token) -> ~str
