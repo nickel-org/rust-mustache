@@ -546,7 +546,7 @@ impl Parser {
                         fail ~"Unclosed section";
                     }
                   }
-                  _ => { vec::push(children, last); }
+                  _ => { children.push(last); }
                 }
             }
           }
@@ -635,7 +635,7 @@ impl Parser {
         }
     }
 
-    fn check_content(+content: ~str) -> ~str {
+    fn check_content(content: &str) -> ~str {
         let trimmed = content.trim();
         if trimmed.len() == 0u {
             fail ~"empty tag";
