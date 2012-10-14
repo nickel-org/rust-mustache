@@ -1,9 +1,8 @@
-#[forbid(deprecated_mode)];
 #[allow(structural_records)];  // TODO: enable more of these
-#[warn(unused_imports)];
+#[forbid(deprecated_mode)];
 #[forbid(deprecated_pattern)];
-#[allow(non_implicitly_copyable_typarams)];
-
+#[forbid(non_implicitly_copyable_typarams)];
+#[forbid(unused_imports)];
 
 /// Represents template data.
 pub enum Data {
