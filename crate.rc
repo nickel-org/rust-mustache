@@ -5,4 +5,9 @@
 
 extern mod std;
 
+use io::{ReaderUtil, WriterUtil};
+use dvec::DVec;
+use to_str::ToStr;
+use std::map::HashMap;
+
 mod mustache;
