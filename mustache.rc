@@ -10,4 +10,4 @@ use dvec::DVec;
 use to_str::ToStr;
 use std::map::HashMap;
 
-mod mustache;
+pub mod mustache;
