@@ -622,7 +622,7 @@ impl Parser {
     fn not_otag() {
         let mut i = 0u;
         while i < self.tag_position {
-            unsafe { str::push_char(&self.content, self.otag_chars[i]) };
+            unsafe { str::push_char(&mut self.content, self.otag_chars[i]) };
             i += 1u;
         }
     }
@@ -630,7 +630,7 @@ impl Parser {
     fn not_ctag() {
         let mut i = 0u;
         while i < self.tag_position {
-            unsafe { str::push_char(&self.content, self.ctag_chars[i]) };
+            unsafe { str::push_char(&mut self.content, self.ctag_chars[i]) };
             i += 1u;
         }
     }
@@ -858,7 +858,7 @@ fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
           '&' => { escaped += "&amp;" }
           '"' => { escaped += "&quot;" }
           '\'' => { escaped += "&#39;" }
-          _ => { str::push_char(&escaped, c); }
+          _ => { str::push_char(&mut escaped, c); }
         }
     }
     escaped
