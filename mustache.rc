@@ -9,5 +9,6 @@ use io::{ReaderUtil, WriterUtil};
 use dvec::DVec;
 use to_str::ToStr;
 use std::map::HashMap;
+use std::serialization::{Serializable, Serializer};
 
 pub mod mustache;

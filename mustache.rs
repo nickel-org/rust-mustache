@@ -8,7 +8,7 @@
 pub enum Data {
     Str(@~str),
     Bool(bool),
-    Vec(@~[Data]),
+    Vec(@DVec<Data>),
     Map(HashMap<@~str, Data>),
     Fun(fn@(@~str) -> ~str),
 }
@@ -31,10 +31,10 @@ pub struct Template {
 /**
  * Configures a mustache context with the partial template path and extension.
  */
-pub fn Context(template_path: @~str, template_extension: @~str) -> Context {
+pub fn Context(template_path: ~str, template_extension: ~str) -> Context {
     Context {
-        template_path: template_path,
-        template_extension: template_extension,
+        template_path: @template_path,
+        template_extension: @template_extension,
     }
 }
 
@@ -42,7 +42,7 @@ pub fn Context(template_path: @~str, template_extension: @~str) -> Context {
  * Configures a mustache context looking for partial files in the current
  * directory.
  */
-pub fn default_context() -> Context { Context(@~".", @~".mustache") }
+pub fn default_context() -> Context { Context(~".", ~".mustache") }
 
 impl Context {
     /// Compiles a template from an io::Reader.
@@ -84,17 +84,17 @@ impl Context {
     }
 
     /// Renders a template from an io::Reader.
-    fn render_reader(rdr: io::Reader, data: HashMap<@~str, Data>) -> ~str {
+    fn render_reader<S: Serializable>(rdr: io::Reader, data: &S) -> ~str {
         self.compile_reader(rdr).render(data)
     }
 
     /// Renders a template from a file.
-    fn render_file(file: &str, data: HashMap<@~str, Data>) -> ~str {
+    fn render_file<S: Serializable>(file: &str, data: &S) -> ~str {
         self.compile_file(file).render(data)
     }
 
     /// Renders a template from a string.
-    fn render_str(template: &str, data: HashMap<@~str, Data>) -> ~str {
+    fn render_str<S: Serializable>(template: &str, data: &S) -> ~str {
         self.compile_str(template).render(data)
     }
 }
@@ -115,80 +115,145 @@ pub fn compile_str(template: &str) -> Template {
 }
 
 /// Renders a template from an io::Reader.
-pub fn render_reader(rdr: io::Reader, data: HashMap<@~str, Data>) -> ~str {
+pub fn render_reader<S: Serializable>(rdr: io::Reader, data: &S) -> ~str {
     default_context().compile_reader(rdr).render(data)
 }
 
 /// Renders a template from a file.
-pub fn render_file(file: &str, data: HashMap<@~str, Data>) -> ~str {
+pub fn render_file<S: Serializable>(file: &str, data: &S) -> ~str {
     default_context().compile_file(file).render(data)
 }
 
 /// Renders a template from a string.
-pub fn render_str(template: &str, data: HashMap<@~str, Data>) -> ~str {
+pub fn render_str<S: Serializable>(template: &str, data: &S) -> ~str {
     default_context().compile_str(template).render(data)
 }
 
-pub trait ToMustache {
-    fn to_mustache() -> Data;
+struct DataSerializer {
+    data: std::cell::Cell<Data>,
 }
 
-impl Data: ToMustache {
-    fn to_mustache() -> Data { self }
+fn DataSerializer() -> DataSerializer {
+    DataSerializer { data: std::cell::empty_cell() }
 }
 
-impl ~str: ToMustache {
-    fn to_mustache() -> Data { Str(@copy self) }
-}
+impl DataSerializer: std::serialization::Serializer {
+    fn emit_nil(&self) { fail }
 
-impl @~str: ToMustache {
-    fn to_mustache() -> Data { Str(self) }
-}
+    fn emit_uint(&self, v: uint) { self.emit_owned_str(v.to_str()); }
+    fn emit_u64(&self, v: u64)   { self.emit_owned_str(v.to_str()); }
+    fn emit_u32(&self, v: u32)   { self.emit_owned_str(v.to_str()); }
+    fn emit_u16(&self, v: u16)   { self.emit_owned_str(v.to_str()); }
+    fn emit_u8(&self, v: u8)     { self.emit_owned_str(v.to_str()); }
 
-impl bool: ToMustache {
-    fn to_mustache() -> Data { Bool(self) }
-}
+    fn emit_int(&self, v: int) { self.emit_owned_str(v.to_str()); }
+    fn emit_i64(&self, v: i64) { self.emit_owned_str(v.to_str()); }
+    fn emit_i32(&self, v: i32) { self.emit_owned_str(v.to_str()); }
+    fn emit_i16(&self, v: i16) { self.emit_owned_str(v.to_str()); }
+    fn emit_i8(&self, v: i8)   { self.emit_owned_str(v.to_str()); }
 
-impl uint: ToMustache {
-    fn to_mustache() -> Data { Str(@uint::str(self)) }
-}
+    fn emit_bool(&self, v: bool) { self.data.put_back(Bool(v)); }
 
-impl int: ToMustache {
-    fn to_mustache() -> Data { Str(@int::str(self)) }
-}
-
-impl <T: ToMustache> ~[T]: ToMustache {
-    fn to_mustache() -> Data { Vec(@self.map(|x| x.to_mustache())) }
-}
-
-impl <T: ToMustache Copy> HashMap<@~str, T>: ToMustache {
-    fn to_mustache() -> Data {
-        let m = HashMap();
-        for self.each |k, v| { m.insert(k, v.to_mustache()); }
-        Map(m)
+    fn emit_f64(&self, v: f64)     { self.emit_owned_str(v.to_str()); }
+    fn emit_f32(&self, v: f32)     { self.emit_owned_str(v.to_str()); }
+    fn emit_float(&self, v: float) {
+        // We want to strip trailing zeros.
+        let s = str::trim_right_chars(v.to_str(), ~['0', '.']);
+        self.emit_owned_str(s);
     }
-}
 
-impl fn@(@~str) -> ~str: ToMustache {
-    fn to_mustache() -> Data { Fun(self) }
-}
+    fn emit_char(&self, v: char) { self.emit_owned_str(str::from_char(v)); }
 
-impl<T: ToMustache> Option<T>: ToMustache {
-    fn to_mustache() -> Data {
-        match self {
-          None => { Bool(false) }
-          Some(ref v) => { v.to_mustache() }
+    fn emit_borrowed_str(&self, v: &str) {
+        self.data.put_back(Str(@v.to_unique()));
+    }
+    fn emit_owned_str(&self, v: &str) {
+        self.data.put_back(Str(@v.to_unique()));
+    }
+    fn emit_managed_str(&self, v: &str) {
+        self.data.put_back(Str(@v.to_unique()));
+    }
+
+    fn emit_borrowed(&self, f: fn()) { f() }
+    fn emit_owned(&self, f: fn()) { f() }
+    fn emit_managed(&self, f: fn()) { f() }
+
+    fn emit_enum(&self, _name: &str, _f: fn()) {
+        fail
+    }
+    fn emit_enum_variant(&self, _name: &str, _id: uint, _cnt: uint, _f: fn()) {
+        fail
+    }
+    fn emit_enum_variant_arg(&self, _idx: uint, _f: fn()) {
+        fail
+    }
+
+    fn emit_borrowed_vec(&self, _len: uint, f: fn()) {
+        self.data.put_back(Vec(@DVec()));
+        f()
+    }
+    fn emit_owned_vec(&self, _len: uint, f: fn()) {
+        self.data.put_back(Vec(@DVec()));
+        f()
+    }
+    fn emit_managed_vec(&self, _len: uint, f: fn()) {
+        self.data.put_back(Vec(@DVec()));
+        f()
+    }
+    fn emit_vec_elt(&self, _idx: uint, f: fn()) {
+        let v = self.data.take();
+        f();
+        match move v {
+            Vec(move v) => {
+                let mut v = move v;
+                v.push(self.data.take());
+                self.data.put_back(Vec(v));
+            }
+            _ => fail
         }
+    }
+
+    fn emit_rec(&self, f: fn()) {
+        self.data.put_back(Map(HashMap()));
+        f()
+    }
+    fn emit_struct(&self, _name: &str, f: fn()) {
+        self.data.put_back(Map(HashMap()));
+        f()
+    }
+    fn emit_field(&self, name: &str, _idx: uint, f: fn()) {
+        let m = self.data.take();
+        f();
+        match move m {
+            Map(move m) => {
+                m.insert(@name.to_unique(), self.data.take());
+                self.data.put_back(Map(m))
+            }
+            _ => fail
+        }
+    }
+
+    fn emit_tup(&self, len: uint, f: fn()) {
+        self.emit_owned_vec(len, f)
+    }
+    fn emit_tup_elt(&self, idx: uint, f: fn()) {
+        self.emit_vec_elt(idx, f)
     }
 }
 
 impl Template {
-    fn render(data: HashMap<@~str, Data>) -> ~str {
+    fn render<S: Serializable>(data: &S) -> ~str {
+        let serializer = DataSerializer();
+        data.serialize(&serializer);
+        self.render_data(serializer.data.take())
+    }
+
+    fn render_data(data: Data) -> ~str {
         render_helper(&RenderContext {
             ctx: self.ctx,
             tokens: self.tokens,
             partials: self.partials,
-            stack: @~[Map(data)],
+            stack: @~[data],
             indent: @~""
         })
     }
@@ -709,7 +774,7 @@ struct RenderContext {
 fn render_helper(ctx: &RenderContext) -> ~str {
     fn find(stack: &[Data], path: &[~str]) -> Option<Data> {
         // If we have an empty path, we just want the top value in our stack.
-        if vec::is_empty(path) {
+        if path.is_empty() {
             return match vec::last_opt(stack) {
               None => { None }
               Some(value) => { Some(value) }
@@ -870,7 +935,7 @@ fn render_utag(value: Data, ctx: &RenderContext) -> ~str {
 fn render_inverted_section(value: Data, ctx: &RenderContext) -> ~str {
     match value {
       Bool(false) => { render_helper(ctx) }
-      Vec(xs) if xs.is_empty() => { render_helper(ctx) }
+      Vec(xs) if xs.len() == 0 => { render_helper(ctx) }
       _ => { ~"" }
     }
 }
@@ -883,13 +948,16 @@ fn render_section(value: Data,
     match value {
         Bool(true) => render_helper(ctx),
         Bool(false) => ~"",
-        Vec(vs) =>
-            str::concat(do vs.map |v| {
-                render_helper(&RenderContext {
-                    stack: @(ctx.stack + ~[*v]),
-                    .. *ctx
+        Vec(vs) => {
+            do vs.borrow |vs| {
+                str::concat(do vs.map |v| {
+                    render_helper(&RenderContext {
+                        stack: @(ctx.stack + ~[*v]),
+                        .. *ctx
+                    })
                 })
-            }),
+            }
+        }
         Map(_) =>
             render_helper(&RenderContext {
                 stack: @(ctx.stack + ~[value]),
@@ -960,7 +1028,8 @@ fn check_tokens(actual: &[Token], expected: &[Token]) -> bool
 
 #[cfg(test)]
 mod tests {
-    use mod std::json;
+    use send_map::linear::LinearMap;
+    use std::json;
 
     #[test]
     fn test_compile_texts() {
@@ -1136,10 +1205,12 @@ mod tests {
         ]);
     }
 
+    #[auto_serialize]
+    struct Name { name: ~str }
+
     #[test]
     fn test_render_texts() {
-        let ctx = HashMap();
-        ctx.insert(@~"name", Str(@~"world"));
+        let ctx = &Name { name: ~"world" };
 
         assert render_str(~"hello world", ctx) == ~"hello world";
         assert render_str(~"hello {world", ctx) == ~"hello {world";
@@ -1150,87 +1221,104 @@ mod tests {
 
     #[test]
     fn test_render_etags() {
-        let ctx = HashMap();
-        ctx.insert(@~"name", Str(@~"world"));
+        let ctx = &Name { name: ~"world" };
 
         assert render_str(~"hello {{name}}", ctx) == ~"hello world";
     }
 
     #[test]
     fn test_render_utags() {
-        let ctx = HashMap();
-        ctx.insert(@~"name", Str(@~"world"));
+        let ctx = &Name { name: ~"world" };
 
         assert render_str(~"hello {{{name}}}", ctx) == ~"hello world";
     }
+
+/*
+    enum StrHash<V> = HashMap<@~str, V>;
+
+    impl<V: Serializable> StrHash<V>: Serializable {
+        fn serialize<S: Serializer>(&self, s: &S) {
+            do s.emit_rec || {
+                let mut idx = 0;
+                for self.each_ref |key, value| {
+                    do s.emit_field(**key, idx) || {
+                        (*value).serialize(s);
+                    }
+                    idx += 1;
+                }
+            }
+        }
+    }
+    */
 
     #[test]
     fn test_render_sections() {
         let ctx0 = HashMap();
         let template = compile_str(~"0{{#a}}1 {{n}} 3{{/a}}5");
 
-        assert template.render(ctx0) == ~"05";
+        assert template.render_data(Map(ctx0)) == ~"05";
 
-        ctx0.insert(@~"a", Vec(@~[]));
-        assert template.render(ctx0) == ~"05";
+        ctx0.insert(@~"a", Vec(@DVec()));
+        assert template.render_data(Map(ctx0)) == ~"05";
 
         let ctx1: HashMap<@~str, Data> = HashMap();
-        ctx0.insert(@~"a", (~[ctx1]).to_mustache());
+        ctx0.insert(@~"a", Vec(@dvec::from_elem(Map(ctx1))));
 
-        assert template.render(ctx0) == ~"01  35";
+        assert template.render_data(Map(ctx0)) == ~"01  35";
 
         let ctx1 = HashMap();
-        ctx1.insert(@~"n", (~"a").to_mustache());
-        ctx0.insert(@~"a", (~[ctx1]).to_mustache());
-        assert template.render(ctx0) == ~"01 a 35";
+        ctx1.insert(@~"n", Str(@~"a"));
+        ctx0.insert(@~"a", Vec(@dvec::from_elem(Map(ctx1))));
+        assert template.render_data(Map(ctx0)) == ~"01 a 35";
 
-        ctx0.insert(@~"a", (|_text| {~"foo"}).to_mustache());
-        assert template.render(ctx0) == ~"0foo5";
+        ctx0.insert(@~"a", Fun(|_text| {~"foo"}));
+        assert template.render_data(Map(ctx0)) == ~"0foo5";
     }
 
     #[test]
     fn test_render_inverted_sections() {
-        let template = ~"0{{^a}}1 3{{/a}}5";
+        let template = compile_str(~"0{{^a}}1 3{{/a}}5");
 
         let ctx0 = HashMap();
-        assert render_str(template, ctx0) == ~"01 35";
+        assert template.render_data(Map(ctx0)) == ~"01 35";
 
-        ctx0.insert(@~"a", Vec(@~[]));
-        assert render_str(template, ctx0) == ~"01 35";
+        ctx0.insert(@~"a", Vec(@DVec()));
+        assert template.render_data(Map(ctx0)) == ~"01 35";
 
         let ctx1 = HashMap();
-        ctx0.insert(@~"a", (~[ctx1]).to_mustache());
-        assert render_str(template, ctx0) == ~"05";
+        ctx0.insert(@~"a", Vec(@dvec::from_elem(Map(ctx1))));
+        assert template.render_data(Map(ctx0)) == ~"05";
 
-        ctx1.insert(@~"n", (~"a").to_mustache());
-        assert render_str(template, ctx0) == ~"05";
+        ctx1.insert(@~"n", Str(@~"a"));
+        assert template.render_data(Map(ctx0)) == ~"05";
     }
 
     #[test]
     fn test_render_partial() {
         let path = ~"base";
+        let template = compile_file(path);
 
         let ctx0 = HashMap();
-        assert render_file(path, ctx0) == ~"<h2>Names</h2>\n";
+        assert template.render_data(Map(ctx0)) == ~"<h2>Names</h2>\n";
 
-        ctx0.insert(@~"names", Vec(@~[]));
-        assert render_file(path, ctx0) == ~"<h2>Names</h2>\n";
+        ctx0.insert(@~"names", Vec(@DVec()));
+        assert template.render_data(Map(ctx0)) == ~"<h2>Names</h2>\n";
 
         let ctx1 = HashMap();
-        ctx0.insert(@~"names", Vec(@~[Map(ctx1)]));
-        assert render_file(path, ctx0) ==
+        ctx0.insert(@~"names", Vec(@dvec::from_elem(Map(ctx1))));
+        assert template.render_data(Map(ctx0)) ==
            ~ "<h2>Names</h2>\n" +
             ~"  <strong></strong>\n\n";
 
         ctx1.insert(@~"name", Str(@~"a"));
-        assert render_file(path, ctx0) ==
+        assert template.render_data(Map(ctx0)) ==
             ~"<h2>Names</h2>\n" +
             ~"  <strong>a</strong>\n\n";
 
         let ctx2 = HashMap();
         ctx2.insert(@~"name", Str(@~"<b>"));
-        ctx0.insert(@~"names", Vec(@~[Map(ctx1), Map(ctx2)]));
-        assert render_file(path, ctx0) ==
+        ctx0.insert(@~"names", Vec(@dvec::from_vec(~[Map(ctx1), Map(ctx2)])));
+        assert template.render_data(Map(ctx0)) ==
             ~"<h2>Names</h2>\n" +
             ~"  <strong>a</strong>\n\n" +
             ~"  <strong>&lt;b&gt;</strong>\n\n";
@@ -1243,11 +1331,11 @@ mod tests {
             Ok(move s) => {
                 match json::from_str(s) {
                     Err(e) => fail e.to_str(),
-                    Ok(json) => {
+                    Ok(move json) => {
                         match json {
-                            json::Object(d) => {
-                                match d.find(&~"tests") {
-                                    Some(json::List(move tests)) => tests,
+                            json::Object(ref d) => {
+                                match d.find_ref(&~"tests") {
+                                    Some(&json::List(move tests)) => tests,
                                     _ => fail fmt!("%s: tests key not a list", src),
                                 }
                             }
@@ -1259,6 +1347,7 @@ mod tests {
         }
     }
 
+/*
     fn convert_json_map(map: &json::Object) -> HashMap<@~str, Data> {
         let d = HashMap();
         for map.each |key, value| { d.insert(@copy *key, convert_json(value)); }
@@ -1279,21 +1368,25 @@ mod tests {
           _ => { fail fmt!("%?", value) }
         }
     }
+*/
 
-    fn write_partials(value: json::Json) -> ~[Path] {
-        let mut files = ~[];
+    struct Tmpdir {
+        path: path::Path,
+        drop {
+            os::walk_dir(&self.path, os::remove_file);
+            os::remove_dir(&self.path);
+        }
+    }
 
+    fn write_partials(tmpdir: &path::Path, value: &json::Json) {
         match value {
-            json::Object(d) => {
+            &json::Object(ref d) => {
                 for d.each |key, value| {
                     match value {
-                        &json::String(s) => {
-                            let file = path::from_str(key + ".mustache");
-                            match io::file_writer(&file, ~[io::Create, io::Truncate]) {
-                                Ok(move wr) => {
-                                    files.push(file);
-                                    wr.write_str(s)
-                                },
+                        &json::String(ref s) => {
+                            let path = tmpdir.push(key + ".mustache");
+                            match io::file_writer(&path, ~[io::Create, io::Truncate]) {
+                                Ok(move wr) => wr.write_str(*s),
                                 Err(move e) => fail e,
                             }
                         }
@@ -1303,80 +1396,83 @@ mod tests {
             },
             _ => fail,
         }
-
-        files
     }
 
-    fn run_test(test: ~json::Object, data: HashMap<@~str, Data>) {
-        let template = match test.get(&~"template") {
-          json::String(s) => copy s,
-          _ => fail,
+    fn run_test(test: ~json::Object, data: Data) {
+        let mut test = test;
+
+        let template = match test.find_ref(&~"template") {
+            Some(&json::String(copy s)) => s,
+            _ => fail,
         };
 
-        let expected = match test.get(&~"expected") {
-          json::String(s) => copy s,
-          _ => fail,
+        let expected = match test.find_ref(&~"expected") {
+            Some(&json::String(copy s)) => s,
+            _ => fail,
         };
 
-        let partials = match test.find(&~"partials") {
-          Some(value) => write_partials(copy value),
-          None => ~[],
+        // Make a temporary dir where we'll store our partials. This is to
+        // avoid a race on filenames.
+        let tmpdir = match std::tempfile::mkdtemp(&path::Path("."), "") {
+            Some(move path) => Tmpdir { path: path },
+            None => fail,
         };
 
-        let result = render_str(template, data);
+        match test.find_ref(&~"partials") {
+            Some(value) => write_partials(&tmpdir.path, value),
+            None => {},
+        }
+
+        let ctx = Context(tmpdir.path.to_str(), ~".mustache");
+        let template = ctx.compile_str(template);
+        let result = template.render_data(data);
 
         if result != expected {
-            fn to_list(x: json::Json) -> json::Json {
+            fn to_list(x: &json::Json) -> json::Json {
                 match x {
-                    json::Object(d) => {
+                    &json::Object(ref d) => {
                         let mut xs = ~[];
                         for d.each |k, v| {
                             let k = json::String(copy *k);
-                            let v = to_list(copy *v);
+                            let v = to_list(v);
                             xs.push(json::List(~[k, v]));
                         }
                         json::List(xs)
                     },
-                    json::List(xs) => {
-                        json::List(xs.map(|x| to_list(copy *x)))
+                    &json::List(ref xs) => {
+                        json::List(xs.map(|x| to_list(x)))
                     },
-                    _ => { x }
+                    _ => { copy *x }
                 }
             }
 
-            io::println(fmt!("desc:     %?", test.get(&~"desc")));
-            io::println(fmt!("context:  %?", to_list(test.get(&~"data"))));
-            io::println(fmt!("partials: %?", partials));
-            io::println(fmt!("partials: %?", test.find(&~"partials")));
+            io::println(fmt!("desc:     %s", test.get_ref(&~"desc").to_str()));
+            io::println(fmt!("context:  %s", test.get_ref(&~"data").to_str()));
             io::println(~"=>");
             io::println(fmt!("template: %?", template));
             io::println(fmt!("expected: %?", expected));
             io::println(fmt!("actual:   %?", result));
-	        io::println(~"THIS SHOULD BE AN ASSERT");
             io::println(~"");
         }
-        // TODO: enable this
-        // problem is that fmt! is now returning trailing zeros for numbers
-        // e.g. Basic Decimal Interpolation wants 1.21 to be printed as exactly that
-        // but %? prints it as 1.2100 and %f prints it as 1.210000
-        //assert result == *expected;	
-
-        for partials.each |file| { os::remove_file(file); }
+        assert result == expected;
     }
 
     fn run_tests(spec: &str) {
-        for parse_spec_tests(spec).each |json| {
-            let test = match json {
-                &json::Object(m) => copy m,
+        do vec::consume(parse_spec_tests(spec)) |_i, json| {
+            let test = match move json {
+                json::Object(move m) => m,
                 _ => fail,
             };
 
-            let data = match test.get(&~"data") {
-                json::Object(m) => convert_json_map(m),
-                _ => fail,
+            let data = match test.find_ref(&~"data") {
+                Some(data) => copy *data,
+                None => fail,
             };
 
-            run_test(test, data);
+            let serializer = DataSerializer();
+            data.serialize(&serializer);
+
+            run_test(move test, serializer.data.take());
         }
     }
 
@@ -1414,54 +1510,60 @@ mod tests {
     fn test_spec_lambdas() {
         for parse_spec_tests(~"spec/specs/~lambdas.json").each |json| {
             let test = match json {
-                &json::Object(m) => copy m,
+                &json::Object(copy m) => m,
                 _ => fail,
             };
 
             // Replace the lambda with rust code.
-            let mut ctx = match test.get(&~"data") {
-                json::Object(m) => convert_json_map(m),
+            let data = match test.find_ref(&~"data") {
+                Some(data) => copy *data,
+                None => fail,
+            };
+
+            let serializer = DataSerializer();
+            data.serialize(&serializer);
+            let ctx = match serializer.data.take() {
+                Map(move ctx) => ctx,
                 _ => fail,
             };
 
-            let f = match test.get(&~"name") {
-              json::String(~"Interpolation") => {
+            let f = match test.get_ref(&~"name") {
+              &json::String(~"Interpolation") => {
                   |_text| {~"world" }
               }
-              json::String(~"Interpolation - Expansion") => {
+              &json::String(~"Interpolation - Expansion") => {
                   |_text| {~"{{planet}}" }
               }
-              json::String(~"Interpolation - Alternate Delimiters") => {
+              &json::String(~"Interpolation - Alternate Delimiters") => {
                   |_text| {~"|planet| => {{planet}}" }
               }
-              json::String(~"Interpolation - Multiple Calls") => {
+              &json::String(~"Interpolation - Multiple Calls") => {
                   let calls = @mut 0;
                   |_text| {*calls += 1; int::str(*calls) }
               }
-              json::String(~"Escaping") => {
+              &json::String(~"Escaping") => {
                   |_text| {~">" }
               }
-              json::String(~"Section") => {
+              &json::String(~"Section") => {
                   |text: @~str| {if *text == ~"{{x}}" { ~"yes" } else { ~"no" } }
               }
-              json::String(~"Section - Expansion") => {
+              &json::String(~"Section - Expansion") => {
                   |text: @~str| {*text + "{{planet}}" + *text }
               }
-              json::String(~"Section - Alternate Delimiters") => {
+              &json::String(~"Section - Alternate Delimiters") => {
                   |text: @~str| {*text + "{{planet}} => |planet|" + *text }
               }
-              json::String(~"Section - Multiple Calls") => {
+              &json::String(~"Section - Multiple Calls") => {
                   |text: @~str| {~"__" + *text + ~"__" }
               }
-              json::String(~"Inverted Section") => {
+              &json::String(~"Inverted Section") => {
                   |_text| {~"" }
               }
               value => { fail fmt!("%?", value) }
             };
-
             ctx.insert(@~"lambda", Fun(f));
 
-            run_test(test, ctx);
+            run_test(test, Map(ctx));
         }
     }
 }
