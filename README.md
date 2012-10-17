@@ -22,16 +22,15 @@ Install It
 Use It
 ======
 
-    use std;
+    extern mod std;
     use mustache;
 
-    import std::io;
-    import std::map;
+    #[auto_serialize]
+    struct Name { name: ~str }
 
     fn main() {
-        let ctx = map::new_str_hash();
-        ctx.insert("planet", mustache::str("world"));
-        let s = mustache::render_str("hello {{planet}}", ctx);
+        let name = Name { name: ~"world" };
+        let s = mustache::render_str("hello {{name}}!", ctx);
         io::println(s);
     }
 
