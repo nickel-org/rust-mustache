@@ -13,14 +13,15 @@ extern mod std;
 extern mod extra;
 
 use extra::serialize::*;
-use std::prelude::*;
 use std::io::*;
 use std::str::*;
-use std::path::*;
 use std::vec::*;
 use std::util::swap;
 use std::hashmap::HashMap;
+
 //use to_str::ToStr;
+//use std::path::*;
+//use std::prelude::*;
 
 /// Represents template data.
 pub enum Data {
@@ -190,11 +191,11 @@ impl Encoder: Encoder {
     fn emit_f32(&self, v: f32)     { self.emit_owned_str(v.to_str()); }
     fn emit_float(&self, v: float) {
         // We want to strip trailing zeros.
-        let s = str::trim_right_chars(v.to_str(), ~['0', '.']);
+        let s = trim_right_chars(v.to_str(), ~['0', '.']);
         self.emit_owned_str(s);
     }
 
-    fn emit_char(&self, v: char) { self.emit_owned_str(str::from_char(v)); }
+    fn emit_char(&self, v: char) { self.emit_owned_str(from_char(v)); }
 
     fn emit_borrowed_str(&self, v: &str) {
         self.data.put_back(Str(@v.to_owned()));
@@ -447,7 +448,7 @@ impl Parser {
             match *token {
                 IncompleteSection(name, _, _, _) => {
                     fail!( fmt!("Unclosed mustache section %s",
-                        str::connect(*name, ~".")));
+                        connect(*name, ~".")));
               }
               _ => {}
             }
@@ -484,7 +485,7 @@ impl Parser {
               Text(s) if *s != ~"" => {
                 // Look for the last newline character that may have whitespace
                 // following it.
-                match str::rfind(*s, |c| c == '\n' || !char::is_whitespace(c)) {
+                match rfind(*s, |c| c == '\n' || !char::is_whitespace(c)) {
                   // It's all whitespace.
                   None => {
                     if self.tokens.len() == 1u {
@@ -555,14 +556,14 @@ impl Parser {
           '&' => {
             let name = content.slice(1u, len);
             let name = self.check_content(name);
-            let name = @str::split_char_nonempty(name, '.');
+            let name = @split_char_nonempty(name, '.');
             self.tokens.push(UTag(name, tag));
           }
           '{' => {
             if ends_with(content, "}") {
                 let name = content.slice(1u, len - 1u);
                 let name = self.check_content(name);
-                let name = @str::split_char_nonempty(name, '.');
+                let name = @split_char_nonempty(name, '.');
                 self.tokens.push(UTag(name, tag));
             } else { fail!( ~"unbalanced \"{\" in tag" ); }
           }
@@ -570,21 +571,21 @@ impl Parser {
             let newlined = self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
-            let name = @str::split_char_nonempty(name, '.');
+            let name = @split_char_nonempty(name, '.');
             self.tokens.push(IncompleteSection(name, false, tag, newlined));
           }
           '^' => {
             let newlined = self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
-            let name = @str::split_char_nonempty(name, '.');
+            let name = @split_char_nonempty(name, '.');
             self.tokens.push(IncompleteSection(name, true, tag, newlined));
           }
           '/' => {
             self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
-            let name = @str::split_char_nonempty(name, '.');
+            let name = @split_char_nonempty(name, '.');
             let mut children = ~[];
 
             loop {
@@ -650,30 +651,30 @@ impl Parser {
             if (len > 2u && ends_with(content, "=")) {
                 let s = self.check_content(content.slice(1u, len - 1u));
 
-                let pos = str::find_from(s, 0u, char::is_whitespace);
+                let pos = find_from(s, 0u, char::is_whitespace);
                 let pos = match pos {
                   None => { fail!( ~"invalid change delimiter tag content" ); }
                   Some(pos) => { pos }
                 };
 
                 self.otag = @s.slice(0u, pos);
-                self.otag_chars = @str::chars(*self.otag);
+                self.otag_chars = @chars(*self.otag);
 
-                let pos = str::find_from(s, pos, |c| !char::is_whitespace(c));
+                let pos = find_from(s, pos, |c| !char::is_whitespace(c));
                 let pos = match pos {
                   None => { fail!( ~"invalid change delimiter tag content" ); }
                   Some(pos) => { pos }
                 };
 
                 self.ctag = @s.slice(pos, s.len());
-                self.ctag_chars = @str::chars(*self.ctag);
+                self.ctag_chars = @chars(*self.ctag);
             } else {
                 fail!( ~"invalid change delimiter tag content" );
             }
           }
           _ => {
             let name = self.check_content(content);
-            let name = @str::split_char_nonempty(name, '.');
+            let name = @split_char_nonempty(name, '.');
             self.tokens.push(ETag(name, tag));
           }
         }
@@ -757,8 +758,8 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
         state: TEXT,
         otag: ctx.otag,
         ctag: ctx.ctag,
-        otag_chars: @str::chars(*ctx.otag),
-        ctag_chars: @str::chars(*ctx.ctag),
+        otag_chars: @chars(*ctx.otag),
+        ctag_chars: @chars(*ctx.ctag),
         tag_position: 0u,
         tokens: ~[],
         partials: ~[],
@@ -866,7 +867,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     let len = value.len();
 
                     while pos < len {
-                        let line = match str::find_char_from(*value, '\n', pos) {
+                        let line = match find_char_from(*value, '\n', pos) {
                           None => {
                             let line = value.slice(pos, len);
                             pos = len;
@@ -988,7 +989,7 @@ fn render_section(value: Data,
         Bool(false) => ~"",
         Vec(vs) => {
             do vs.borrow |vs| {
-                str::concat(do vs.map |v| {
+                concat(do vs.map |v| {
                     render_helper(&RenderContext {
                         stack: @(ctx.stack + ~[*v]),
                         .. *ctx
