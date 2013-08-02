@@ -15,8 +15,10 @@ extern mod extra;
 use extra::serialize::*;
 use std::io::*;
 use std::str::*;
+use std::char::*;
 use std::vec::*;
 use std::util::swap;
+use std::cell::*;
 use std::hashmap::HashMap;
 
 //use to_str::ToStr;
@@ -166,7 +168,7 @@ pub struct Encoder {
 
 impl Encoder {
     fn new() -> Encoder {
-        Encoder { data: std::cell::empty_cell() }
+        Encoder { data: Cell::new_empty() }
     }
 }
 
@@ -485,7 +487,7 @@ impl Parser {
               Text(s) if *s != ~"" => {
                 // Look for the last newline character that may have whitespace
                 // following it.
-                match rfind(*s, |c| c == '\n' || !char::is_whitespace(c)) {
+                match rfind(*s, |c| c == '\n' || !is_whitespace(c)) {
                   // It's all whitespace.
                   None => {
                     if self.tokens.len() == 1u {
@@ -651,7 +653,7 @@ impl Parser {
             if (len > 2u && ends_with(content, "=")) {
                 let s = self.check_content(content.slice(1u, len - 1u));
 
-                let pos = find_from(s, 0u, char::is_whitespace);
+                let pos = find_from(s, 0u, is_whitespace);
                 let pos = match pos {
                   None => { fail!( ~"invalid change delimiter tag content" ); }
                   Some(pos) => { pos }
@@ -660,7 +662,7 @@ impl Parser {
                 self.otag = @s.slice(0u, pos);
                 self.otag_chars = @chars(*self.otag);
 
-                let pos = find_from(s, pos, |c| !char::is_whitespace(c));
+                let pos = find_from(s, pos, |c| !is_whitespace(c));
                 let pos = match pos {
                   None => { fail!( ~"invalid change delimiter tag content" ); }
                   Some(pos) => { pos }
