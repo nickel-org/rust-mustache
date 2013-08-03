@@ -67,7 +67,7 @@ pub fn default_context() -> Context { Context(~".", ~".mustache") }
 
 impl Context {
     /// Compiles a template from an io::Reader.
-    fn compile_reader(rdr: Reader) -> Template {
+    fn compile_reader(&self, rdr: Reader) -> Template {
         let partials = HashMap::new();
 
         let mut ctx = CompileContext {
@@ -89,7 +89,7 @@ impl Context {
     }
 
     /// Compiles a template from a file.
-    fn compile_file(file: &str) -> Template {
+    fn compile_file(&self, file: &str) -> Template {
     	let path = Path(*self.template_path);
     	let path = path.push(file.to_owned() + *self.template_extension);
 
@@ -100,28 +100,28 @@ impl Context {
     }
 
     /// Compiles a template from a string.
-    fn compile_str(src: &str) -> Template {
+    fn compile_str(&self, src: &str) -> Template {
         with_str_reader(src, |rdr| self.compile_reader(rdr))
     }
 
     /// Renders a template from an Reader.
     fn render_reader<
         T: Encodable<Encoder>
-    >(rdr: Reader, data: &T) -> ~str {
+    >(&self, rdr: Reader, data: &T) -> ~str {
         self.compile_reader(rdr).render(data)
     }
 
     /// Renders a template from a file.
     fn render_file<
         T: Encodable<Encoder>
-    >(file: &str, data: &T) -> ~str {
+    >(&self, file: &str, data: &T) -> ~str {
         self.compile_file(file).render(data)
     }
 
     /// Renders a template from a string.
     fn render_str<
         T: Encodable<Encoder>
-    >(template: &str, data: &T) -> ~str {
+    >(&self, template: &str, data: &T) -> ~str {
         self.compile_str(template).render(data)
     }
 }
@@ -279,13 +279,13 @@ impl Encoder: Encoder {
 impl Template {
     fn render<
         T: Encodable<Encoder>
-    >(data: &T) -> ~str {
+    >(&self, data: &T) -> ~str {
         let encoder = Encoder::new();
         data.encode(&encoder);
         self.render_data(encoder.data.take())
     }
 
-    fn render_data(data: Data) -> ~str {
+    fn render_data(&self, data: Data) -> ~str {
         render_helper(&RenderContext {
             ctx: self.ctx,
             tokens: self.tokens,
@@ -487,7 +487,8 @@ impl Parser {
               Text(s) if *s != ~"" => {
                 // Look for the last newline character that may have whitespace
                 // following it.
-                match rfind(*s, |c| c == '\n' || !is_whitespace(c)) {
+                // Changing rfind to 's' upon rustc suggestion
+                match s(*s, |c| c == '\n' || !is_whitespace(c)) {
                   // It's all whitespace.
                   None => {
                     if self.tokens.len() == 1u {
@@ -558,14 +559,14 @@ impl Parser {
           '&' => {
             let name = content.slice(1u, len);
             let name = self.check_content(name);
-            let name = @split_char_nonempty(name, '.');
+            let name = @split_options_iter(name, '.');
             self.tokens.push(UTag(name, tag));
           }
           '{' => {
             if ends_with(content, "}") {
                 let name = content.slice(1u, len - 1u);
                 let name = self.check_content(name);
-                let name = @split_char_nonempty(name, '.');
+                let name = @split_options_iter(name, '.');
                 self.tokens.push(UTag(name, tag));
             } else { fail!( ~"unbalanced \"{\" in tag" ); }
           }
@@ -573,21 +574,21 @@ impl Parser {
             let newlined = self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
-            let name = @split_char_nonempty(name, '.');
+            let name = @split_options_iter(name, '.');
             self.tokens.push(IncompleteSection(name, false, tag, newlined));
           }
           '^' => {
             let newlined = self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
-            let name = @split_char_nonempty(name, '.');
+            let name = @split_options_iter(name, '.');
             self.tokens.push(IncompleteSection(name, true, tag, newlined));
           }
           '/' => {
             self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
-            let name = @split_char_nonempty(name, '.');
+            let name = @split_options_iter(name, '.');
             let mut children = ~[];
 
             loop {
@@ -660,7 +661,8 @@ impl Parser {
                 };
 
                 self.otag = @s.slice(0u, pos);
-                self.otag_chars = @chars(*self.otag);
+                // Changed @chars to @ctag, upon rustc asking.
+                self.otag_chars = @ctag(*self.otag);
 
                 let pos = find_from(s, pos, |c| !is_whitespace(c));
                 let pos = match pos {
@@ -669,14 +671,15 @@ impl Parser {
                 };
 
                 self.ctag = @s.slice(pos, s.len());
-                self.ctag_chars = @chars(*self.ctag);
+                // Changed @chars to @ctag, upon rustc asking.
+                self.ctag_chars = @ctag(*self.ctag);
             } else {
                 fail!( ~"invalid change delimiter tag content" );
             }
           }
           _ => {
             let name = self.check_content(content);
-            let name = @split_char_nonempty(name, '.');
+            let name = @split_options_iter(name, '.');
             self.tokens.push(ETag(name, tag));
           }
         }
@@ -760,8 +763,9 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
         state: TEXT,
         otag: ctx.otag,
         ctag: ctx.ctag,
-        otag_chars: @chars(*ctx.otag),
-        ctag_chars: @chars(*ctx.ctag),
+        // Changing @chars to @ctx, rustc suggestion
+        otag_chars: @ctx(*ctx.otag),
+        ctag_chars: @ctx(*ctx.ctag),
         tag_position: 0u,
         tokens: ~[],
         partials: ~[],
