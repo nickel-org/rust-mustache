@@ -193,7 +193,7 @@ impl Encoder: Encoder {
     fn emit_f32(&self, v: f32)     { self.emit_owned_str(v.to_str()); }
     fn emit_float(&self, v: float) {
         // We want to strip trailing zeros.
-        let s = trim_right_chars(v.to_str(), ~['0', '.']);
+        let s = v.to_str().trim_right_chars(~['0', '.']);
         self.emit_owned_str(s);
     }
 
@@ -377,7 +377,7 @@ impl Parser {
                         self.state = TAG;
                     }
                 } else {
-                    unsafe { push_char(&mut self.content, self.ch) };
+                    unsafe { self.content.push_char(self.ch) };
                 }
                 self.bump();
               }
@@ -395,18 +395,18 @@ impl Parser {
                     // so far to the string.
                     self.state = TEXT;
                     self.not_otag();
-                    unsafe { push_char(&mut self.content, self.ch) };
+                    unsafe { self.content.push_char(self.ch) };
                 }
                 self.bump();
               }
               TAG => {
                 if self.content == ~"" && self.ch == '{' {
                     curly_brace_tag = true;
-                    unsafe { push_char(&mut self.content, self.ch) };
+                    unsafe { self.content.push_char(self.ch) };
                     self.bump();
                 } else if curly_brace_tag && self.ch == '}' {
                     curly_brace_tag = false;
-                    unsafe { push_char(&mut self.content, self.ch) };
+                    unsafe { self.content.push_char(self.ch) };
                     self.bump();
                 } else if self.ch == self.ctag_chars[0u] {
                     if self.ctag_chars.len() > 1u {
@@ -418,7 +418,7 @@ impl Parser {
                         self.state = TEXT;
                     }
                 } else {
-                    unsafe { push_char(&mut self.content, self.ch) };
+                    unsafe { self.content.push_char(self.ch) };
                     self.bump();
                 }
               }
@@ -430,7 +430,7 @@ impl Parser {
                     } else {
                         self.state = TAG;
                         self.not_ctag();
-                        unsafe { push_char(&mut self.content, self.ch) };
+                        unsafe { self.content.push_char(self.ch) };
                         self.bump();
                     }
                 }
@@ -498,7 +498,7 @@ impl Parser {
                     }
                   }
                   Some(pos) => {
-                    if char_at(*s, pos) == '\n' {
+                    if *s.char_at(pos) == '\n' {
                         if pos == s.len() - 1u {
                             StandAlone
                         } else {
@@ -559,14 +559,14 @@ impl Parser {
           '&' => {
             let name = content.slice(1u, len);
             let name = self.check_content(name);
-            let name = @split_options_iter(name, '.');
+            let name = @name.split_options_iter('.');
             self.tokens.push(UTag(name, tag));
           }
           '{' => {
-            if ends_with(content, "}") {
+            if content.ends_with("}") {
                 let name = content.slice(1u, len - 1u);
                 let name = self.check_content(name);
-                let name = @split_options_iter(name, '.');
+                let name = @name.split_options_iter('.');
                 self.tokens.push(UTag(name, tag));
             } else { fail!( ~"unbalanced \"{\" in tag" ); }
           }
@@ -574,21 +574,21 @@ impl Parser {
             let newlined = self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
-            let name = @split_options_iter(name, '.');
+            let name = @name.split_options_iter('.');
             self.tokens.push(IncompleteSection(name, false, tag, newlined));
           }
           '^' => {
             let newlined = self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
-            let name = @split_options_iter(name, '.');
+            let name = @name.split_options_iter('.');
             self.tokens.push(IncompleteSection(name, true, tag, newlined));
           }
           '/' => {
             self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
-            let name = @split_options_iter(name, '.');
+            let name = @name.split_options_iter('.');
             let mut children = ~[];
 
             loop {
@@ -651,10 +651,11 @@ impl Parser {
           '=' => {
             self.eat_whitespace();
 
-            if (len > 2u && ends_with(content, "=")) {
+            if (len > 2u && content.ends_with("=")) {
                 let s = self.check_content(content.slice(1u, len - 1u));
 
-                let pos = find_from(s, 0u, is_whitespace);
+                // Changed: "find_from will now be .slice_from(x).find()"
+                let pos = s.slice_from(0u).find(is_whitespace);
                 let pos = match pos {
                   None => { fail!( ~"invalid change delimiter tag content" ); }
                   Some(pos) => { pos }
@@ -664,7 +665,7 @@ impl Parser {
                 // Changed @chars to @ctag, upon rustc asking.
                 self.otag_chars = @ctag(*self.otag);
 
-                let pos = find_from(s, pos, |c| !is_whitespace(c));
+                let pos = s.slice_from(pos).find(|c| !is_whitespace(c));
                 let pos = match pos {
                   None => { fail!( ~"invalid change delimiter tag content" ); }
                   Some(pos) => { pos }
@@ -679,7 +680,7 @@ impl Parser {
           }
           _ => {
             let name = self.check_content(content);
-            let name = @split_options_iter(name, '.');
+            let name = @name.split_options_iter('.');
             self.tokens.push(ETag(name, tag));
           }
         }
@@ -721,7 +722,7 @@ impl Parser {
     fn not_otag(&self) {
         let mut i = 0u;
         while i < self.tag_position {
-            unsafe { push_char(&mut self.content, self.otag_chars[i]) };
+            unsafe { self.content.push_char(self.otag_chars[i]) };
             i += 1u;
         }
     }
@@ -729,7 +730,7 @@ impl Parser {
     fn not_ctag(&self) {
         let mut i = 0u;
         while i < self.tag_position {
-            unsafe { push_char(&mut self.content, self.ctag_chars[i]) };
+            unsafe { self.content.push_char(self.ctag_chars[i]) };
             i += 1u;
         }
     }
@@ -820,7 +821,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
     fn find(stack: &[Data], path: &[~str]) -> Option<Data> {
         // If we have an empty path, we just want the top value in our stack.
         if path.is_empty() {
-            return match last_opt(stack) {
+            return match stack.last_opt() {
               None => { None }
               Some(value) => { Some(value) }
             };
@@ -873,7 +874,8 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     let len = value.len();
 
                     while pos < len {
-                        let line = match find_char_from(*value, '\n', pos) {
+                        // Changed: "find_from will now be .slice_from(x).find()"
+                        let line = match *value.slice_from('\n').find(pos) {
                           None => {
                             let line = value.slice(pos, len);
                             pos = len;
@@ -886,7 +888,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                           }
                         };
 
-                        if char_at(line, 0u) != '\n' {
+                        if line.char_at(0u) != '\n' {
                             output += *ctx.indent;
                         }
 
@@ -953,14 +955,14 @@ fn render_helper(ctx: &RenderContext) -> ~str {
 
 fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
     let mut escaped = ~"";
-    for each_char(render_utag(value, ctx)) |c| {
+    for render_utag(value, ctx).each_char() |c| {
         match c {
           '<' => { escaped += "&lt;" }
           '>' => { escaped += "&gt;" }
           '&' => { escaped += "&amp;" }
           '"' => { escaped += "&quot;" }
           '\'' => { escaped += "&#39;" }
-          _ => { push_char(&mut escaped, c); }
+          _ => { escaped.push_char(c); }
         }
     }
     escaped
