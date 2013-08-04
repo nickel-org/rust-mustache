@@ -1,24 +1,24 @@
-//#[link(name = "mustache",
-//       vers = "0.3pre",
-//       uuid = "afecaa07-75c5-466c-b3a3-fae5d32e04aa")];
-//#[crate_type = "lib"];
-//
-//#[allow(structural_records)];  // TODO: enable more of these
-//#[forbid(deprecated_mode)];
-//#[forbid(deprecated_pattern)];
-//#[forbid(non_implicitly_copyable_typarams)];
-//#[forbid(unused_imports)];
+#[link(name = "mustache",
+       vers = "0.8pre",
+       author = "Erick Tryzelaar")];
+#[crate_type = "lib"];
+
+#[allow(structural_records)];  // TODO: enable more of these
+#[forbid(deprecated_mode)];
+#[forbid(deprecated_pattern)];
+#[forbid(non_implicitly_copyable_typarams)];
+#[forbid(unused_imports)];
 
 extern mod std;
 extern mod extra;
 
-use extra::serialize::*;
+use extra::serialize;
 use std::io::*;
 use std::str::*;
 use std::char::*;
 use std::vec::*;
 use std::util::swap;
-use std::cell::*;
+use std::cell;
 use std::hashmap::HashMap;
 
 //use to_str::ToStr;
@@ -106,21 +106,21 @@ impl Context {
 
     /// Renders a template from an Reader.
     fn render_reader<
-        T: Encodable<Encoder>
+        T: serialize::Encodable<Encoder>
     >(&self, rdr: @Reader, data: &T) -> ~str {
         self.compile_reader(rdr).render(data)
     }
 
     /// Renders a template from a file.
     fn render_file<
-        T: Encodable<Encoder>
+        T: serialize::Encodable<Encoder>
     >(&self, file: &str, data: &T) -> ~str {
         self.compile_file(file).render(data)
     }
 
     /// Renders a template from a string.
     fn render_str<
-        T: Encodable<Encoder>
+        T: serialize::Encodable<Encoder>
     >(&self, template: &str, data: &T) -> ~str {
         self.compile_str(template).render(data)
     }
@@ -143,32 +143,32 @@ pub fn compile_str(template: &str) -> Template {
 
 /// Renders a template from an io::Reader.
 pub fn render_reader<
-    T: Encodable<Encoder>
+    T: serialize::Encodable<Encoder>
 >(rdr: @Reader, data: &T) -> ~str {
     default_context().compile_reader(rdr).render(data)
 }
 
 /// Renders a template from a file.
 pub fn render_file<
-    T: Encodable<Encoder>
+    T: serialize::Encodable<Encoder>
 >(file: &str, data: &T) -> ~str {
     default_context().compile_file(file).render(data)
 }
 
 /// Renders a template from a string.
 pub fn render_str<
-    T: Encodable<Encoder>
+    T: serialize::Encodable<Encoder>
 >(template: &str, data: &T) -> ~str {
     default_context().compile_str(template).render(data)
 }
 
 pub struct Encoder {
-    data: std::cell::Cell<Data>,
+    data: cell::Cell<Data>,
 }
 
-impl Encoder {
+impl serialize::Encoder for Encoder {
     fn new() -> Encoder {
-        Encoder { data: Cell::new_empty() }
+        Encoder { data: cell::Cell::new_empty() }
     }
 }
 
@@ -277,7 +277,7 @@ impl Encoder {
 }
 
 impl Template {
-    fn render< T: Encodable<Encoder> >(&self, data: &T) -> ~str {
+    fn render< T: serialize::Encodable<Encoder> >(&self, data: &T) -> ~str {
         let encoder = Encoder::new();
         data.encode(&encoder);
         self.render_data(encoder.data.take())
