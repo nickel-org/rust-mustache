@@ -67,7 +67,7 @@ pub fn default_context() -> Context { Context(~".", ~".mustache") }
 
 impl Context {
     /// Compiles a template from an io::Reader.
-    fn compile_reader(&self, rdr: Reader) -> Template {
+    fn compile_reader(&self, rdr: ~Reader) -> Template {
         let partials = HashMap::new();
 
         let mut ctx = CompileContext {
@@ -82,7 +82,7 @@ impl Context {
         let tokens = compile_helper(&ctx);
 
         Template {
-            ctx: self,
+            ctx: *self,
             tokens: tokens,
             partials: partials
         }
@@ -107,7 +107,7 @@ impl Context {
     /// Renders a template from an Reader.
     fn render_reader<
         T: Encodable<Encoder>
-    >(&self, rdr: Reader, data: &T) -> ~str {
+    >(&self, rdr: &Reader, data: &T) -> ~str {
         self.compile_reader(rdr).render(data)
     }
 
@@ -127,7 +127,7 @@ impl Context {
 }
 
 /// Compiles a template from an io::Reader.
-pub fn compile_reader(rdr: Reader) -> Template {
+pub fn compile_reader(rdr: &Reader) -> Template {
     default_context().compile_reader(rdr)
 }
 
@@ -144,7 +144,7 @@ pub fn compile_str(template: &str) -> Template {
 /// Renders a template from an io::Reader.
 pub fn render_reader<
     T: Encodable<Encoder>
->(rdr: Reader, data: &T) -> ~str {
+>(rdr: &Reader, data: &T) -> ~str {
     default_context().compile_reader(rdr).render(data)
 }
 
@@ -172,7 +172,7 @@ impl Encoder {
     }
 }
 
-impl Encoder: Encoder {
+impl Encoder {
     fn emit_nil(&self) { fail!() }
 
     fn emit_uint(&self, v: uint) { self.emit_owned_str(v.to_str()); }
@@ -193,7 +193,7 @@ impl Encoder: Encoder {
     fn emit_f32(&self, v: f32)     { self.emit_owned_str(v.to_str()); }
     fn emit_float(&self, v: float) {
         // We want to strip trailing zeros.
-        let s = v.to_str().trim_right_chars(~['0', '.']);
+        let s = v.to_str().trim_right_chars(&'0');
         self.emit_owned_str(s);
     }
 
@@ -224,15 +224,15 @@ impl Encoder: Encoder {
     }
 
     fn emit_borrowed_vec(&self, _len: uint, f: &fn()) {
-        self.data.put_back(Vec(@~[]));
+        self.data.put_back(Vec(@mut ~[]));
         f()
     }
     fn emit_owned_vec(&self, _len: uint, f: &fn()) {
-        self.data.put_back(Vec(@~[]));
+        self.data.put_back(Vec(@mut ~[]));
         f()
     }
     fn emit_managed_vec(&self, _len: uint, f: &fn()) {
-        self.data.put_back(Vec(@~[]));
+        self.data.put_back(Vec(@mut ~[]));
         f()
     }
     fn emit_vec_elt(&self, _idx: uint, f: &fn()) {
@@ -313,7 +313,7 @@ enum TokenClass {
 }
 
 pub struct Parser {
-    rdr: Reader,
+    rdr: ~Reader,
     ch: char,
     lookahead: Option<char>,
     line: uint,
@@ -745,7 +745,7 @@ impl Parser {
 }
 
 struct CompileContext {
-    rdr: Reader,
+    rdr: ~Reader,
     partials: HashMap<@~str, @~[Token]>,
     otag: @~str,
     ctag: @~str,
