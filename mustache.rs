@@ -166,8 +166,8 @@ pub struct Encoder {
     data: cell::Cell<Data>,
 }
 
-impl serialize::Encoder for Encoder {
-    pub fn new() -> Encoder {
+impl Encoder {
+    fn new() -> Encoder {
         Encoder { data: cell::Cell::new_empty() }
     }
 }
