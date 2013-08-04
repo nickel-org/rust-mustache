@@ -17,7 +17,7 @@ The different Mustache tags are documented at [mustache(5)][4].
 Install It
 ==========
 
-    cargo install mustache
+    rustpkg(?) install mustache
 
 Use It
 ======
