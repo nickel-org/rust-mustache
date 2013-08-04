@@ -13,16 +13,16 @@ extern mod std;
 extern mod extra;
 
 use extra::serialize;
-use std::io::{file_reader, with_str_reader};
-use std::str::{from_char};
-use std::char::{is_whitespace};
-use std::vec::{connect, concat};
-use std::util::swap;
+use std::io;
+use std::path;
+use std::str;
+use std::char;
+use std::vec;
+use std::util;
 use std::cell;
-use std::hashmap::HashMap;
+use std::hashmap;
 
 //use to_str::ToStr;
-//use std::path::*;
 //use std::prelude::*;
 
 /// Represents template data.
@@ -30,7 +30,7 @@ pub enum Data {
     Str(@~str),
     Bool(bool),
     Vec(@mut ~[Data]),
-    Map(HashMap<@~str, Data>),
+    Map(hashmap::HashMap<@~str, Data>),
     Fun(@fn(@~str) -> ~str),
 }
 
@@ -46,7 +46,7 @@ pub struct Context {
 pub struct Template {
     ctx: Context,
     tokens: @~[Token],
-    partials: HashMap<@~str, @~[Token]>
+    partials: hashmap::HashMap<@~str, @~[Token]>
 }
 
 /**
@@ -67,8 +67,8 @@ pub fn default_context() -> Context { Context(~".", ~".mustache") }
 
 impl Context {
     /// Compiles a template from an io::Reader.
-    fn compile_reader(&self, rdr: @Reader) -> Template {
-        let partials = HashMap::new();
+    fn compile_reader(&self, rdr: @io::Reader) -> Template {
+        let partials = hashmap::HashMap::new();
 
         let mut ctx = CompileContext {
             rdr: rdr,
@@ -90,10 +90,10 @@ impl Context {
 
     /// Compiles a template from a file.
     fn compile_file(&self, file: &str) -> Template {
-    	let path = Path(*self.template_path);
+    	let path = path::Path(*self.template_path);
     	let path = path.push(file.to_owned() + *self.template_extension);
 
-        match file_reader(&path) {
+        match io::file_reader(&path) {
           Ok(rdr) => self.compile_reader(rdr),
           Err(e) => fail!(e),
         }
@@ -101,13 +101,13 @@ impl Context {
 
     /// Compiles a template from a string.
     fn compile_str(&self, src: &str) -> Template {
-        with_str_reader(src, |rdr| self.compile_reader(rdr))
+        io::with_str_reader(src, |rdr| self.compile_reader(rdr))
     }
 
     /// Renders a template from an Reader.
     fn render_reader<
         T: serialize::Encodable<Encoder>
-    >(&self, rdr: @Reader, data: &T) -> ~str {
+    >(&self, rdr: @io::Reader, data: &T) -> ~str {
         self.compile_reader(rdr).render(data)
     }
 
@@ -127,7 +127,7 @@ impl Context {
 }
 
 /// Compiles a template from an io::Reader.
-pub fn compile_reader(rdr: @Reader) -> Template {
+pub fn compile_reader(rdr: @io::Reader) -> Template {
     default_context().compile_reader(rdr)
 }
 
@@ -144,7 +144,7 @@ pub fn compile_str(template: &str) -> Template {
 /// Renders a template from an io::Reader.
 pub fn render_reader<
     T: serialize::Encodable<Encoder>
->(rdr: @Reader, data: &T) -> ~str {
+>(rdr: @io::Reader, data: &T) -> ~str {
     default_context().compile_reader(rdr).render(data)
 }
 
@@ -196,7 +196,7 @@ impl serialize::Encoder for Encoder {
 
     fn emit_f64(&mut self, v: f64)     { self.emit_str(v.to_str()); }
     fn emit_f32(&mut self, v: f32)     { self.emit_str(v.to_str()); }
-    fn emit_char(&mut self, v: char) { self.emit_str(from_char(v)); }
+    fn emit_char(&mut self, v: char) { self.emit_str(str::from_char(v)); }
     fn emit_str(&mut self, v: &str) {
         // copying emit_owned_str
          self.data.put_back(Str(@v.to_owned()));
@@ -298,11 +298,11 @@ impl serialize::Encoder for Encoder {
     // }
 
     // fn emit_rec(&mut self, f: &fn()) {
-    //     self.data.put_back(Map(HashMap::new()));
+    //     self.data.put_back(Map(hashmap::HashMap::new()));
     //     f()
     // }
     // fn emit_struct(&mut self, _name: &str, f: &fn()) {
-    //     self.data.put_back(Map(HashMap::new()));
+    //     self.data.put_back(Map(hashmap::HashMap::new()));
     //     f()
     // }
     // fn emit_field(&mut self, name: &str, _idx: uint, f: &fn()) {
@@ -360,7 +360,7 @@ enum TokenClass {
 }
 
 pub struct Parser {
-    rdr: ~Reader,
+    rdr: @io::Reader,
     ch: char,
     lookahead: Option<char>,
     line: uint,
@@ -383,7 +383,7 @@ impl Parser {
 
     fn bump(&self) {
         let mut lookahead = None;
-        swap( &mut lookahead, self.lookahead );
+        util::swap( &mut lookahead, self.lookahead );
 
         match lookahead {
             None => { self.ch = self.rdr.read_char(); }
@@ -497,7 +497,7 @@ impl Parser {
             match *token {
                 IncompleteSection(name, _, _, _) => {
                     fail!( fmt!("Unclosed mustache section %s",
-                        connect(*name, ~".")));
+                        vec::connect(*name, ~".")));
               }
               _ => {}
             }
@@ -507,7 +507,7 @@ impl Parser {
     fn add_text(&self) {
         if self.content != ~"" {
             let mut content = ~"";
-            swap( &mut content, self.content );
+            util::swap( &mut content, self.content );
 
             self.tokens.push(Text(@content));
         }
@@ -535,7 +535,7 @@ impl Parser {
                 // Look for the last newline character that may have whitespace
                 // following it.
                 // Changing rfind to 's' upon rustc suggestion
-                match s(*s, |c| c == '\n' || !is_whitespace(c)) {
+                match s(*s, |c| c == '\n' || !char::is_whitespace(c)) {
                   // It's all whitespace.
                   None => {
                     if self.tokens.len() == 1u {
@@ -595,7 +595,7 @@ impl Parser {
 
         // Move the content to avoid a copy.
         let mut content = ~"";
-        swap( &mut content, self.content );
+        util::swap( &mut content, self.content );
         let len = content.len();
 
         match content[0] as char {
@@ -702,7 +702,7 @@ impl Parser {
                 let s = self.check_content(content.slice(1u, len - 1u));
 
                 // Changed: "find_from will now be .slice_from(x).find()"
-                let pos = s.slice_from(0u).find(is_whitespace);
+                let pos = s.slice_from(0u).find(char::is_whitespace);
                 let pos = match pos {
                   None => { fail!( ~"invalid change delimiter tag content" ); }
                   Some(pos) => { pos }
@@ -712,7 +712,7 @@ impl Parser {
                 // Changed @chars to @ctag, upon rustc asking.
                 self.otag_chars = @ctag(*self.otag);
 
-                let pos = s.slice_from(pos).find(|c| !is_whitespace(c));
+                let pos = s.slice_from(pos).find(|c| !char::is_whitespace(c));
                 let pos = match pos {
                   None => { fail!( ~"invalid change delimiter tag content" ); }
                   Some(pos) => { pos }
@@ -792,8 +792,8 @@ impl Parser {
 }
 
 struct CompileContext {
-    rdr: @Reader,
-    partials: HashMap<@~str, @~[Token]>,
+    rdr: @io::Reader,
+    partials: hashmap::HashMap<@~str, @~[Token]>,
     otag: @~str,
     ctag: @~str,
     template_path: @~str,
@@ -824,14 +824,14 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
 
     // Compile the partials if we haven't done so already.
     for name in parser.partials {
-    	let path = Path(*ctx.template_path);
+    	let path = path::Path(*ctx.template_path);
     	let path = path.push(*name + *ctx.template_extension);
 
         if !ctx.partials.contains_key(*name) {
             // Insert a placeholder so we don't recurse off to infinity.
             ctx.partials.insert(*name, @~[]);
 
-            match file_reader(&path) {
+            match io::file_reader(&path) {
                 Err(_e) => {}
                 Ok(rdr) => {
                     let mut inner_ctx = CompileContext {
@@ -859,7 +859,7 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
 struct RenderContext {
     ctx: Context,
     tokens: @~[Token],
-    partials: HashMap<@~str, @~[Token]>,
+    partials: hashmap::HashMap<@~str, @~[Token]>,
     stack: @~[Data],
     indent: @~str,
 }
@@ -1044,7 +1044,7 @@ fn render_section(value: Data,
         Bool(false) => ~"",
         Vec(vs) => {
             do vs.borrow |vs| {
-                concat(do vs.map |v| {
+                vec::concat(do vs.map |v| {
                     render_helper(&RenderContext {
                         stack: @(ctx.stack + ~[*v]),
                         .. *ctx
@@ -1067,7 +1067,7 @@ fn render_fun(ctx: &RenderContext,
               otag: @~str,
               ctag: @~str,
               f: &fn(@~str) -> ~str) -> ~str {
-    let tokens = do with_str_reader(f(src)) |rdr| {
+    let tokens = do io::with_str_reader(f(src)) |rdr| {
         let mut inner_ctx = CompileContext {
             rdr: rdr,
             partials: ctx.partials,
@@ -1114,7 +1114,7 @@ fn check_tokens(actual: &[Token], expected: &[Token]) -> bool
 	let expected = do expected.map |x| {token_to_str(x)};
 	if actual !=  expected
 	{
-		stderr().write_line(fmt!("Found %?, but expected %?", actual, expected));
+		io::stderr().write_line(fmt!("Found %?, but expected %?", actual, expected));
 		return false;
 	}
 	return true;
@@ -1328,7 +1328,7 @@ mod tests {
     }
 
 /*
-    enum StrHash<V> = HashMap<@~str, V>;
+    enum StrHash<V> = hashmap::HashMap<@~str, V>;
 
     impl<S: serialize::Encoder, V: serialize::Encodable> StrHash<V>: serialize::Encodable {
         fn encode<S: Encoder>(&self, s: &S) {
@@ -1347,7 +1347,7 @@ mod tests {
 
     #[test]
     fn test_render_sections() {
-        let ctx0 = HashMap();
+        let ctx0 = hashmap::HashMap();
         let template = compile_str(~"0{{#a}}1 {{n}} 3{{/a}}5");
 
         assert!( template.render_data(Map(ctx0)) == ~"05" );
@@ -1355,12 +1355,12 @@ mod tests {
         ctx0.insert(@~"a", Vec(@~[]));
         assert!( template.render_data(Map(ctx0)) == ~"05" );
 
-        let ctx1: HashMap<@~str, Data> = HashMap();
+        let ctx1: hashmap::HashMap<@~str, Data> = hashmap::HashMap();
         ctx0.insert(@~"a", Vec(@dvec::from_elem(Map(ctx1))));
 
         assert!( template.render_data(Map(ctx0)) == ~"01  35" );
 
-        let ctx1 = HashMap();
+        let ctx1 = hashmap::HashMap();
         ctx1.insert(@~"n", Str(@~"a"));
         ctx0.insert(@~"a", Vec(@dvec::from_elem(Map(ctx1))));
         assert!( template.render_data(Map(ctx0)) == ~"01 a 35" );
@@ -1373,13 +1373,13 @@ mod tests {
     fn test_render_inverted_sections() {
         let template = compile_str(~"0{{^a}}1 3{{/a}}5");
 
-        let ctx0 = HashMap();
+        let ctx0 = hashmap::HashMap();
         assert!( template.render_data(Map(ctx0)) == ~"01 35" );
 
         ctx0.insert(@~"a", Vec(@~[]));
         assert!( template.render_data(Map(ctx0)) == ~"01 35" );
 
-        let ctx1 = HashMap();
+        let ctx1 = hashmap::HashMap();
         ctx0.insert(@~"a", Vec(@dvec::from_elem(Map(ctx1))));
         assert!( template.render_data(Map(ctx0)) == ~"05" );
 
@@ -1392,13 +1392,13 @@ mod tests {
         let path = ~"base";
         let template = compile_file(path);
 
-        let ctx0 = HashMap();
+        let ctx0 = hashmap::HashMap();
         assert!( template.render_data(Map(ctx0)) == ~"<h2>Names</h2>\n" );
 
         ctx0.insert(@~"names", Vec(@~[]));
         assert!( template.render_data(Map(ctx0)) == ~"<h2>Names</h2>\n" );
 
-        let ctx1 = HashMap();
+        let ctx1 = hashmap::HashMap();
         ctx0.insert(@~"names", Vec(@dvec::from_elem(Map(ctx1))));
         assert!( template.render_data(Map(ctx0)) ==
            ~ "<h2>Names</h2>\n" +
@@ -1409,7 +1409,7 @@ mod tests {
             ~"<h2>Names</h2>\n" +
             ~"  <strong>a</strong>\n\n");
 
-        let ctx2 = HashMap();
+        let ctx2 = hashmap::HashMap();
         ctx2.insert(@~"name", Str(@~"<b>"));
         ctx0.insert(@~"names", Vec(@dvec::from_vec(~[Map(ctx1), Map(ctx2)])));
         assert!( template.render_data(Map(ctx0)) ==
@@ -1419,7 +1419,7 @@ mod tests {
     }
 
     fn parse_spec_tests(src: &str) -> ~[json::Json] {
-    	let path = Path(src);
+    	let path = path::Path(src);
         match read_whole_file_str(&path) {
             Err(e) => fail!( e ),
             Ok(s) => {
@@ -1442,8 +1442,8 @@ mod tests {
     }
 
 /*
-    fn convert_json_map(map: &json::Object) -> HashMap<@~str, Data> {
-        let d = HashMap();
+    fn convert_json_map(map: &json::Object) -> hashmap::HashMap<@~str, Data> {
+        let d = hashmap::HashMap();
         for map.each |key, value| { d.insert(@copy *key, convert_json(value)); }
         move d
     }
@@ -1472,7 +1472,7 @@ mod tests {
         }
     }
 
-    fn write_partials(tmpdir: &Path, value: &json::Json) {
+    fn write_partials(tmpdir: &path::Path, value: &json::Json) {
         match value {
             &json::Object(ref d) => {
                 for (key, value) in d {
@@ -1507,7 +1507,7 @@ mod tests {
 
         // Make a temporary dir where we'll store our partials. This is to
         // avoid a race on filenames.
-        let tmpdir = match std::tempfile::mkdtemp(&Path("."), "") {
+        let tmpdir = match std::tempfile::mkdtemp(&path::Path("."), "") {
             Some(path) => Tmpdir { path: path },
             None => fail!(),
         };
