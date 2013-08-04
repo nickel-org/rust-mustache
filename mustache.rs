@@ -1,5 +1,5 @@
 #[link(name = "mustache",
-       vers = "0.8pre",
+       vers = "0.4pre",
        author = "Erick Tryzelaar")];
 #[crate_type = "lib"];
 
@@ -13,10 +13,10 @@ extern mod std;
 extern mod extra;
 
 use extra::serialize;
-use std::io::*;
-use std::str::*;
-use std::char::*;
-use std::vec::*;
+use std::io::{file_reader, with_str_reader};
+use std::str::{from_char};
+use std::char::{is_whitespace};
+use std::vec::{connect, concat};
 use std::util::swap;
 use std::cell;
 use std::hashmap::HashMap;
@@ -167,12 +167,12 @@ pub struct Encoder {
 }
 
 impl serialize::Encoder for Encoder {
-    fn new() -> Encoder {
+    pub fn new() -> Encoder {
         Encoder { data: cell::Cell::new_empty() }
     }
 }
 
-impl Encoder {
+impl serialize::Encoder for Encoder {
     fn emit_nil(&self) { fail!() }
 
     fn emit_uint(&self, v: uint) { self.emit_owned_str(v.to_str()); }
