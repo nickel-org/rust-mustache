@@ -173,107 +173,156 @@ impl Encoder {
 }
 
 impl serialize::Encoder for Encoder {
-    fn emit_nil(&self) { fail!() }
+    fn emit_nil(&mut self) { fail!() }
 
-    fn emit_uint(&self, v: uint) { self.emit_owned_str(v.to_str()); }
-    fn emit_u64(&self, v: u64)   { self.emit_owned_str(v.to_str()); }
-    fn emit_u32(&self, v: u32)   { self.emit_owned_str(v.to_str()); }
-    fn emit_u16(&self, v: u16)   { self.emit_owned_str(v.to_str()); }
-    fn emit_u8(&self, v: u8)     { self.emit_owned_str(v.to_str()); }
+    fn emit_uint(&mut self, v: uint) { self.emit_str(v.to_str()); }
+    fn emit_u64(&mut self, v: u64)   { self.emit_str(v.to_str()); }
+    fn emit_u32(&mut self, v: u32)   { self.emit_str(v.to_str()); }
+    fn emit_u16(&mut self, v: u16)   { self.emit_str(v.to_str()); }
+    fn emit_u8(&mut self, v: u8)     { self.emit_str(v.to_str()); }
 
-    fn emit_int(&self, v: int) { self.emit_owned_str(v.to_str()); }
-    fn emit_i64(&self, v: i64) { self.emit_owned_str(v.to_str()); }
-    fn emit_i32(&self, v: i32) { self.emit_owned_str(v.to_str()); }
-    fn emit_i16(&self, v: i16) { self.emit_owned_str(v.to_str()); }
-    fn emit_i8(&self, v: i8)   { self.emit_owned_str(v.to_str()); }
+    fn emit_int(&mut self, v: int) { self.emit_str(v.to_str()); }
+    fn emit_i64(&mut self, v: i64) { self.emit_str(v.to_str()); }
+    fn emit_i32(&mut self, v: i32) { self.emit_str(v.to_str()); }
+    fn emit_i16(&mut self, v: i16) { self.emit_str(v.to_str()); }
+    fn emit_i8(&mut self, v: i8)   { self.emit_str(v.to_str()); }
 
-    fn emit_bool(&self, v: bool) { self.data.put_back(Bool(v)); }
-
-    fn emit_f64(&self, v: f64)     { self.emit_owned_str(v.to_str()); }
-    fn emit_f32(&self, v: f32)     { self.emit_owned_str(v.to_str()); }
-    fn emit_float(&self, v: float) {
+    fn emit_bool(&mut self, v: bool) { self.data.put_back(Bool(v)); }
+    fn emit_float(&mut self, v: float) {
         // We want to strip trailing zeros.
         let s = v.to_str().trim_right_chars(&'0');
-        self.emit_owned_str(s);
+        self.emit_str(s);
     }
 
-    fn emit_char(&self, v: char) { self.emit_owned_str(from_char(v)); }
+    fn emit_f64(&mut self, v: f64)     { self.emit_str(v.to_str()); }
+    fn emit_f32(&mut self, v: f32)     { self.emit_str(v.to_str()); }
+    fn emit_char(&mut self, v: char) { self.emit_str(from_char(v)); }
+    fn emit_str(&mut self, v: &str) {
+        // copying emit_owned_str
+         self.data.put_back(Str(@v.to_owned()));
+    }
+    /* new stuff in Encoder trait
+       don't know what should go in these, if anything.
+     */
+    fn emit_enum(&mut self, name: &str, f: &fn(&mut Encoder)) {}
 
-    fn emit_borrowed_str(&self, v: &str) {
-        self.data.put_back(Str(@v.to_owned()));
-    }
-    fn emit_owned_str(&self, v: &str) {
-        self.data.put_back(Str(@v.to_owned()));
-    }
-    fn emit_managed_str(&self, v: &str) {
-        self.data.put_back(Str(@v.to_owned()));
-    }
+    fn emit_enum_variant(&mut self,
+                         v_name: &str,
+                         v_id: uint,
+                         len: uint,
+                         f: &fn(&mut Encoder)) {}
+    fn emit_enum_variant_arg(&mut self, a_idx: uint, f: &fn(&mut Encoder)) {}
 
-    fn emit_borrowed(&self, f: &fn() ) { f() }
-    fn emit_owned(&self, f: &fn()) { f() }
-    fn emit_managed(&self, f: &fn()) { f() }
+    fn emit_enum_struct_variant(&mut self,
+                                v_name: &str,
+                                v_id: uint,
+                                len: uint,
+                                f: &fn(&mut Encoder)) {}
+    fn emit_enum_struct_variant_field(&mut self,
+                                      f_name: &str,
+                                      f_idx: uint,
+                                      f: &fn(&mut Encoder)) {}
 
-    fn emit_enum(&self, _name: &str, _f: &fn()) {
-        fail!()
-    }
-    fn emit_enum_variant(&self, _name: &str, _id: uint, _cnt: uint, _f: &fn()) {
-        fail!()
-    }
-    fn emit_enum_variant_arg(&self, _idx: uint, _f: &fn()) {
-        fail!()
-    }
+    fn emit_struct(&mut self, name: &str, len: uint, f: &fn(&mut Encoder)) {}
+    fn emit_struct_field(&mut self,
+                         f_name: &str,
+                         f_idx: uint,
+                         f: &fn(&mut Encoder)) {}
 
-    fn emit_borrowed_vec(&self, _len: uint, f: &fn()) {
-        self.data.put_back(Vec(@mut ~[]));
-        f()
-    }
-    fn emit_owned_vec(&self, _len: uint, f: &fn()) {
-        self.data.put_back(Vec(@mut ~[]));
-        f()
-    }
-    fn emit_managed_vec(&self, _len: uint, f: &fn()) {
-        self.data.put_back(Vec(@mut ~[]));
-        f()
-    }
-    fn emit_vec_elt(&self, _idx: uint, f: &fn()) {
-        let v = self.data.take();
-        f();
-        match v {
-            Vec(v) => {
-                let mut v = v;
-                v.push(self.data.take());
-                self.data.put_back(Vec(v));
-            }
-            _ => fail!()
-        }
-    }
+    fn emit_tuple(&mut self, len: uint, f: &fn(&mut Encoder)) {}
+    fn emit_tuple_arg(&mut self, idx: uint, f: &fn(&mut Encoder)) {}
 
-    fn emit_rec(&self, f: &fn()) {
-        self.data.put_back(Map(HashMap::new()));
-        f()
-    }
-    fn emit_struct(&self, _name: &str, f: &fn()) {
-        self.data.put_back(Map(HashMap::new()));
-        f()
-    }
-    fn emit_field(&self, name: &str, _idx: uint, f: &fn()) {
-        let m = self.data.take();
-        f();
-        match m {
-            Map(m) => {
-                m.insert(@name.to_owned(), self.data.take());
-                self.data.put_back(Map(m))
-            }
-            _ => fail!()
-        }
-    }
+    fn emit_tuple_struct(&mut self, name: &str, len: uint, f: &fn(&mut Encoder)) {}
+    fn emit_tuple_struct_arg(&mut self, f_idx: uint, f: &fn(&mut Encoder)) {}
 
-    fn emit_tup(&self, len: uint, f: &fn()) {
-        self.emit_owned_vec(len, f)
-    }
-    fn emit_tup_elt(&self, idx: uint, f: &fn()) {
-        self.emit_vec_elt(idx, f)
-    }
+    // Specialized types:
+    fn emit_option(&mut self, f: &fn(&mut Encoder)) {}
+    fn emit_option_none(&mut self) {}
+    fn emit_option_some(&mut self, f: &fn(&mut Encoder)) {}
+
+    fn emit_seq(&mut self, len: uint, f: &fn(this: &mut Encoder)) {}
+    fn emit_seq_elt(&mut self, idx: uint, f: &fn(this: &mut Encoder)) {}
+
+    fn emit_map(&mut self, len: uint, f: &fn(&mut Encoder)) {}
+    fn emit_map_elt_key(&mut self, idx: uint, f: &fn(&mut Encoder)) {}
+    fn emit_map_elt_val(&mut self, idx: uint, f: &fn(&mut Encoder)) {}
+
+    /* old stuff */
+    // fn emit_borrowed_str(&mut self, v: &str) {
+    //     self.data.put_back(Str(@v.to_owned()));
+    // }
+    // fn emit_owned_str(&mut self, v: &str) {
+    //     self.data.put_back(Str(@v.to_owned()));
+    // }
+    // fn emit_managed_str(&mut self, v: &str) {
+    //     self.data.put_back(Str(@v.to_owned()));
+    // }
+
+    // fn emit_borrowed(&mut self, f: &fn() ) { f() }
+    // fn emit_owned(&mut self, f: &fn()) { f() }
+    // fn emit_managed(&mut self, f: &fn()) { f() }
+
+    // fn emit_enum(&mut self, _name: &str, _f: &fn()) {
+    //     fail!()
+    // }
+    // fn emit_enum_variant(&mut self, _name: &str, _id: uint, _cnt: uint, _f: &fn()) {
+    //     fail!()
+    // }
+    // fn emit_enum_variant_arg(&mut self, _idx: uint, _f: &fn()) {
+    //     fail!()
+    // }
+
+    // fn emit_borrowed_vec(&mut self, _len: uint, f: &fn()) {
+    //     self.data.put_back(Vec(@mut ~[]));
+    //     f()
+    // }
+    // fn emit_owned_vec(&mut self, _len: uint, f: &fn()) {
+    //     self.data.put_back(Vec(@mut ~[]));
+    //     f()
+    // }
+    // fn emit_managed_vec(&mut self, _len: uint, f: &fn()) {
+    //     self.data.put_back(Vec(@mut ~[]));
+    //     f()
+    // }
+    // fn emit_vec_elt(&mut self, _idx: uint, f: &fn()) {
+    //     let v = self.data.take();
+    //     f();
+    //     match v {
+    //         Vec(v) => {
+    //             let mut v = v;
+    //             v.push(self.data.take());
+    //             self.data.put_back(Vec(v));
+    //         }
+    //         _ => fail!()
+    //     }
+    // }
+
+    // fn emit_rec(&mut self, f: &fn()) {
+    //     self.data.put_back(Map(HashMap::new()));
+    //     f()
+    // }
+    // fn emit_struct(&mut self, _name: &str, f: &fn()) {
+    //     self.data.put_back(Map(HashMap::new()));
+    //     f()
+    // }
+    // fn emit_field(&mut self, name: &str, _idx: uint, f: &fn()) {
+    //     let m = self.data.take();
+    //     f();
+    //     match m {
+    //         Map(m) => {
+    //             m.insert(@name.to_owned(), self.data.take());
+    //             self.data.put_back(Map(m))
+    //         }
+    //         _ => fail!()
+    //     }
+    // }
+
+    // fn emit_tup(&mut self, len: uint, f: &fn()) {
+    //     self.emit_owned_vec(len, f)
+    // }
+    // fn emit_tup_elt(&mut self, idx: uint, f: &fn()) {
+    //     self.emit_vec_elt(idx, f)
+    // }
 }
 
 impl Template {
