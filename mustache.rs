@@ -1,13 +1,13 @@
-#[link(name = "mustache",
-       vers = "0.3pre",
-       uuid = "afecaa07-75c5-466c-b3a3-fae5d32e04aa")];
-#[crate_type = "lib"];
-
-#[allow(structural_records)];  // TODO: enable more of these
-#[forbid(deprecated_mode)];
-#[forbid(deprecated_pattern)];
-#[forbid(non_implicitly_copyable_typarams)];
-#[forbid(unused_imports)];
+//#[link(name = "mustache",
+//       vers = "0.3pre",
+//       uuid = "afecaa07-75c5-466c-b3a3-fae5d32e04aa")];
+//#[crate_type = "lib"];
+//
+//#[allow(structural_records)];  // TODO: enable more of these
+//#[forbid(deprecated_mode)];
+//#[forbid(deprecated_pattern)];
+//#[forbid(non_implicitly_copyable_typarams)];
+//#[forbid(unused_imports)];
 
 extern mod std;
 extern mod extra;
@@ -67,7 +67,7 @@ pub fn default_context() -> Context { Context(~".", ~".mustache") }
 
 impl Context {
     /// Compiles a template from an io::Reader.
-    fn compile_reader(&self, rdr: ~Reader) -> Template {
+    fn compile_reader(&self, rdr: @Reader) -> Template {
         let partials = HashMap::new();
 
         let mut ctx = CompileContext {
@@ -107,7 +107,7 @@ impl Context {
     /// Renders a template from an Reader.
     fn render_reader<
         T: Encodable<Encoder>
-    >(&self, rdr: &Reader, data: &T) -> ~str {
+    >(&self, rdr: @Reader, data: &T) -> ~str {
         self.compile_reader(rdr).render(data)
     }
 
@@ -127,7 +127,7 @@ impl Context {
 }
 
 /// Compiles a template from an io::Reader.
-pub fn compile_reader(rdr: &Reader) -> Template {
+pub fn compile_reader(rdr: @Reader) -> Template {
     default_context().compile_reader(rdr)
 }
 
@@ -144,7 +144,7 @@ pub fn compile_str(template: &str) -> Template {
 /// Renders a template from an io::Reader.
 pub fn render_reader<
     T: Encodable<Encoder>
->(rdr: &Reader, data: &T) -> ~str {
+>(rdr: @Reader, data: &T) -> ~str {
     default_context().compile_reader(rdr).render(data)
 }
 
@@ -277,9 +277,7 @@ impl Encoder {
 }
 
 impl Template {
-    fn render<
-        T: Encodable<Encoder>
-    >(&self, data: &T) -> ~str {
+    fn render< T: Encodable<Encoder> >(&self, data: &T) -> ~str {
         let encoder = Encoder::new();
         data.encode(&encoder);
         self.render_data(encoder.data.take())
@@ -446,7 +444,7 @@ impl Parser {
         }
 
         // Check that we don't have any incomplete sections.
-        for self.tokens.each |token| {
+        for token in self.tokens {
             match *token {
                 IncompleteSection(name, _, _, _) => {
                     fail!( fmt!("Unclosed mustache section %s",
@@ -604,7 +602,7 @@ impl Parser {
 
                     // Collect all the children's sources.
                     let srcs = ~[];
-                    for children.each |child: &Token| {
+                    for child in children {
                         match child {
                             &Text(s)
                             | &ETag(_, s)
@@ -626,7 +624,7 @@ impl Parser {
                         // case the user uses a function to instantiate the
                         // tag.
                         let mut src = ~"";
-                        for srcs.each |s| { src += **s; }
+                        for s in srcs { src += **s; }
 
                         self.tokens.push(
                             Section(
@@ -745,7 +743,7 @@ impl Parser {
 }
 
 struct CompileContext {
-    rdr: ~Reader,
+    rdr: @Reader,
     partials: HashMap<@~str, @~[Token]>,
     otag: @~str,
     ctag: @~str,
@@ -776,7 +774,7 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
     parser.parse();
 
     // Compile the partials if we haven't done so already.
-    for parser.partials.each |name| {
+    for name in parser.partials {
     	let path = Path(*ctx.template_path);
     	let path = path.push(*name + *ctx.template_extension);
 
@@ -863,7 +861,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
 
     let mut output = ~"";
     
-    for ctx.tokens.each |token| {
+    for token in ctx.tokens {
         match token {
             &Text(value) => {
                 // Indent the lines.
@@ -955,7 +953,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
 
 fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
     let mut escaped = ~"";
-    for render_utag(value, ctx).each_char() |c| {
+    for c in render_utag(value, ctx) {
         match c {
           '<' => { escaped += "&lt;" }
           '>' => { escaped += "&gt;" }
@@ -1428,7 +1426,7 @@ mod tests {
     fn write_partials(tmpdir: &Path, value: &json::Json) {
         match value {
             &json::Object(ref d) => {
-                for d.each |key, value| {
+                for (key, value) in d {
                     match value {
                         &json::String(ref s) => {
                             let path = tmpdir.push(key + ".mustache");
@@ -1479,7 +1477,7 @@ mod tests {
                 match x {
                     &json::Object(ref d) => {
                         let mut xs = ~[];
-                        for d.each |k, v| {
+                        for (k, v) in d {
                             let k = json::String(*k.clone());
                             let v = to_list(v);
                             xs.push(json::List(~[k, v]));
@@ -1555,7 +1553,7 @@ mod tests {
 
     #[test]
     fn test_spec_lambdas() {
-        for parse_spec_tests(~"spec/specs/~lambdas.json").each |json| {
+        for json in parse_spec_tests(~"spec/specs/~lambdas.json") {
             let test = match json {
                 &json::Object(m) => m,
                 _ => fail!(),
