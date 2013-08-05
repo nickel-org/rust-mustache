@@ -383,7 +383,7 @@ impl Parser {
 
     fn bump(&self) {
         let mut lookahead = None;
-        util::swap( &mut lookahead, self.lookahead );
+        util::swap( &mut lookahead, &mut self.lookahead );
 
         match lookahead {
             None => { self.ch = self.rdr.read_char(); }
@@ -494,10 +494,10 @@ impl Parser {
 
         // Check that we don't have any incomplete sections.
         for token in self.tokens {
-            match *token {
+            match token {
                 IncompleteSection(name, _, _, _) => {
                     fail!( fmt!("Unclosed mustache section %s",
-                        vec::connect(*name, ~".")));
+                        vec::connect(name, @~".").to_str()));
               }
               _ => {}
             }
@@ -507,7 +507,7 @@ impl Parser {
     fn add_text(&self) {
         if self.content != ~"" {
             let mut content = ~"";
-            util::swap( &mut content, self.content );
+            util::swap( &mut content, &mut self.content );
 
             self.tokens.push(Text(@content));
         }
@@ -535,7 +535,7 @@ impl Parser {
                 // Look for the last newline character that may have whitespace
                 // following it.
                 // Changing rfind to 's' upon rustc suggestion
-                match s(*s, |c| c == '\n' || !char::is_whitespace(c)) {
+                match (*s).rfind(|c:char| c == '\n' || !char::is_whitespace(c)) {
                   // It's all whitespace.
                   None => {
                     if self.tokens.len() == 1u {
@@ -545,7 +545,7 @@ impl Parser {
                     }
                   }
                   Some(pos) => {
-                    if *s.char_at(pos) == '\n' {
+                    if (*s).char_at(pos) == '\n' {
                         if pos == s.len() - 1u {
                             StandAlone
                         } else {
@@ -577,7 +577,7 @@ impl Parser {
 
               // Trim the whitespace from the last token.
               self.tokens.pop();
-              self.tokens.push(Text(@s.slice(0u, pos)));
+              self.tokens.push(Text(@s.slice(0u, pos).to_str()));
 
               true
           }
@@ -595,7 +595,7 @@ impl Parser {
 
         // Move the content to avoid a copy.
         let mut content = ~"";
-        util::swap( &mut content, self.content );
+        util::swap( &mut content, &mut self.content );
         let len = content.len();
 
         match content[0] as char {
@@ -606,14 +606,15 @@ impl Parser {
           '&' => {
             let name = content.slice(1u, len);
             let name = self.check_content(name);
-            let name = @name.split_options_iter('.');
+            let name = @name.split_options_iter('.', name.len(), false);
             self.tokens.push(UTag(name, tag));
           }
           '{' => {
             if content.ends_with("}") {
                 let name = content.slice(1u, len - 1u);
                 let name = self.check_content(name);
-                let name = @name.split_options_iter('.');
+                // use false for last param
+                let name = @name.split_options_iter('.', name.len(), false);
                 self.tokens.push(UTag(name, tag));
             } else { fail!( ~"unbalanced \"{\" in tag" ); }
           }
@@ -621,21 +622,21 @@ impl Parser {
             let newlined = self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
-            let name = @name.split_options_iter('.');
+            let name = @name.split_options_iter('.', name.len(), false);
             self.tokens.push(IncompleteSection(name, false, tag, newlined));
           }
           '^' => {
             let newlined = self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
-            let name = @name.split_options_iter('.');
+            let name = @name.split_options_iter('.', name.len(), false);
             self.tokens.push(IncompleteSection(name, true, tag, newlined));
           }
           '/' => {
             self.eat_whitespace();
 
             let name = self.check_content(content.slice(1u, len));
-            let name = @name.split_options_iter('.');
+            let name = @name.split_options_iter('.', name.len(), false);
             let mut children = ~[];
 
             loop {
@@ -708,7 +709,7 @@ impl Parser {
                   Some(pos) => { pos }
                 };
 
-                self.otag = @s.slice(0u, pos);
+                self.otag = @s.slice(0u, pos).to_str();
                 // Changed @chars to @ctag, upon rustc asking.
                 self.otag_chars = @ctag(*self.otag);
 
@@ -727,7 +728,7 @@ impl Parser {
           }
           _ => {
             let name = self.check_content(content);
-            let name = @name.split_options_iter('.');
+            let name = @name.split_options_iter('.', name.len(), false);
             self.tokens.push(ETag(name, tag));
           }
         }
