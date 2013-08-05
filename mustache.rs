@@ -22,9 +22,6 @@ use std::util;
 use std::cell;
 use std::hashmap;
 
-//use to_str::ToStr;
-//use std::prelude::*;
-
 /// Represents template data.
 pub enum Data {
     Str(@~str),
@@ -607,6 +604,13 @@ impl Parser {
             let name = content.slice(1u, len);
             let name = self.check_content(name);
             let name = @name.split_options_iter('.', name.len(), false);
+            // http://stackoverflow.com/questions/15379408/how-do-i-transform-str-to-str-in-rust
+            // This is ... gymnastic. There's got to be something better than this.
+            let name2 = @~[];
+            for x in name {
+                name2.push(x.to_owned());
+            }
+            let name = name2;
             self.tokens.push(UTag(name, tag));
           }
           '{' => {
@@ -615,6 +619,11 @@ impl Parser {
                 let name = self.check_content(name);
                 // use false for last param
                 let name = @name.split_options_iter('.', name.len(), false);
+                let name2 = @~[];
+                for x in name {
+                    name2.push(x.to_owned());
+                }
+                let name = name2;
                 self.tokens.push(UTag(name, tag));
             } else { fail!( ~"unbalanced \"{\" in tag" ); }
           }
@@ -623,6 +632,11 @@ impl Parser {
 
             let name = self.check_content(content.slice(1u, len));
             let name = @name.split_options_iter('.', name.len(), false);
+            let name2 = @~[];
+            for x in name {
+                name2.push(x.to_owned());
+            }
+            let name = name2;
             self.tokens.push(IncompleteSection(name, false, tag, newlined));
           }
           '^' => {
@@ -630,6 +644,11 @@ impl Parser {
 
             let name = self.check_content(content.slice(1u, len));
             let name = @name.split_options_iter('.', name.len(), false);
+            let name2 = @~[];
+            for x in name {
+                name2.push(x.to_owned());
+            }
+            let name = name2;
             self.tokens.push(IncompleteSection(name, true, tag, newlined));
           }
           '/' => {
@@ -637,6 +656,11 @@ impl Parser {
 
             let name = self.check_content(content.slice(1u, len));
             let name = @name.split_options_iter('.', name.len(), false);
+            let name2 = @~[];
+            for x in name {
+                name2.push(x.to_owned());
+            }
+            let name = name2;
             let mut children = ~[];
 
             loop {
@@ -719,7 +743,7 @@ impl Parser {
                   Some(pos) => { pos }
                 };
 
-                self.ctag = @s.slice(pos, s.len());
+                self.ctag = @s.slice(pos, s.len()).to_str();
                 // Changed @chars to @ctag, upon rustc asking.
                 self.ctag_chars = @ctag(*self.ctag);
             } else {
@@ -729,6 +753,11 @@ impl Parser {
           _ => {
             let name = self.check_content(content);
             let name = @name.split_options_iter('.', name.len(), false);
+            let name2 = @~[];
+            for x in name {
+                name2.push(x.to_owned());
+            }
+            let name = name2;
             self.tokens.push(ETag(name, tag));
           }
         }
