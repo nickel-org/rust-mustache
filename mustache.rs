@@ -388,10 +388,10 @@ impl Parser {
         }
 
         if self.ch == '\n' {
-            self.line += 1u;
+            self.line = self.line + 1u;
             self.col = 1u;
         } else {
-            self.col += 1u;
+            self.col = self.col + 1u;
         }
     }
 
@@ -432,7 +432,7 @@ impl Parser {
                         curly_brace_tag = false;
                         self.state = TAG;
                     } else {
-                        self.tag_position += 1u;
+                        self.tag_position = self.tag_position + 1u;
                     }
                 } else {
                     // We don't have a tag, so add all the tag parts we've seen
@@ -698,7 +698,7 @@ impl Parser {
                         // case the user uses a function to instantiate the
                         // tag.
                         let mut src = ~"";
-                        for s in srcs { src += **s; }
+                        for s in srcs { src = src + **s; }
 
                         self.tokens.push(
                             Section(
@@ -800,7 +800,7 @@ impl Parser {
         let mut i = 0u;
         while i < self.tag_position {
             unsafe { self.content.push_char(self.otag_chars[i]) };
-            i += 1u;
+            i = i + 1u;
         }
     }
 
@@ -808,7 +808,7 @@ impl Parser {
         let mut i = 0u;
         while i < self.tag_position {
             unsafe { self.content.push_char(self.ctag_chars[i]) };
-            i += 1u;
+            i = i + 1u;
         }
     }
 
@@ -932,7 +932,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                 Some(Map(v)) => { value = v.find( path[i].clone() ); }
                 _ => break,
             }
-            i += 1u;
+            i = i + 1u;
         }
 
         value
@@ -945,7 +945,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
             &Text(value) => {
                 // Indent the lines.
                 if *ctx.indent == ~"" {
-                    output += *value;
+                    output = output + *value;
                 } else {
                     let mut pos = 0u;
                     let len = value.len();
@@ -966,10 +966,10 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                         };
 
                         if line.char_at(0u) != '\n' {
-                            output += *ctx.indent;
+                            output = output + *ctx.indent;
                         }
 
-                        output += line;
+                        output = output + line;
                     }
                 }
             },
@@ -977,7 +977,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                 match find(*ctx.stack, *path) {
                     None => { }
                     Some(value) => {
-                        output += ctx.indent + render_etag(value, ctx);
+                        output = output + ctx.indent + render_etag(value, ctx);
                     }
                 }
             }
@@ -985,14 +985,14 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                 match find(*ctx.stack, *path) {
                     None => { }
                     Some(value) => {
-                        output += ctx.indent + render_utag(value, ctx);
+                        output = output + ctx.indent + render_utag(value, ctx);
                     }
                 }
             }
             &Section(path, true, children, _, _, _, _, _) => {
                 let ctx = RenderContext { tokens: children, .. *ctx };
 
-                output += match find(*ctx.stack, *path) {
+                output = output + match find(*ctx.stack, *path) {
                     None => { render_helper(&ctx) }
                     Some(value) => { render_inverted_section(value, &ctx) }
                 };
@@ -1001,7 +1001,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                 match find(*ctx.stack, *path) {
                     None => { }
                     Some(value) => {
-                        output += render_section(
+                        output = output + render_section(
                             value,
                             src,
                             otag,
@@ -1015,7 +1015,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                 match ctx.partials.find(*name) {
                     None => { }
                     Some(tokens) => {
-                        output += render_helper(&RenderContext {
+                        output = output + render_helper(&RenderContext {
                             tokens: tokens,
                             indent: @(ctx.indent + *ind),
                             .. *ctx
@@ -1034,11 +1034,11 @@ fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
     let mut escaped = ~"";
     for c in render_utag(value, ctx) {
         match c {
-          '<' => { escaped += "&lt;" }
-          '>' => { escaped += "&gt;" }
-          '&' => { escaped += "&amp;" }
-          '"' => { escaped += "&quot;" }
-          '\'' => { escaped += "&#39;" }
+          '<' => { escaped = escaped + "&lt;" }
+          '>' => { escaped = escaped + "&gt;" }
+          '&' => { escaped = escaped + "&amp;" }
+          '"' => { escaped = escaped + "&quot;" }
+          '\'' => { escaped = escaped + "&#39;" }
           _ => { escaped.push_char(c); }
         }
     }
@@ -1368,7 +1368,7 @@ mod tests {
                     do s.emit_field(**key, idx) || {
                         (*value).encode(s);
                     }
-                    idx += 1;
+                    idx = idx + 1;
                 }
             }
         }
@@ -1663,7 +1663,7 @@ mod tests {
               }
               &json::String(~"Interpolation - Multiple Calls") => {
                   let calls = @mut 0;
-                  |_text| {*calls += 1; int::str(*calls) }
+                  |_text| {*calls = *calls + 1; int::str(*calls) }
               }
               &json::String(~"Escaping") => {
                   |_text| {~">" }
