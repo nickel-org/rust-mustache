@@ -734,8 +734,7 @@ impl Parser {
                 };
 
                 self.otag = @s.slice(0u, pos).to_str();
-                // Changed @chars to @ctag, upon rustc asking.
-                self.otag_chars = @ctag(*self.otag);
+                self.otag_chars = @(*self.otag).iter().collect::<~[char]>();
 
                 let pos = s.slice_from(pos).find(|c| !char::is_whitespace(c));
                 let pos = match pos {
@@ -744,8 +743,7 @@ impl Parser {
                 };
 
                 self.ctag = @s.slice(pos, s.len()).to_str();
-                // Changed @chars to @ctag, upon rustc asking.
-                self.ctag_chars = @ctag(*self.ctag);
+                self.ctag_chars = @(*self.ctag).iter().collect::<~[char]>();
             } else {
                 fail!( ~"invalid change delimiter tag content" );
             }
@@ -841,9 +839,8 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
         state: TEXT,
         otag: ctx.otag,
         ctag: ctx.ctag,
-        // Changing @chars to @ctx, rustc suggestion
-        otag_chars: @ctx(*ctx.otag),
-        ctag_chars: @ctx(*ctx.ctag),
+        otag_chars: @(*ctx.otag).iter().collect::<~[char]>(),
+        ctag_chars: @(*ctx.ctag).iter().collect::<~[char]>(),
         tag_position: 0u,
         tokens: ~[],
         partials: ~[],
