@@ -490,11 +490,11 @@ impl Parser {
         }
 
         // Check that we don't have any incomplete sections.
-        for token in self.tokens {
-            match token {
+        for token in self.tokens.iter() {
+            match *token {
                 IncompleteSection(name, _, _, _) => {
                     fail!( fmt!("Unclosed mustache section %s",
-                        vec::connect(name, @~".").to_str()));
+                        (*name).connect(".")));
               }
               _ => {}
             }
@@ -676,7 +676,7 @@ impl Parser {
 
                     // Collect all the children's sources.
                     let srcs = ~[];
-                    for child in children {
+                    for child in children.iter() {
                         match child {
                             &Text(s)
                             | &ETag(_, s)
@@ -780,7 +780,7 @@ impl Parser {
 
             // Trim the whitespace from the last token.
             self.tokens.pop();
-            self.tokens.push(Text(@s.slice(0u, pos)));
+            self.tokens.push(Text(@s.slice(0u, pos).to_str()));
 
             ws
           }
@@ -853,7 +853,7 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
     parser.parse();
 
     // Compile the partials if we haven't done so already.
-    for name in parser.partials {
+    for name in parser.partials.iter() {
     	let path = path::Path(*ctx.template_path);
     	let path = path.push(*name + *ctx.template_extension);
 
@@ -940,7 +940,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
 
     let mut output = ~"";
     
-    for token in ctx.tokens {
+    for token in ctx.tokens.iter() {
         match token {
             &Text(value) => {
                 // Indent the lines.
@@ -1032,7 +1032,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
 
 fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
     let mut escaped = ~"";
-    for c in render_utag(value, ctx) {
+    for c in render_utag(value, ctx).iter() {
         match c {
           '<' => { escaped = escaped + "&lt;" }
           '>' => { escaped = escaped + "&gt;" }
