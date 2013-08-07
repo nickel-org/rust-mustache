@@ -764,11 +764,11 @@ impl Parser {
     fn add_partial(&self, content: &str, tag: @~str) {
         let token_class = self.classify_token();
         let indent = match token_class {
-          Normal => { ~"" }
+          Normal => { "" }
           StandAlone => {
             if self.ch == '\r' { self.bump(); }
             self.bump();
-            ~""
+            ""
           }
           WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
             if self.ch == '\r' { self.bump(); }
@@ -790,7 +790,7 @@ impl Parser {
         let name = content.slice(1u, content.len());
         let name = @self.check_content(name);
 
-        self.tokens.push(Partial(name, @indent, tag));
+        self.tokens.push(Partial(name, @indent.to_owned(), tag));
         self.partials.push(name);
     }
 
@@ -815,7 +815,7 @@ impl Parser {
         if trimmed.len() == 0u {
             fail!( ~"empty tag" );
         }
-        trimmed
+        trimmed.to_owned()
     }
 }
 
@@ -852,9 +852,9 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
     // Compile the partials if we haven't done so already.
     for name in parser.partials.iter() {
     	let path = path::Path(*ctx.template_path);
-    	let path = path.push(*name + *ctx.template_extension);
+        let path = path.push(**name + *ctx.template_extension);
 
-        if !ctx.partials.contains_key(*name) {
+        if !ctx.partials.contains_key(name) {
             // Insert a placeholder so we don't recurse off to infinity.
             ctx.partials.insert(*name, @~[]);
 
@@ -880,7 +880,7 @@ fn compile_helper(ctx: &CompileContext) -> @~[Token] {
     // Destructure the parser so we get get at the tokens without a copy.
     let Parser { tokens: tokens, _ } = parser;
 
-    @tokens.unwrap()
+    @tokens
 }
 
 struct RenderContext {
@@ -897,7 +897,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
         if path.is_empty() {
             return match stack.last_opt() {
               None => { None }
-              Some(value) => { Some(value) }
+              Some(&value) => { Some(value) }
             };
         }
 
@@ -908,7 +908,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
         while i > 0u {
             match stack[i - 1u] {
               Map(ctx) => {
-                match ctx.find(path[0u].clone()) {
+                match ctx.find(&@path[0u].clone()) {
                   Some(v) => { value = Some(v); break; }
                   None => {}
                 }
@@ -949,7 +949,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
 
                     while pos < len {
                         // Changed: "find_from will now be .slice_from(x).find()"
-                        let line = match *value.slice_from('\n').find(pos) {
+                        let line = match (*value).slice_from(pos).find('\n') {
                           None => {
                             let line = value.slice(pos, len);
                             pos = len;
@@ -974,7 +974,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                 match find(*ctx.stack, *path) {
                     None => { }
                     Some(value) => {
-                        output = output + ctx.indent + render_etag(value, ctx);
+                        output = output + *ctx.indent + render_etag(value, ctx);
                     }
                 }
             }
@@ -982,7 +982,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                 match find(*ctx.stack, *path) {
                     None => { }
                     Some(value) => {
-                        output = output + ctx.indent + render_utag(value, ctx);
+                        output = output + *ctx.indent + render_utag(value, ctx);
                     }
                 }
             }
@@ -1009,12 +1009,12 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                 }
             }
             &Partial(ref name, ind, _) => {
-                match ctx.partials.find(*name) {
+                match ctx.partials.find(name) {
                     None => { }
                     Some(tokens) => {
                         output = output + render_helper(&RenderContext {
-                            tokens: tokens,
-                            indent: @(ctx.indent + *ind),
+                            tokens: *tokens,
+                            indent: @(*ctx.indent + *ind),
                             .. *ctx
                         });
                     }
