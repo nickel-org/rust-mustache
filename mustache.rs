@@ -1,13 +1,24 @@
 #[link(name = "mustache",
        vers = "0.4pre",
-       author = "Erick Tryzelaar")];
+       uuid = "afecaa07-75c5-466c-b3a3-fae5d32e04aa")];
 #[crate_type = "lib"];
 
+#[forbid(unused_imports)];
+#[warn(dead_assignment)];
+#[warn(path_statement)];
+#[warn(type_limits)];
+#[warn(unnecessary_allocation)];
+#[warn(unnecessary_qualification)];
+#[warn(unreachable_code)];
+#[warn(unrecognized_lint)];
+#[warn(unused_mut)];
+#[warn(unused_variable)];
+
+// These don't seem to exist anymore.
 #[allow(structural_records)];  // TODO: enable more of these
 #[forbid(deprecated_mode)];
 #[forbid(deprecated_pattern)];
 #[forbid(non_implicitly_copyable_typarams)];
-#[forbid(unused_imports)];
 
 extern mod std;
 extern mod extra;
