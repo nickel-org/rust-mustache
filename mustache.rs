@@ -34,12 +34,13 @@ use std::cell;
 use std::hashmap;
 
 /// Represents template data.
+#[deriving(Clone)]
 pub enum Data {
     Str(@~str),
     Bool(bool),
     Vec(@mut ~[Data]),
     Map(hashmap::HashMap<@~str, Data>),
-    Fun(@fn(@~str) -> ~str),
+    //Fun(@fn(@~str) -> ~str),
 }
 
 /**
@@ -669,7 +670,7 @@ impl Parser {
                     name2.push(x.to_owned());
                 }
                 let name = name2;
-                let mut children = ~[];
+                let mut children: ~[Token] = ~[];
 
                 loop {
                     if self.tokens.len() == 0u {
@@ -913,7 +914,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
             match stack[i - 1u] {
                 Map(ctx) => {
                     match ctx.find(&@path[0u].clone()) {
-                        Some(v) => { value = Some(v); break; }
+                        Some(v) => { value = Some(*v); break; }
                         None => {}
                     }
                     i -= 1u;
@@ -929,8 +930,13 @@ fn render_helper(ctx: &RenderContext) -> ~str {
         let len = path.len();
 
         while i < len {
-            match value.clone() {
-                Some(Map(v)) => { value = v.find( path[i].clone() ); }
+            match value {
+                Some(Map(ref v)) => {
+                    value = match v.find(&@path[i].clone()) {
+                        Some(value) => Some(*value),
+                        None => None,
+                    };
+                }
                 _ => break,
             }
             i = i + 1u;
@@ -1051,7 +1057,7 @@ fn render_utag(value: Data, ctx: &RenderContext) -> ~str {
         Str(s) => (*s).clone(),
 
         // etags and utags use the default delimiter.
-        Fun(f) => render_fun(ctx, @~"", @~"{{", @~"}}", f),
+        //Fun(f) => render_fun(ctx, @~"", @~"{{", @~"}}", f),
 
         _ => fail!(),
     }
@@ -1074,21 +1080,20 @@ fn render_section(value: Data,
         Bool(true) => render_helper(ctx),
         Bool(false) => ~"",
         Vec(vs) => {
-            do vs.borrow |vs| {
-                do vs.map |v| {
-                    render_helper(&RenderContext {
-                        stack: @(ctx.stack + ~[*v]),
-                        .. *ctx
-                    })
-                }).concat()
-            }
+            do vs.map |v| {
+                let mut stack = ctx.stack.to_owned();
+                stack.push(*v);
+
+                render_helper(&RenderContext { stack: @stack, .. *ctx })
+            }.concat()
         }
-        Map(_) =>
-            render_helper(&RenderContext {
-                stack: @(ctx.stack + ~[value]),
-                .. *ctx
-            }),
-        Fun(f) => render_fun(ctx, src, otag, ctag, f),
+        Map(_) => {
+            let mut stack = ctx.stack.to_owned();
+            stack.push(value);
+
+            render_helper(&RenderContext { stack: @stack, .. *ctx })
+        }
+        //Fun(f) => render_fun(ctx, src, otag, ctag, f),
         _ => fail!(),
     }
 }
@@ -1391,8 +1396,8 @@ mod tests {
         ctx0.insert(@~"a", Vec(@dvec::from_elem(Map(ctx1))));
         assert!( template.render_data(Map(ctx0)) == ~"01 a 35" );
 
-        ctx0.insert(@~"a", Fun(|_text| {~"foo"}));
-        assert!( template.render_data(Map(ctx0)) == ~"0foo5" );
+        //ctx0.insert(@~"a", Fun(|_text| {~"foo"}));
+        //assert!( template.render_data(Map(ctx0)) == ~"0foo5" );
     }
 
     #[test]
@@ -1681,7 +1686,7 @@ mod tests {
               }
               value => { fail!( fmt!("%?", value) ) }
             };
-            ctx.insert(@~"lambda", Fun(f));
+            //ctx.insert(@~"lambda", Fun(f));
 
             run_test(test, Map(ctx));
         }
