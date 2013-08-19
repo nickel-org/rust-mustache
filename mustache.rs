@@ -669,7 +669,7 @@ impl Parser {
                     name2.push(x.to_owned());
                 }
                 let name = name2;
-                let mut children: ~[Token] = ~[];
+                let mut children = ~[];
 
                 loop {
                     if self.tokens.len() == 0u {
@@ -913,7 +913,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
             match stack[i - 1u] {
                 Map(ctx) => {
                     match ctx.find(&@path[0u].clone()) {
-                        Some(v) => { value = Some(*v); break; }
+                        Some(v) => { value = Some(v); break; }
                         None => {}
                     }
                     i -= 1u;
@@ -1075,12 +1075,12 @@ fn render_section(value: Data,
         Bool(false) => ~"",
         Vec(vs) => {
             do vs.borrow |vs| {
-                vec::concat(do vs.map |v| {
+                do vs.map |v| {
                     render_helper(&RenderContext {
                         stack: @(ctx.stack + ~[*v]),
                         .. *ctx
                     })
-                })
+                }).concat()
             }
         }
         Map(_) =>
