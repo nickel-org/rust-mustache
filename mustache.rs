@@ -84,7 +84,7 @@ impl Context {
             otag: @~"{{",
             ctag: @~"}}",
             template_path: self.template_path,
-            template_extension: self.template_extension
+            template_extension: self.template_extension,
         };
 
         let tokens = compile_helper(&ctx);
@@ -389,31 +389,28 @@ enum ParserState { TEXT, OTAG, TAG, CTAG }
 impl Parser {
     fn eof(&self) -> bool { self.ch == -1 as char }
 
-    fn bump(&self) {
-        let mut lookahead = None;
-        util::swap( &mut lookahead, &mut self.lookahead );
-
-        match lookahead {
+    fn bump(&mut self) {
+        match self.lookahead.take() {
             None => { self.ch = self.rdr.read_char(); }
             Some(ch) => { self.ch = ch; }
         }
 
         if self.ch == '\n' {
-            self.line = self.line + 1u;
-            self.col = 1u;
+            self.line += 1;
+            self.col = 1;
         } else {
-            self.col = self.col + 1u;
+            self.col += 1;
         }
     }
 
-    fn peek(&self) -> char {
+    fn peek(&mut self) -> char {
         match self.lookahead {
-          None => {
-            let ch = self.rdr.read_char();
-            self.lookahead = Some(ch);
-            ch
-          }
-          Some(ch) => { ch }
+            None => {
+                let ch = self.rdr.read_char();
+                self.lookahead = Some(ch);
+                ch
+            }
+            Some(ch) => ch,
         }
     }
 
@@ -422,82 +419,82 @@ impl Parser {
 
         while !self.eof() {
             match self.state {
-              TEXT => {
-                if self.ch == self.otag_chars[0] {
-                    if self.otag_chars.len() > 1u {
-                        self.tag_position = 1u;
-                        self.state = OTAG;
+                TEXT => {
+                    if self.ch == self.otag_chars[0] {
+                        if self.otag_chars.len() > 1u {
+                            self.tag_position = 1u;
+                            self.state = OTAG;
+                        } else {
+                            self.add_text();
+                            self.state = TAG;
+                        }
                     } else {
-                        self.add_text();
-                        self.state = TAG;
+                        unsafe { self.content.push_char(self.ch) };
                     }
-                } else {
-                    unsafe { self.content.push_char(self.ch) };
+                    self.bump();
                 }
-                self.bump();
-              }
-              OTAG => {
-                if self.ch == self.otag_chars[self.tag_position] {
-                    if self.tag_position == self.otag_chars.len() - 1u {
-                        self.add_text();
-                        curly_brace_tag = false;
-                        self.state = TAG;
+                OTAG => {
+                    if self.ch == self.otag_chars[self.tag_position] {
+                        if self.tag_position == self.otag_chars.len() - 1u {
+                            self.add_text();
+                            curly_brace_tag = false;
+                            self.state = TAG;
+                        } else {
+                            self.tag_position = self.tag_position + 1u;
+                        }
                     } else {
-                        self.tag_position = self.tag_position + 1u;
+                        // We don't have a tag, so add all the tag parts we've seen
+                        // so far to the string.
+                        self.state = TEXT;
+                        self.not_otag();
+                        unsafe { self.content.push_char(self.ch) };
                     }
-                } else {
-                    // We don't have a tag, so add all the tag parts we've seen
-                    // so far to the string.
-                    self.state = TEXT;
-                    self.not_otag();
-                    unsafe { self.content.push_char(self.ch) };
+                    self.bump();
                 }
-                self.bump();
-              }
-              TAG => {
-                if self.content == ~"" && self.ch == '{' {
-                    curly_brace_tag = true;
-                    unsafe { self.content.push_char(self.ch) };
-                    self.bump();
-                } else if curly_brace_tag && self.ch == '}' {
-                    curly_brace_tag = false;
-                    unsafe { self.content.push_char(self.ch) };
-                    self.bump();
-                } else if self.ch == self.ctag_chars[0u] {
-                    if self.ctag_chars.len() > 1u {
-                        self.tag_position = 1u;
-                        self.state = CTAG;
+                TAG => {
+                    if self.content == ~"" && self.ch == '{' {
+                        curly_brace_tag = true;
+                        unsafe { self.content.push_char(self.ch) };
                         self.bump();
+                    } else if curly_brace_tag && self.ch == '}' {
+                        curly_brace_tag = false;
+                        unsafe { self.content.push_char(self.ch) };
+                        self.bump();
+                    } else if self.ch == self.ctag_chars[0u] {
+                        if self.ctag_chars.len() > 1u {
+                            self.tag_position = 1u;
+                            self.state = CTAG;
+                            self.bump();
+                        } else {
+                            self.add_tag();
+                            self.state = TEXT;
+                        }
                     } else {
-                        self.add_tag();
-                        self.state = TEXT;
-                    }
-                } else {
-                    unsafe { self.content.push_char(self.ch) };
-                    self.bump();
-                }
-              }
-              CTAG => {
-                if self.ch == self.ctag_chars[self.tag_position] {
-                    if self.tag_position == self.ctag_chars.len() - 1u {
-                        self.add_tag();
-                        self.state = TEXT;
-                    } else {
-                        self.state = TAG;
-                        self.not_ctag();
                         unsafe { self.content.push_char(self.ch) };
                         self.bump();
                     }
                 }
-              }
+                CTAG => {
+                    if self.ch == self.ctag_chars[self.tag_position] {
+                        if self.tag_position == self.ctag_chars.len() - 1u {
+                            self.add_tag();
+                            self.state = TEXT;
+                        } else {
+                            self.state = TAG;
+                            self.not_ctag();
+                            unsafe { self.content.push_char(self.ch) };
+                            self.bump();
+                        }
+                    }
+                }
             }
         }
 
         match self.state {
-          TEXT => { self.add_text() }
-          OTAG => { self.not_otag(); self.add_text() }
-          TAG => { fail!( ~"unclosed tag" ) }
-          CTAG => { self.not_ctag(); self.add_text() }
+            TEXT => { self.add_text(); }
+            OTAG => { self.not_otag(); self.add_text(); }
+            TAG => { fail!( ~"unclosed tag"); }
+            CTAG => { self.not_ctag(); self.add_text(); }
         }
 
         // Check that we don't have any incomplete sections.
@@ -537,33 +534,33 @@ impl Parser {
             if self.tokens.len() == 0u { return StandAlone; }
 
             match self.tokens[self.tokens.len() - 1u] {
-              IncompleteSection(_, _, _, true) => { StandAlone }
+                IncompleteSection(_, _, _, true) => { StandAlone }
 
-              Text(s) if *s != ~"" => {
-                // Look for the last newline character that may have whitespace
-                // following it.
-                // Changing rfind to 's' upon rustc suggestion
-                match (*s).rfind(|c:char| c == '\n' || !char::is_whitespace(c)) {
-                  // It's all whitespace.
-                  None => {
-                    if self.tokens.len() == 1u {
-                        WhiteSpace(s, 0u)
-                    } else {
-                        Normal
-                    }
-                  }
-                  Some(pos) => {
-                    if (*s).char_at(pos) == '\n' {
-                        if pos == s.len() - 1u {
-                            StandAlone
-                        } else {
-                            WhiteSpace(s, pos + 1u)
+                Text(s) if *s != ~"" => {
+                    // Look for the last newline character that may have whitespace
+                    // following it.
+                    // Changing rfind to 's' upon rustc suggestion
+                    match s.rfind(|c:char| c == '\n' || !char::is_whitespace(c)) {
+                        // It's all whitespace.
+                        None => {
+                            if self.tokens.len() == 1u {
+                                WhiteSpace(s, 0u)
+                            } else {
+                                Normal
+                            }
                         }
-                    } else { Normal }
-                  }
+                        Some(pos) => {
+                            if s.char_at(pos) == '\n' {
+                                if pos == s.len() - 1u {
+                                    StandAlone
+                                } else {
+                                    WhiteSpace(s, pos + 1u)
+                                }
+                            } else { Normal }
+                        }
+                    }
                 }
-              }
-              _ => { Normal }
+                _ => Normal,
             }
         } else { Normal }
     }
@@ -573,22 +570,22 @@ impl Parser {
         // newline and whitespace, clear out the whitespace.
 
         match self.classify_token() {
-          Normal => { false }
-          StandAlone => {
-              if self.ch == '\r' { self.bump(); }
-              self.bump();
-              true
-          }
-          WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
-              if self.ch == '\r' { self.bump(); }
-              self.bump();
+            Normal => { false }
+            StandAlone => {
+                if self.ch == '\r' { self.bump(); }
+                self.bump();
+                true
+            }
+            WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
+                if self.ch == '\r' { self.bump(); }
+                self.bump();
 
-              // Trim the whitespace from the last token.
-              self.tokens.pop();
-              self.tokens.push(Text(@s.slice(0u, pos).to_str()));
+                // Trim the whitespace from the last token.
+                self.tokens.pop();
+                self.tokens.push(Text(@s.slice(0u, pos).to_str()));
 
-              true
-          }
+                true
+            }
         }
     }
 
@@ -607,192 +604,188 @@ impl Parser {
         let len = content.len();
 
         match content[0] as char {
-          '!' => {
-            // ignore comments
-            self.eat_whitespace();
-          }
-          '&' => {
-            let name = content.slice(1u, len);
-            let name = self.check_content(name);
-            let name = @name.split_options_iter('.', name.len(), false);
-            // http://stackoverflow.com/questions/15379408/how-do-i-transform-str-to-str-in-rust
-            // This is ... gymnastic. There's got to be something better than this.
-            let name2 = @~[];
-            for x in name {
-                name2.push(x.to_owned());
+            '!' => {
+                // ignore comments
+                self.eat_whitespace();
             }
-            let name = name2;
-            self.tokens.push(UTag(name, tag));
-          }
-          '{' => {
-            if content.ends_with("}") {
-                let name = content.slice(1u, len - 1u);
+            '&' => {
+                let name = content.slice(1u, len);
                 let name = self.check_content(name);
-                // use false for last param
                 let name = @name.split_options_iter('.', name.len(), false);
+                // http://stackoverflow.com/questions/15379408/how-do-i-transform-str-to-str-in-rust
+                // This is ... gymnastic. There's got to be something better than this.
                 let name2 = @~[];
                 for x in name {
                     name2.push(x.to_owned());
                 }
                 let name = name2;
                 self.tokens.push(UTag(name, tag));
-            } else { fail!( ~"unbalanced \"{\" in tag" ); }
-          }
-          '#' => {
-            let newlined = self.eat_whitespace();
-
-            let name = self.check_content(content.slice(1u, len));
-            let name = @name.split_options_iter('.', name.len(), false);
-            let name2 = @~[];
-            for x in name {
-                name2.push(x.to_owned());
             }
-            let name = name2;
-            self.tokens.push(IncompleteSection(name, false, tag, newlined));
-          }
-          '^' => {
-            let newlined = self.eat_whitespace();
-
-            let name = self.check_content(content.slice(1u, len));
-            let name = @name.split_options_iter('.', name.len(), false);
-            let name2 = @~[];
-            for x in name {
-                name2.push(x.to_owned());
+            '{' => {
+                if content.ends_with("}") {
+                    let name = content.slice(1u, len - 1u);
+                    let name = self.check_content(name);
+                    // use false for last param
+                    let name = @name.split_options_iter('.', name.len(), false);
+                    let name2 = @~[];
+                    for x in name {
+                        name2.push(x.to_owned());
+                    }
+                    let name = name2;
+                    self.tokens.push(UTag(name, tag));
+                } else { fail!( ~"unbalanced \"{\" in tag" ); }
             }
-            let name = name2;
-            self.tokens.push(IncompleteSection(name, true, tag, newlined));
-          }
-          '/' => {
-            self.eat_whitespace();
+            '#' => {
+                let newlined = self.eat_whitespace();
 
-            let name = self.check_content(content.slice(1u, len));
-            let name = @name.split_options_iter('.', name.len(), false);
-            let name2 = @~[];
-            for x in name {
-                name2.push(x.to_owned());
-            }
-            let name = name2;
-            let mut children = ~[];
-
-            loop {
-                if self.tokens.len() == 0u {
-                    fail!( ~"closing unopened section" );
+                let name = self.check_content(content.slice(1u, len));
+                let name = @name.split_options_iter('.', name.len(), false);
+                let name2 = @~[];
+                for x in name {
+                    name2.push(x.to_owned());
                 }
+                let name = name2;
+                self.tokens.push(IncompleteSection(name, false, tag, newlined));
+            }
+            '^' => {
+                let newlined = self.eat_whitespace();
 
-                let last = self.tokens.pop();
+                let name = self.check_content(content.slice(1u, len));
+                let name = @name.split_options_iter('.', name.len(), false);
+                let name2 = @~[];
+                for x in name {
+                    name2.push(x.to_owned());
+                }
+                let name = name2;
+                self.tokens.push(IncompleteSection(name, true, tag, newlined));
+            }
+            '/' => {
+                self.eat_whitespace();
 
-                match last {
-                  IncompleteSection(section_name, inverted, osection, _) => {
-                    let children = children.reverse();
+                let name = self.check_content(content.slice(1u, len));
+                let name = @name.split_options_iter('.', name.len(), false);
+                let name2 = @~[];
+                for x in name {
+                    name2.push(x.to_owned());
+                }
+                let name = name2;
+                let mut children: ~[Token] = ~[];
 
-                    // Collect all the children's sources.
-                    let srcs = ~[];
-                    for child in children.iter() {
-                        match child {
-                            &Text(s)
-                            | &ETag(_, s)
-                            | &UTag(_, s)
-                            | &Partial(_, _, s) =>
-                                srcs.push(s.clone()),
-                            &Section(_, _, _, _, osection, src, csection, _) => {
-                                srcs.push(osection.clone());
-                                srcs.push(src.clone());
-                                srcs.push(csection.clone());
+                loop {
+                    if self.tokens.len() == 0u {
+                        fail!( ~"closing unopened section" );
+                    }
+
+                    let last = self.tokens.pop();
+
+                    match last {
+                        IncompleteSection(section_name, inverted, osection, _) => {
+                            // Collect all the children's sources.
+                            let srcs = ~[];
+                            for child in children.rev_iter() {
+                                match *child {
+                                    Text(s) | ETag(_, s) | UTag(_, s) | Partial(_, _, s) => {
+                                        srcs.push(s.clone())
+                                    }
+                                    Section(_, _, _, _, osection, src, csection, _) => {
+                                        srcs.push(osection.clone());
+                                        srcs.push(src.clone());
+                                        srcs.push(csection.clone());
+                                    }
+                                    _ => fail!(),
+                                }
                             }
-                            _ => fail!(),
+
+                            if section_name == name {
+                                // Cache the combination of all the sources in the
+                                // section. It's unfortunate, but we need to do this in
+                                // case the user uses a function to instantiate the
+                                // tag.
+                                let mut src = ~"";
+                                for s in srcs.iter() { src.push_str(**s); }
+
+                                self.tokens.push(
+                                    Section(
+                                        name,
+                                        inverted,
+                                        @children,
+                                        self.otag,
+                                        osection,
+                                        @src,
+                                        tag,
+                                        self.ctag));
+                                break;
+                            } else {
+                                fail!( ~"Unclosed section" );
+                            }
                         }
+                        _ => { children.push(last); }
                     }
-
-                    if section_name == name {
-                        // Cache the combination of all the sources in the
-                        // section. It's unfortunate, but we need to do this in
-                        // case the user uses a function to instantiate the
-                        // tag.
-                        let mut src = ~"";
-                        for s in srcs { src = src + **s; }
-
-                        self.tokens.push(
-                            Section(
-                                name,
-                                inverted,
-                                @children,
-                                self.otag,
-                                osection,
-                                @src,
-                                tag,
-                                self.ctag));
-                        break;
-                    } else {
-                        fail!( ~"Unclosed section" );
-                    }
-                  }
-                  _ => { children.push(last); }
                 }
             }
-          }
-          '>' => { self.add_partial(content, tag); }
-          '=' => {
-            self.eat_whitespace();
+            '>' => { self.add_partial(content, tag); }
+            '=' => {
+                self.eat_whitespace();
 
-            if (len > 2u && content.ends_with("=")) {
-                let s = self.check_content(content.slice(1u, len - 1u));
+                if (len > 2u && content.ends_with("=")) {
+                    let s = self.check_content(content.slice(1u, len - 1u));
 
-                // Changed: "find_from will now be .slice_from(x).find()"
-                let pos = s.slice_from(0u).find(char::is_whitespace);
-                let pos = match pos {
-                  None => { fail!( ~"invalid change delimiter tag content" ); }
-                  Some(pos) => { pos }
-                };
+                    // Changed: "find_from will now be .slice_from(x).find()"
+                    let pos = s.slice_from(0u).find(char::is_whitespace);
+                    let pos = match pos {
+                      None => { fail!( ~"invalid change delimiter tag content" ); }
+                      Some(pos) => { pos }
+                    };
 
-                self.otag = @s.slice(0u, pos).to_str();
-                self.otag_chars = @(*self.otag).iter().collect::<~[char]>();
+                    self.otag = @s.slice(0u, pos).to_str();
+                    self.otag_chars = @(*self.otag).iter().collect::<~[char]>();
 
-                let pos = s.slice_from(pos).find(|c| !char::is_whitespace(c));
-                let pos = match pos {
-                  None => { fail!( ~"invalid change delimiter tag content" ); }
-                  Some(pos) => { pos }
-                };
+                    let pos = s.slice_from(pos).find(|c| !char::is_whitespace(c));
+                    let pos = match pos {
+                      None => { fail!( ~"invalid change delimiter tag content" ); }
+                      Some(pos) => { pos }
+                    };
 
-                self.ctag = @s.slice(pos, s.len()).to_str();
-                self.ctag_chars = @(*self.ctag).iter().collect::<~[char]>();
-            } else {
-                fail!( ~"invalid change delimiter tag content" );
+                    self.ctag = @s.slice(pos, s.len()).to_str();
+                    self.ctag_chars = @(*self.ctag).iter().collect::<~[char]>();
+                } else {
+                    fail!( ~"invalid change delimiter tag content" );
+                }
             }
-          }
-          _ => {
-            let name = self.check_content(content);
-            let name = @name.split_options_iter('.', name.len(), false);
-            let name2 = @~[];
-            for x in name {
-                name2.push(x.to_owned());
+            _ => {
+                let name = self.check_content(content);
+                let name = @name.split_options_iter('.', name.len(), false);
+                let name2 = @~[];
+                for x in name {
+                    name2.push(x.to_owned());
+                }
+                let name = name2;
+                self.tokens.push(ETag(name, tag));
             }
-            let name = name2;
-            self.tokens.push(ETag(name, tag));
-          }
         }
     }
 
     fn add_partial(&self, content: &str, tag: @~str) {
         let token_class = self.classify_token();
         let indent = match token_class {
-          Normal => { "" }
-          StandAlone => {
-            if self.ch == '\r' { self.bump(); }
-            self.bump();
-            ""
-          }
-          WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
-            if self.ch == '\r' { self.bump(); }
-            self.bump();
+            Normal => "",
+            StandAlone => {
+                if self.ch == '\r' { self.bump(); }
+                self.bump();
+                ""
+            }
+            WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
+                if self.ch == '\r' { self.bump(); }
+                self.bump();
 
-            let ws = s.slice(pos, s.len());
+                let ws = s.slice(pos, s.len());
 
-            // Trim the whitespace from the last token.
-            self.tokens.pop();
-            self.tokens.push(Text(@s.slice(0u, pos).to_str()));
+                // Trim the whitespace from the last token.
+                self.tokens.pop();
+                self.tokens.push(Text(@s.slice(0u, pos).to_str()));
 
-            ws
-          }
+                ws
+            }
         };
 
         // We can't inline the tokens directly as we may have a recursive
@@ -907,8 +900,8 @@ fn render_helper(ctx: &RenderContext) -> ~str {
         // If we have an empty path, we just want the top value in our stack.
         if path.is_empty() {
             return match stack.last_opt() {
-              None => { None }
-              Some(&value) => { Some(value) }
+                None => None,
+                Some(&value) => Some(value),
             };
         }
 
@@ -918,14 +911,14 @@ fn render_helper(ctx: &RenderContext) -> ~str {
         let mut i = stack.len();
         while i > 0u {
             match stack[i - 1u] {
-              Map(ctx) => {
-                match ctx.find(&@path[0u].clone()) {
-                  Some(v) => { value = Some(v); break; }
-                  None => {}
+                Map(ctx) => {
+                    match ctx.find(&@path[0u].clone()) {
+                        Some(v) => { value = Some(*v); break; }
+                        None => {}
+                    }
+                    i -= 1u;
                 }
-                i -= 1u;
-              }
-              _ => { fail!( fmt!("%? %?", stack, path) ) }
+                _ => { fail!( fmt!("%? %?", stack, path) ) }
             }
         }
 
@@ -961,16 +954,16 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     while pos < len {
                         // Changed: "find_from will now be .slice_from(x).find()"
                         let line = match (*value).slice_from(pos).find('\n') {
-                          None => {
-                            let line = value.slice(pos, len);
-                            pos = len;
-                            line
-                          }
-                          Some(i) => {
-                            let line = value.slice(pos, i + 1u);
-                            pos = i + 1u;
-                            line
-                          }
+                            None => {
+                                let line = value.slice(pos, len);
+                                pos = len;
+                                line
+                            }
+                            Some(i) => {
+                                let line = value.slice(pos, i + 1u);
+                                pos = i + 1u;
+                                line
+                            }
                         };
 
                         if line.char_at(0u) != '\n' {
@@ -1042,12 +1035,12 @@ fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
     let mut escaped = ~"";
     for c in render_utag(value, ctx).iter() {
         match c {
-          '<' => { escaped = escaped + "&lt;" }
-          '>' => { escaped = escaped + "&gt;" }
-          '&' => { escaped = escaped + "&amp;" }
-          '"' => { escaped = escaped + "&quot;" }
-          '\'' => { escaped = escaped + "&#39;" }
-          _ => { escaped.push_char(c); }
+            '<' => { escaped.push_str("&lt;"); }
+            '>' => { escaped.push_str("&gt;"); }
+            '&' => { escaped.push_str("&amp;"); }
+            '"' => { escaped.push_str("&quot;"); }
+            '\'' => { escaped.push_str("&#39;"); }
+            _ => { escaped.push_char(c); }
         }
     }
     escaped
@@ -1055,7 +1048,7 @@ fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
 
 fn render_utag(value: Data, ctx: &RenderContext) -> ~str {
     match value {
-        Str(s) => *s.clone(),
+        Str(s) => (*s).clone(),
 
         // etags and utags use the default delimiter.
         Fun(f) => render_fun(ctx, @~"", @~"{{", @~"}}", f),
@@ -1066,9 +1059,9 @@ fn render_utag(value: Data, ctx: &RenderContext) -> ~str {
 
 fn render_inverted_section(value: Data, ctx: &RenderContext) -> ~str {
     match value {
-      Bool(false) => { render_helper(ctx) }
-      Vec(xs) if xs.len() == 0 => { render_helper(ctx) }
-      _ => { ~"" }
+        Bool(false) => render_helper(ctx),
+        Vec(xs) if xs.len() == 0 => render_helper(ctx),
+        _ => ~"",
     }
 }
 
@@ -1120,12 +1113,10 @@ fn render_fun(ctx: &RenderContext,
     render_helper(&RenderContext { tokens: tokens ,.. *ctx })
 }
 
-fn token_to_str(token: &Token) -> ~str
-{
+fn token_to_str(token: &Token) -> ~str {
 	match *token {
 		// recursive enums crash %?
-		Section(name, inverted, children, otag, osection, src, tag, ctag) =>
-		{
+		Section(name, inverted, children, otag, osection, src, tag, ctag) => {
 			let children = children.map(|x| token_to_str(x));
 			fmt!("Section(%?, %?, %?, %?, %?, %?, %?, %?)",
                 name,
@@ -1137,21 +1128,18 @@ fn token_to_str(token: &Token) -> ~str
                 tag,
                 ctag)
 		}
-		_ =>
-		{
+		_ => {
 			fmt!("%?", token)
 		}
 	}
 }
 
 #[cfg(test)]
-fn check_tokens(actual: &[Token], expected: &[Token]) -> bool
-{
+fn check_tokens(actual: &[Token], expected: &[Token]) -> bool {
 	// TODO: equality is currently broken for enums
 	let actual = do actual.map |x| {token_to_str(x)};
 	let expected = do expected.map |x| {token_to_str(x)};
-	if actual !=  expected
-	{
+	if actual !=  expected {
 		io::stderr().write_line(fmt!("Found %?, but expected %?", actual, expected));
 		return false;
 	}
