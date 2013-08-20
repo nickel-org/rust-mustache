@@ -481,6 +481,10 @@ impl Parser {
                             self.content.push_char(self.ch);
                             self.bump();
                         }
+                    } else {
+                        fail!("character %? is not part of CTAG: %?",
+                            self.ch,
+                            self.ctag_chars[self.tag_position]);
                     }
                 }
             }
@@ -489,7 +493,7 @@ impl Parser {
         match self.state {
             TEXT => { self.add_text(); }
             OTAG => { self.not_otag(); self.add_text(); }
-            TAG => { fail!( ~"unclosed tag"); }
+            TAG => { fail!(~"unclosed tag"); }
             CTAG => { self.not_ctag(); self.add_text(); }
         }
 
@@ -497,8 +501,8 @@ impl Parser {
         for token in self.tokens.iter() {
             match *token {
                 IncompleteSection(name, _, _, _) => {
-                    fail!( fmt!("Unclosed mustache section %s",
-                        (*name).connect(".")));
+                    fail!("Unclosed mustache section %s",
+                        (*name).connect("."));
               }
               _ => {}
             }
@@ -535,7 +539,6 @@ impl Parser {
                 Text(s) if *s != ~"" => {
                     // Look for the last newline character that may have whitespace
                     // following it.
-                    // Changing rfind to 's' upon rustc suggestion
                     match s.rfind(|c:char| c == '\n' || !char::is_whitespace(c)) {
                         // It's all whitespace.
                         None => {
@@ -647,7 +650,7 @@ impl Parser {
 
                 loop {
                     if self.tokens.len() == 0u {
-                        fail!( ~"closing unopened section" );
+                        fail!(~"closing unopened section");
                     }
 
                     let last = self.tokens.pop();
@@ -709,26 +712,26 @@ impl Parser {
                 if (len > 2u && content.ends_with("=")) {
                     let s = self.check_content(content.slice(1u, len - 1u));
 
-                    // Changed: "find_from will now be .slice_from(x).find()"
-                    let pos = s.slice_from(0u).find(char::is_whitespace);
+                    let pos = s.find(char::is_whitespace);
                     let pos = match pos {
-                      None => { fail!( ~"invalid change delimiter tag content" ); }
+                      None => { fail!("invalid change delimiter tag content"); }
                       Some(pos) => { pos }
                     };
 
                     self.otag = @s.slice(0u, pos).to_str();
-                    self.otag_chars = @(*self.otag).iter().collect::<~[char]>();
+                    self.otag_chars = @(*self.otag).iter().collect();
 
-                    let pos = s.slice_from(pos).find(|c| !char::is_whitespace(c));
+                    let s2 = s.slice_from(pos);
+                    let pos = s2.find(|c| !char::is_whitespace(c));
                     let pos = match pos {
-                      None => { fail!( ~"invalid change delimiter tag content" ); }
+                      None => { fail!("invalid change delimiter tag content"); }
                       Some(pos) => { pos }
                     };
 
-                    self.ctag = @s.slice(pos, s.len()).to_str();
-                    self.ctag_chars = @(*self.ctag).iter().collect::<~[char]>();
+                    self.ctag = @s2.slice_from(pos).to_str();
+                    self.ctag_chars = @(*self.ctag).iter().collect();
                 } else {
-                    fail!( ~"invalid change delimiter tag content" );
+                    fail!("invalid change delimiter tag content");
                 }
             }
             _ => {
@@ -778,7 +781,7 @@ impl Parser {
         let mut i = 0u;
         while i < self.tag_position {
             self.content.push_char(self.otag_chars[i]);
-            i = i + 1u;
+            i += 1u;
         }
     }
 
@@ -786,14 +789,14 @@ impl Parser {
         let mut i = 0u;
         while i < self.tag_position {
             self.content.push_char(self.ctag_chars[i]);
-            i = i + 1u;
+            i += 1u;
         }
     }
 
     fn check_content(&self, content: &str) -> ~str {
         let trimmed = content.trim();
         if trimmed.len() == 0u {
-            fail!( ~"empty tag" );
+            fail!(~"empty tag");
         }
         trimmed.to_owned()
     }
@@ -1303,7 +1306,6 @@ mod tests {
         ]));
     }
 
-    /*
     #[test]
     fn test_compile_delimiters() {
         assert!( check_tokens(*compile_str("before {{=<% %>=}}<%name%> after").tokens, [
@@ -1312,7 +1314,6 @@ mod tests {
             Text(@~" after")
         ]));
     }
-    */
 
     #[deriving(Encodable)]
     struct Name { name: ~str }
@@ -1402,7 +1403,6 @@ mod tests {
         assert!( template.render_data(Map(ctx0.clone())) == ~"05" );
     }
 
-/*
     #[test]
     fn test_render_partial() {
         let path = ~"base";
@@ -1433,7 +1433,6 @@ mod tests {
             "  <strong>a</strong>\n\n" +
             "  <strong>&lt;b&gt;</strong>\n\n");
     }
-*/
 
     fn parse_spec_tests(src: &str) -> ~[json::Json] {
     	let path = Path(src);
@@ -1595,12 +1594,10 @@ mod tests {
         run_tests("spec/specs/comments.json");
     }
 
-/*
     #[test]
     fn test_spec_delimiters() {
         run_tests("spec/specs/delimiters.json");
     }
-*/
 
     #[test]
     fn test_spec_interpolation() {
