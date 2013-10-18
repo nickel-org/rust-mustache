@@ -16,11 +16,11 @@ use std::hashmap::HashMap;
 /// Represents template data.
 #[deriving(Clone)]
 pub enum Data {
-    Str(@~str),
+    Str(~str),
     Bool(bool),
-    Vec(@mut ~[Data]),
-    Map(HashMap<@~str, Data>),
-    //Fun(@fn(@~str) -> ~str),
+    Vec(~[Data]),
+    Map(HashMap<~str, Data>),
+    //Fun(@fn(~str) -> ~str),
 }
 
 /**
@@ -29,14 +29,14 @@ pub enum Data {
  */
 #[deriving(Clone)]
 pub struct Context {
-    template_path: @~str,
-    template_extension: @~str,
+    template_path: ~str,
+    template_extension: ~str,
 }
 
 pub struct Template {
     ctx: Context,
     tokens: @~[Token],
-    partials: @mut HashMap<@~str, @~[Token]>
+    partials: @mut HashMap<~str, @~[Token]>
 }
 
 /**
@@ -44,8 +44,8 @@ pub struct Template {
  */
 pub fn Context(template_path: ~str, template_extension: ~str) -> Context {
     Context {
-        template_path: @template_path,
-        template_extension: @template_extension,
+        template_path: template_path,
+        template_extension: template_extension,
     }
 }
 
@@ -63,16 +63,16 @@ impl Context {
         let mut ctx = CompileContext {
             rdr: rdr,
             partials: partials,
-            otag: @~"{{",
-            ctag: @~"}}",
-            template_path: self.template_path,
-            template_extension: self.template_extension,
+            otag: ~"{{",
+            ctag: ~"}}",
+            template_path: self.template_path.to_owned(),
+            template_extension: self.template_extension.to_owned(),
         };
 
         let tokens = compile_helper(&mut ctx);
 
         Template {
-            ctx: *self,
+            ctx: self.clone(),
             tokens: tokens,
             partials: partials
         }
@@ -81,7 +81,7 @@ impl Context {
     /// Compiles a template from a file.
     fn compile_file(&self, file: &str) -> Template {
         let mut path = Path::new(self.template_path.as_slice());
-        path.push(file.to_owned() + *self.template_extension);
+        path.push(file.to_owned() + self.template_extension);
 
         match io::file_reader(&path) {
           Ok(rdr) => self.compile_reader(rdr),
@@ -193,7 +193,7 @@ impl serialize::Encoder for Encoder {
 
     fn emit_str(&mut self, v: &str) {
         // copying emit_owned_str
-        self.data.push(Str(@v.to_owned()));
+        self.data.push(Str(v.to_owned()));
     }
 
     fn emit_enum(&mut self, _name: &str, _f: &fn(&mut Encoder)) {
@@ -234,7 +234,7 @@ impl serialize::Encoder for Encoder {
             _ => fail!(),
         };
         f(self);
-        m.insert(@name.to_owned(), self.data.pop());
+        m.insert(name.to_owned(), self.data.pop());
         self.data.push(Map(m));
     }
 
@@ -268,12 +268,12 @@ impl serialize::Encoder for Encoder {
     }
 
     fn emit_seq(&mut self, _len: uint, f: &fn(&mut Encoder)) {
-        self.data.push(Vec(@mut ~[]));
+        self.data.push(Vec(~[]));
         f(self);
     }
 
     fn emit_seq_elt(&mut self, _idx: uint, f: &fn(&mut Encoder)) {
-        let v = match self.data.pop() {
+        let mut v = match self.data.pop() {
             Vec(v) => v,
             _ => fail!(),
         };
@@ -320,31 +320,31 @@ impl Template {
 
     fn render_data(&self, data: Data) -> ~str {
         render_helper(&RenderContext {
-            ctx: self.ctx,
+            ctx: self.ctx.clone(),
             tokens: self.tokens,
             partials: self.partials,
             stack: @~[data],
-            indent: @~""
+            indent: ~""
         })
     }
 }
 
 #[deriving(Clone)]
 pub enum Token {
-    Text(@~str),
-    ETag(@~[~str], @~str),
-    UTag(@~[~str], @~str),
-    Section(@~[~str], bool, @~[Token], @~str, @~str, @~str, @~str, @~str),
-    IncompleteSection(@~[~str], bool, @~str, bool),
-    Partial(@~str, @~str, @~str),
+    Text(~str),
+    ETag(@~[~str], ~str),
+    UTag(@~[~str], ~str),
+    Section(@~[~str], bool, @~[Token], ~str, ~str, ~str, ~str, ~str),
+    IncompleteSection(@~[~str], bool, ~str, bool),
+    Partial(~str, ~str, ~str),
 }
 
 #[deriving(Clone)]
 pub enum TokenClass {
     Normal,
     StandAlone,
-    WhiteSpace(@~str, uint),
-    NewLineWhiteSpace(@~str, uint),
+    WhiteSpace(~str, uint),
+    NewLineWhiteSpace(~str, uint),
 }
 
 pub struct Parser {
@@ -355,13 +355,13 @@ pub struct Parser {
     col: uint,
     content: ~str,
     state: ParserState,
-    otag: @~str,
-    ctag: @~str,
+    otag: ~str,
+    ctag: ~str,
     otag_chars: @~[char],
     ctag_chars: @~[char],
     tag_position: uint,
     tokens: ~[Token],
-    partials: ~[@~str],
+    partials: ~[~str],
 }
 
 enum ParserState { TEXT, OTAG, TAG, CTAG }
@@ -403,8 +403,8 @@ impl Parser {
             match self.state {
                 TEXT => {
                     if self.ch == self.otag_chars[0] {
-                        if self.otag_chars.len() > 1u {
-                            self.tag_position = 1u;
+                        if self.otag_chars.len() > 1 {
+                            self.tag_position = 1;
                             self.state = OTAG;
                         } else {
                             self.add_text();
@@ -417,12 +417,12 @@ impl Parser {
                 }
                 OTAG => {
                     if self.ch == self.otag_chars[self.tag_position] {
-                        if self.tag_position == self.otag_chars.len() - 1u {
+                        if self.tag_position == self.otag_chars.len() - 1 {
                             self.add_text();
                             curly_brace_tag = false;
                             self.state = TAG;
                         } else {
-                            self.tag_position = self.tag_position + 1u;
+                            self.tag_position = self.tag_position + 1;
                         }
                     } else {
                         // We don't have a tag, so add all the tag parts we've seen
@@ -442,9 +442,9 @@ impl Parser {
                         curly_brace_tag = false;
                         self.content.push_char(self.ch);
                         self.bump();
-                    } else if self.ch == self.ctag_chars[0u] {
-                        if self.ctag_chars.len() > 1u {
-                            self.tag_position = 1u;
+                    } else if self.ch == self.ctag_chars[0] {
+                        if self.ctag_chars.len() > 1 {
+                            self.tag_position = 1;
                             self.state = CTAG;
                             self.bump();
                         } else {
@@ -458,7 +458,7 @@ impl Parser {
                 }
                 CTAG => {
                     if self.ch == self.ctag_chars[self.tag_position] {
-                        if self.tag_position == self.ctag_chars.len() - 1u {
+                        if self.tag_position == self.ctag_chars.len() - 1 {
                             self.add_tag();
                             self.state = TEXT;
                         } else {
@@ -500,7 +500,7 @@ impl Parser {
             let mut content = ~"";
             util::swap(&mut content, &mut self.content);
 
-            self.tokens.push(Text(@content));
+            self.tokens.push(Text(content));
         }
     }
 
@@ -517,29 +517,29 @@ impl Parser {
 
             // If the last token ends with a newline (or there is no previous
             // token), then this token is standalone.
-            if self.tokens.len() == 0u { return StandAlone; }
+            if self.tokens.len() == 0 { return StandAlone; }
 
-            match self.tokens[self.tokens.len() - 1u] {
+            match self.tokens[self.tokens.len() - 1] {
                 IncompleteSection(_, _, _, true) => { StandAlone }
 
-                Text(s) if *s != ~"" => {
+                Text(ref s) if !s.is_empty() => {
                     // Look for the last newline character that may have whitespace
                     // following it.
                     match s.rfind(|c:char| c == '\n' || !char::is_whitespace(c)) {
                         // It's all whitespace.
                         None => {
-                            if self.tokens.len() == 1u {
-                                WhiteSpace(s, 0u)
+                            if self.tokens.len() == 1 {
+                                WhiteSpace(s.to_owned(), 0)
                             } else {
                                 Normal
                             }
                         }
                         Some(pos) => {
                             if s.char_at(pos) == '\n' {
-                                if pos == s.len() - 1u {
+                                if pos == s.len() - 1 {
                                     StandAlone
                                 } else {
-                                    WhiteSpace(s, pos + 1u)
+                                    WhiteSpace(s.to_owned(), pos + 1)
                                 }
                             } else { Normal }
                         }
@@ -567,7 +567,7 @@ impl Parser {
 
                 // Trim the whitespace from the last token.
                 self.tokens.pop();
-                self.tokens.push(Text(@s.slice(0u, pos).to_str()));
+                self.tokens.push(Text(s.slice(0, pos).to_str()));
 
                 true
             }
@@ -577,7 +577,7 @@ impl Parser {
     fn add_tag(&mut self) {
         self.bump();
 
-        let tag = @(*self.otag + self.content + *self.ctag);
+        let tag = self.otag + self.content + self.ctag;
 
         // Move the content to avoid a copy.
         let mut content = ~"";
@@ -590,7 +590,7 @@ impl Parser {
                 self.eat_whitespace();
             }
             '&' => {
-                let name = content.slice(1u, len);
+                let name = content.slice(1, len);
                 let name = self.check_content(name);
                 let name = @name.split_terminator_iter('.')
                     .map(|x| x.to_owned())
@@ -599,7 +599,7 @@ impl Parser {
             }
             '{' => {
                 if content.ends_with("}") {
-                    let name = content.slice(1u, len - 1u);
+                    let name = content.slice(1, len - 1);
                     let name = self.check_content(name);
                     let name = @name.split_terminator_iter('.')
                         .map(|x| x.to_owned())
@@ -610,7 +610,7 @@ impl Parser {
             '#' => {
                 let newlined = self.eat_whitespace();
 
-                let name = self.check_content(content.slice(1u, len));
+                let name = self.check_content(content.slice(1, len));
                 let name = @name.split_terminator_iter('.')
                     .map(|x| x.to_owned())
                     .collect();
@@ -619,7 +619,7 @@ impl Parser {
             '^' => {
                 let newlined = self.eat_whitespace();
 
-                let name = self.check_content(content.slice(1u, len));
+                let name = self.check_content(content.slice(1, len));
                 let name = @name.split_terminator_iter('.')
                     .map(|x| x.to_owned())
                     .collect();
@@ -628,14 +628,14 @@ impl Parser {
             '/' => {
                 self.eat_whitespace();
 
-                let name = self.check_content(content.slice(1u, len));
+                let name = self.check_content(content.slice(1, len));
                 let name = @name.split_terminator_iter('.')
                     .map(|x| x.to_owned())
                     .collect();
                 let mut children: ~[Token] = ~[];
 
                 loop {
-                    if self.tokens.len() == 0u {
+                    if self.tokens.len() == 0 {
                         fail!(~"closing unopened section");
                     }
 
@@ -649,13 +649,13 @@ impl Parser {
                             let mut srcs = ~[];
                             for child in children.iter() {
                                 match *child {
-                                    Text(s)
-                                    | ETag(_, s)
-                                    | UTag(_, s)
-                                    | Partial(_, _, s) => {
+                                    Text(ref s)
+                                    | ETag(_, ref s)
+                                    | UTag(_, ref s)
+                                    | Partial(_, _, ref s) => {
                                         srcs.push(s.clone())
                                     }
-                                    Section(_, _, _, _, osection, src, csection, _) => {
+                                    Section(_, _, _, _, ref osection, ref src, ref csection, _) => {
                                         srcs.push(osection.clone());
                                         srcs.push(src.clone());
                                         srcs.push(csection.clone());
@@ -670,18 +670,18 @@ impl Parser {
                                 // case the user uses a function to instantiate the
                                 // tag.
                                 let mut src = ~"";
-                                for s in srcs.iter() { src.push_str(**s); }
+                                for s in srcs.iter() { src.push_str(*s); }
 
                                 self.tokens.push(
                                     Section(
                                         name,
                                         inverted,
                                         @children,
-                                        self.otag,
+                                        self.otag.to_owned(),
                                         osection,
-                                        @src,
+                                        src,
                                         tag,
-                                        self.ctag));
+                                        self.ctag.to_owned()));
                                 break;
                             } else {
                                 fail!(~"Unclosed section");
@@ -696,7 +696,7 @@ impl Parser {
                 self.eat_whitespace();
 
                 if (len > 2u && content.ends_with("=")) {
-                    let s = self.check_content(content.slice(1u, len - 1u));
+                    let s = self.check_content(content.slice(1, len - 1));
 
                     let pos = s.find(char::is_whitespace);
                     let pos = match pos {
@@ -704,8 +704,8 @@ impl Parser {
                       Some(pos) => { pos }
                     };
 
-                    self.otag = @s.slice(0u, pos).to_str();
-                    self.otag_chars = @(*self.otag).iter().collect();
+                    self.otag = s.slice(0, pos).to_str();
+                    self.otag_chars = @self.otag.iter().collect();
 
                     let s2 = s.slice_from(pos);
                     let pos = s2.find(|c| !char::is_whitespace(c));
@@ -714,8 +714,8 @@ impl Parser {
                       Some(pos) => { pos }
                     };
 
-                    self.ctag = @s2.slice_from(pos).to_str();
-                    self.ctag_chars = @(*self.ctag).iter().collect();
+                    self.ctag = s2.slice_from(pos).to_str();
+                    self.ctag_chars = @self.ctag.iter().collect();
                 } else {
                     fail!("invalid change delimiter tag content");
                 }
@@ -737,7 +737,7 @@ impl Parser {
         }
     }
 
-    fn add_partial(&mut self, content: &str, tag: @~str) {
+    fn add_partial(&mut self, content: &str, tag: ~str) {
         let token_class = self.classify_token();
         let indent = match token_class.clone() {
             Normal => ~"",
@@ -754,7 +754,7 @@ impl Parser {
 
                 // Trim the whitespace from the last token.
                 self.tokens.pop();
-                self.tokens.push(Text(@s.slice(0u, pos).to_str()));
+                self.tokens.push(Text(s.slice(0, pos).to_str()));
 
                 ws.to_owned()
             }
@@ -763,45 +763,45 @@ impl Parser {
         // We can't inline the tokens directly as we may have a recursive
         // partial. So instead, we'll cache the partials we used and look them
         // up later.
-        let name = content.slice(1u, content.len());
-        let name = @self.check_content(name);
+        let name = content.slice(1, content.len());
+        let name = self.check_content(name);
 
-        self.tokens.push(Partial(name, @indent, tag));
+        self.tokens.push(Partial(name.to_owned(), indent, tag));
         self.partials.push(name);
     }
 
     fn not_otag(&mut self) {
-        let mut i = 0u;
+        let mut i = 0;
         while i < self.tag_position {
             self.content.push_char(self.otag_chars[i]);
-            i += 1u;
+            i += 1;
         }
     }
 
     fn not_ctag(&mut self) {
-        let mut i = 0u;
+        let mut i = 0;
         while i < self.tag_position {
             self.content.push_char(self.ctag_chars[i]);
-            i += 1u;
+            i += 1;
         }
     }
 
     fn check_content(&self, content: &str) -> ~str {
         let trimmed = content.trim();
-        if trimmed.len() == 0u {
+        if trimmed.len() == 0 {
             fail!(~"empty tag");
         }
         trimmed.to_owned()
     }
 }
 
-struct CompileContext {
+struct CompileContext<'self> {
     rdr: @Reader,
-    partials: @mut HashMap<@~str, @~[Token]>,
-    otag: @~str,
-    ctag: @~str,
-    template_path: @~str,
-    template_extension: @~str,
+    partials: @mut HashMap<~str, @~[Token]>,
+    otag: ~str,
+    ctag: ~str,
+    template_path: ~str,
+    template_extension: ~str,
 }
 
 fn compile_helper(ctx: &mut CompileContext) -> @~[Token] {
@@ -809,15 +809,15 @@ fn compile_helper(ctx: &mut CompileContext) -> @~[Token] {
         rdr: ctx.rdr,
         ch: '\0',
         lookahead: None,
-        line: 1u,
-        col: 1u,
+        line: 1,
+        col: 1,
         content: ~"",
         state: TEXT,
-        otag: ctx.otag,
-        ctag: ctx.ctag,
-        otag_chars: @(*ctx.otag).iter().collect::<~[char]>(),
-        ctag_chars: @(*ctx.ctag).iter().collect::<~[char]>(),
-        tag_position: 0u,
+        otag: ctx.otag.to_owned(),
+        ctag: ctx.ctag.to_owned(),
+        otag_chars: @ctx.otag.iter().collect::<~[char]>(),
+        ctag_chars: @ctx.ctag.iter().collect::<~[char]>(),
+        tag_position: 0,
         tokens: ~[],
         partials: ~[],
     };
@@ -828,11 +828,11 @@ fn compile_helper(ctx: &mut CompileContext) -> @~[Token] {
     // Compile the partials if we haven't done so already.
     for name in parser.partials.iter() {
         let mut path = Path::new(ctx.template_path.as_slice());
-        path.push(**name + *ctx.template_extension);
+        path.push(*name + ctx.template_extension);
 
         if !ctx.partials.contains_key(name) {
             // Insert a placeholder so we don't recurse off to infinity.
-            ctx.partials.insert(*name, @~[]);
+            ctx.partials.insert(name.to_owned(), @~[]);
 
             match io::file_reader(&path) {
                 Err(_e) => {}
@@ -840,14 +840,14 @@ fn compile_helper(ctx: &mut CompileContext) -> @~[Token] {
                     let mut inner_ctx = CompileContext {
                         rdr: rdr,
                         partials: ctx.partials.clone(),
-                        otag: @~"{{",
-                        ctag: @~"}}",
-                        template_path: ctx.template_path,
-                        template_extension: ctx.template_extension
+                        otag: ~"{{",
+                        ctag: ~"}}",
+                        template_path: ctx.template_path.to_owned(),
+                        template_extension: ctx.template_extension.to_owned(),
                     };
                     let tokens = compile_helper(&mut inner_ctx);
 
-                    ctx.partials.insert(*name, tokens);
+                    ctx.partials.insert(name.to_owned(), tokens);
               }
             }
         }
@@ -863,36 +863,9 @@ fn compile_helper(ctx: &mut CompileContext) -> @~[Token] {
 struct RenderContext {
     ctx: Context,
     tokens: @~[Token],
-    partials: @mut HashMap<@~str, @~[Token]>,
+    partials: @mut HashMap<~str, @~[Token]>,
     stack: @~[Data],
-    indent: @~str,
-}
-
-fn to_str(data: &Data) -> ~str {
-    match *data {
-        Str(ref s) => format!("{}", **s),
-        Bool(b) => format!("{}", b),
-        Vec(ref v) => {
-            let mut s = ~"[";
-
-            for (i, x) in v.iter().enumerate() {
-                if i != 0 { s.push_str(", "); }
-                s.push_str(to_str(x));
-            }
-
-            s.push_str("]");
-            s
-        }
-        Map(ref m) => {
-            let mut s = ~"{\n";
-            for (i, (k, v)) in m.iter().enumerate() {
-                if i != 0 { s.push_str(", "); }
-                s.push_str(format!("  {} => {:?}\n", **k, to_str(v)));
-            }
-            s.push_str("}");
-            s
-        }
-    }
+    indent: ~str,
 }
 
 fn render_helper(ctx: &RenderContext) -> ~str {
@@ -909,14 +882,14 @@ fn render_helper(ctx: &RenderContext) -> ~str {
         let mut value: Option<Data> = None;
 
         let mut i = stack.len();
-        while i > 0u {
-            match stack[i - 1u] {
+        while i > 0 {
+            match stack[i - 1] {
                 Map(ref ctx) => {
-                    match ctx.find(&@path[0u].clone()) {
+                    match ctx.find_equiv(&path[0]) {
                         Some(v) => { value = Some(v.clone()); break; }
                         None => {}
                     }
-                    i -= 1u;
+                    i -= 1;
                 }
                 _ => {
                     fail!("%? %?", stack, path)
@@ -927,20 +900,20 @@ fn render_helper(ctx: &RenderContext) -> ~str {
         // Walk the rest of the path to find our final value.
         let mut value = value;
 
-        let mut i = 1u;
+        let mut i = 1;
         let len = path.len();
 
         while i < len {
             value = match value {
                 Some(Map(v)) => {
-                    match v.find(&@path[i].clone()) {
+                    match v.find_equiv(&path[i]) {
                         Some(value) => Some(value.clone()),
                         None => None,
                     }
                 }
                 _ => break,
             };
-            i = i + 1u;
+            i = i + 1;
         }
 
         value
@@ -950,12 +923,12 @@ fn render_helper(ctx: &RenderContext) -> ~str {
     
     for token in ctx.tokens.iter() {
         match token {
-            &Text(value) => {
+            &Text(ref value) => {
                 // Indent the lines.
-                if *ctx.indent == ~"" {
+                if ctx.indent.equiv(& &"") {
                     output = output + *value;
                 } else {
-                    let mut pos = 0u;
+                    let mut pos = 0;
                     let len = value.len();
 
                     while pos < len {
@@ -973,8 +946,8 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                             }
                         };
 
-                        if line.char_at(0u) != '\n' {
-                            output.push_str(*ctx.indent);
+                        if line.char_at(0) != '\n' {
+                            output.push_str(ctx.indent);
                         }
 
                         output.push_str(line);
@@ -985,7 +958,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                 match find(*ctx.stack, *path) {
                     None => { }
                     Some(value) => {
-                        output = output + *ctx.indent + render_etag(value, ctx);
+                        output = output + ctx.indent + render_etag(value, ctx);
                     }
                 }
             }
@@ -993,7 +966,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                 match find(*ctx.stack, *path) {
                     None => { }
                     Some(value) => {
-                        output = output + *ctx.indent + render_utag(value, ctx);
+                        output = output + ctx.indent + render_utag(value, ctx);
                     }
                 }
             }
@@ -1005,27 +978,27 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     Some(value) => { render_inverted_section(value, &ctx) }
                 };
             }
-            &Section(path, false, children, otag, _, src, _, ctag) => {
+            &Section(path, false, children, ref otag, _, ref src, _, ref ctag) => {
                 match find(*ctx.stack, *path) {
                     None => { }
                     Some(value) => {
                         output = output + render_section(
                             value,
-                            src,
-                            otag,
-                            ctag,
+                            *src,
+                            *otag,
+                            *ctag,
                             &RenderContext { tokens: children ,.. ctx.clone() }
                         );
                     }
                 }
             }
-            &Partial(ref name, ind, _) => {
+            &Partial(ref name, ref ind, _) => {
                 match ctx.partials.find(name) {
                     None => { }
                     Some(tokens) => {
                         output = output + render_helper(&RenderContext {
                             tokens: *tokens,
-                            indent: @(*ctx.indent + *ind),
+                            indent: ctx.indent + *ind,
                             .. ctx.clone()
                         });
                     }
@@ -1056,10 +1029,10 @@ fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
 
 fn render_utag(value: Data, _ctx: &RenderContext) -> ~str {
     match value {
-        Str(s) => (*s).clone(),
+        Str(ref s) => s.clone(),
 
         // etags and utags use the default delimiter.
-        //Fun(f) => render_fun(ctx, @~"", @~"{{", @~"}}", f),
+        //Fun(f) => render_fun(ctx, ~"", ~"{{", ~"}}", f),
 
         _ => fail!(),
     }
@@ -1068,15 +1041,15 @@ fn render_utag(value: Data, _ctx: &RenderContext) -> ~str {
 fn render_inverted_section(value: Data, ctx: &RenderContext) -> ~str {
     match value {
         Bool(false) => render_helper(ctx),
-        Vec(xs) if xs.len() == 0 => render_helper(ctx),
+        Vec(ref xs) if xs.len() == 0 => render_helper(ctx),
         _ => ~"",
     }
 }
 
 fn render_section(value: Data,
-                  _src: @~str,
-                  _otag: @~str,
-                  _ctag: @~str,
+                  _src: &str,
+                  _otag: &str,
+                  _ctag: &str,
                   ctx: &RenderContext) -> ~str {
     match value {
         Bool(true) => render_helper(ctx),
@@ -1101,18 +1074,18 @@ fn render_section(value: Data,
 }
 
 fn render_fun(ctx: &RenderContext,
-              src: @~str,
-              otag: @~str,
-              ctag: @~str,
-              f: &fn(@~str) -> ~str) -> ~str {
+              src: &str,
+              otag: &str,
+              ctag: &str,
+              f: &fn(&str) -> ~str) -> ~str {
     let tokens = do io::with_str_reader(f(src)) |rdr| {
         let mut inner_ctx = CompileContext {
             rdr: rdr,
             partials: ctx.partials.clone(),
-            otag: otag,
-            ctag: ctag,
-            template_path: ctx.ctx.template_path,
-            template_extension: ctx.ctx.template_extension
+            otag: otag.to_owned(),
+            ctag: ctag.to_owned(),
+            template_path: ctx.ctx.template_path.to_owned(),
+            template_extension: ctx.ctx.template_extension.to_owned(),
         };
         compile_helper(&mut inner_ctx)
     };
@@ -1139,7 +1112,14 @@ mod tests {
     fn token_to_str(token: &Token) -> ~str {
         match *token {
             // recursive enums crash %?
-            Section(name, inverted, children, otag, osection, src, tag, ctag) => {
+            Section(name,
+                    inverted,
+                    children,
+                    ref otag,
+                    ref osection,
+                    ref src,
+                    ref tag,
+                    ref ctag) => {
                 let children = children.map(|x| token_to_str(x));
                 fmt!("Section(%?, %?, %?, %?, %?, %?, %?, %?)",
                     name,
@@ -1170,55 +1150,55 @@ mod tests {
 
     #[test]
     fn test_compile_texts() {
-        assert!(check_tokens(*compile_str("hello world").tokens, [Text(@~"hello world")]));
-        assert!(check_tokens(*compile_str("hello {world").tokens, [Text(@~"hello {world")]));
-        assert!(check_tokens(*compile_str("hello world}").tokens, [Text(@~"hello world}")]));
-        assert!(check_tokens(*compile_str("hello world}}").tokens, [Text(@~"hello world}}")]));
+        assert!(check_tokens(*compile_str("hello world").tokens, [Text(~"hello world")]));
+        assert!(check_tokens(*compile_str("hello {world").tokens, [Text(~"hello {world")]));
+        assert!(check_tokens(*compile_str("hello world}").tokens, [Text(~"hello world}")]));
+        assert!(check_tokens(*compile_str("hello world}}").tokens, [Text(~"hello world}}")]));
     }
 
     #[test]
     fn test_compile_etags() {
         assert!(check_tokens(*compile_str("{{ name }}").tokens, [
-            ETag(@~[~"name"], @~"{{ name }}")
+            ETag(@~[~"name"], ~"{{ name }}")
         ]));
 
         assert!(check_tokens(*compile_str("before {{name}} after").tokens, [
-            Text(@~"before "),
-            ETag(@~[~"name"], @~"{{name}}"),
-            Text(@~" after")
+            Text(~"before "),
+            ETag(@~[~"name"], ~"{{name}}"),
+            Text(~" after")
         ]));
 
         assert!(check_tokens(*compile_str("before {{name}}").tokens, [
-            Text(@~"before "),
-            ETag(@~[~"name"], @~"{{name}}")
+            Text(~"before "),
+            ETag(@~[~"name"], ~"{{name}}")
         ]));
 
         assert!(check_tokens(*compile_str("{{name}} after").tokens, [
-            ETag(@~[~"name"], @~"{{name}}"),
-            Text(@~" after")
+            ETag(@~[~"name"], ~"{{name}}"),
+            Text(~" after")
         ]));
     }
 
     #[test]
     fn test_compile_utags() {
         assert!(check_tokens(*compile_str("{{{name}}}").tokens, [
-            UTag(@~[~"name"], @~"{{{name}}}")
+            UTag(@~[~"name"], ~"{{{name}}}")
         ]));
 
         assert!(check_tokens(*compile_str("before {{{name}}} after").tokens, [
-            Text(@~"before "),
-            UTag(@~[~"name"], @~"{{{name}}}"),
-            Text(@~" after")
+            Text(~"before "),
+            UTag(@~[~"name"], ~"{{{name}}}"),
+            Text(~" after")
         ]));
 
         assert!(check_tokens(*compile_str("before {{{name}}}").tokens, [
-            Text(@~"before "),
-            UTag(@~[~"name"], @~"{{{name}}}")
+            Text(~"before "),
+            UTag(@~[~"name"], ~"{{{name}}}")
         ]));
 
         assert!(check_tokens(*compile_str("{{{name}}} after").tokens, [
-            UTag(@~[~"name"], @~"{{{name}}}"),
-            Text(@~" after")
+            UTag(@~[~"name"], ~"{{{name}}}"),
+            Text(~" after")
         ]));
     }
 
@@ -1229,40 +1209,40 @@ mod tests {
                 @~[~"name"],
                 false,
                 @~[],
-                @~"{{",
-                @~"{{# name}}",
-                @~"",
-                @~"{{/name}}",
-                @~"}}"
+                ~"{{",
+                ~"{{# name}}",
+                ~"",
+                ~"{{/name}}",
+                ~"}}"
             )
         ]));
 
         assert!(check_tokens(*compile_str("before {{^name}}{{/name}} after").tokens, [
-            Text(@~"before "),
+            Text(~"before "),
             Section(
                 @~[~"name"],
                 true,
                 @~[],
-                @~"{{",
-                @~"{{^name}}",
-                @~"",
-                @~"{{/name}}",
-                @~"}}"
+                ~"{{",
+                ~"{{^name}}",
+                ~"",
+                ~"{{/name}}",
+                ~"}}"
             ),
-            Text(@~" after")
+            Text(~" after")
         ]));
 
         assert!(check_tokens(*compile_str("before {{#name}}{{/name}}").tokens, [
-            Text(@~"before "),
+            Text(~"before "),
             Section(
                 @~[~"name"],
                 false,
                 @~[],
-                @~"{{",
-                @~"{{#name}}",
-                @~"",
-                @~"{{/name}}",
-                @~"}}"
+                ~"{{",
+                ~"{{#name}}",
+                ~"",
+                ~"{{/name}}",
+                ~"}}"
             )
         ]));
 
@@ -1271,74 +1251,74 @@ mod tests {
                 @~[~"name"],
                 false,
                 @~[],
-                @~"{{",
-                @~"{{#name}}",
-                @~"",
-                @~"{{/name}}",
-                @~"}}"
+                ~"{{",
+                ~"{{#name}}",
+                ~"",
+                ~"{{/name}}",
+                ~"}}"
             ),
-            Text(@~" after")
+            Text(~" after")
         ]));
 
         assert!(check_tokens(*compile_str(
                 "before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after").tokens, [
-            Text(@~"before "),
+            Text(~"before "),
             Section(
                 @~[~"a"],
                 false,
                 @~[
-                    Text(@~" 1 "),
+                    Text(~" 1 "),
                     Section(
                         @~[~"b"],
                         true,
-                        @~[Text(@~" 2 ")],
-                        @~"{{",
-                        @~"{{^b}}",
-                        @~" 2 ",
-                        @~"{{/b}}",
-                        @~"}}"
+                        @~[Text(~" 2 ")],
+                        ~"{{",
+                        ~"{{^b}}",
+                        ~" 2 ",
+                        ~"{{/b}}",
+                        ~"}}"
                     ),
-                    Text(@~" ")
+                    Text(~" ")
                 ],
-                @~"{{",
-                @~"{{#a}}",
-                @~" 1 {{^b}} 2 {{/b}} ",
-                @~"{{/a}}",
-                @~"}}"
+                ~"{{",
+                ~"{{#a}}",
+                ~" 1 {{^b}} 2 {{/b}} ",
+                ~"{{/a}}",
+                ~"}}"
             ),
-            Text(@~" after")
+            Text(~" after")
         ]));
     }
 
     #[test]
     fn test_compile_partials() {
         assert!(check_tokens(*compile_str("{{> test}}").tokens, [
-            Partial(@~"test", @~"", @~"{{> test}}")
+            Partial(~"test", ~"", ~"{{> test}}")
         ]));
 
         assert!(check_tokens(*compile_str("before {{>test}} after").tokens, [
-            Text(@~"before "),
-            Partial(@~"test", @~"", @~"{{>test}}"),
-            Text(@~" after")
+            Text(~"before "),
+            Partial(~"test", ~"", ~"{{>test}}"),
+            Text(~" after")
         ]));
 
         assert!(check_tokens(*compile_str("before {{> test}}").tokens, [
-            Text(@~"before "),
-            Partial(@~"test", @~"", @~"{{> test}}")
+            Text(~"before "),
+            Partial(~"test", ~"", ~"{{> test}}")
         ]));
 
         assert!(check_tokens(*compile_str("{{>test}} after").tokens, [
-            Partial(@~"test", @~"", @~"{{>test}}"),
-            Text(@~" after")
+            Partial(~"test", ~"", ~"{{>test}}"),
+            Text(~" after")
         ]));
     }
 
     #[test]
     fn test_compile_delimiters() {
         assert!(check_tokens(*compile_str("before {{=<% %>=}}<%name%> after").tokens, [
-            Text(@~"before "),
-            ETag(@~[~"name"], @~"<%name%>"),
-            Text(@~" after")
+            Text(~"before "),
+            ETag(@~[~"name"], ~"<%name%>"),
+            Text(~" after")
         ]));
     }
 
@@ -1370,7 +1350,7 @@ mod tests {
         assert!(render_str("hello {{{name}}}", ctx) == ~"hello world");
     }
 
-    struct StrHash<V>(HashMap<@~str, V>);
+    struct StrHash<V>(HashMap<~str, V>);
 
     impl<E: serialize::Encoder, V> serialize::Encodable<E> for StrHash<V> {
         fn encode(&self, e: &mut E) {
@@ -1385,20 +1365,20 @@ mod tests {
 
         assert!(template.render_data(Map(ctx0.clone())) == ~"05");
 
-        ctx0.insert(@~"a", Vec(@mut ~[]));
+        ctx0.insert(~"a", Vec(~[]));
         assert!(template.render_data(Map(ctx0.clone())) == ~"05");
 
-        let ctx1: HashMap<@~str, Data> = HashMap::new();
-        ctx0.insert(@~"a", Vec(@mut ~[Map(ctx1.clone())]));
+        let ctx1: HashMap<~str, Data> = HashMap::new();
+        ctx0.insert(~"a", Vec(~[Map(ctx1.clone())]));
 
         assert!(template.render_data(Map(ctx0.clone())) == ~"01  35");
 
         let mut ctx1 = HashMap::new();
-        ctx1.insert(@~"n", Str(@~"a"));
-        ctx0.insert(@~"a", Vec(@mut ~[Map(ctx1.clone())]));
+        ctx1.insert(~"n", Str(~"a"));
+        ctx0.insert(~"a", Vec(~[Map(ctx1.clone())]));
         assert!(template.render_data(Map(ctx0.clone())) == ~"01 a 35");
 
-        //ctx0.insert(@~"a", Fun(|_text| {~"foo"}));
+        //ctx0.insert(~"a", Fun(|_text| {~"foo"}));
         //assert!(template.render_data(Map(ctx0)) == ~"0foo5");
     }
 
@@ -1409,14 +1389,14 @@ mod tests {
         let mut ctx0 = HashMap::new();
         assert!(template.render_data(Map(ctx0.clone())) == ~"01 35");
 
-        ctx0.insert(@~"a", Vec(@mut ~[]));
+        ctx0.insert(~"a", Vec(~[]));
         assert!(template.render_data(Map(ctx0.clone())) == ~"01 35");
 
         let mut ctx1 = HashMap::new();
-        ctx0.insert(@~"a", Vec(@mut ~[Map(ctx1.clone())]));
+        ctx0.insert(~"a", Vec(~[Map(ctx1.clone())]));
         assert!(template.render_data(Map(ctx0.clone())) == ~"05");
 
-        ctx1.insert(@~"n", Str(@~"a"));
+        ctx1.insert(~"n", Str(~"a"));
         assert!(template.render_data(Map(ctx0.clone())) == ~"05");
     }
 
@@ -1428,24 +1408,24 @@ mod tests {
         let mut ctx0 = HashMap::new();
         assert_eq!(template.render_data(Map(ctx0.clone())), ~"<h2>Names</h2>\n");
 
-        ctx0.insert(@~"names", Vec(@mut ~[]));
+        ctx0.insert(~"names", Vec(~[]));
         assert_eq!(template.render_data(Map(ctx0.clone())), ~"<h2>Names</h2>\n");
 
         let mut ctx1 = HashMap::new();
-        ctx0.insert(@~"names", Vec(@mut ~[Map(ctx1.clone())]));
+        ctx0.insert(~"names", Vec(~[Map(ctx1.clone())]));
         assert_eq!(
             template.render_data(Map(ctx0.clone())),
             ~"<h2>Names</h2>\n  <strong></strong>\n\n");
 
-        ctx1.insert(@~"name", Str(@~"a"));
-        ctx0.insert(@~"names", Vec(@mut ~[Map(ctx1.clone())]));
+        ctx1.insert(~"name", Str(~"a"));
+        ctx0.insert(~"names", Vec(~[Map(ctx1.clone())]));
         assert_eq!(
             template.render_data(Map(ctx0.clone())),
             ~"<h2>Names</h2>\n  <strong>a</strong>\n\n");
 
         let mut ctx2 = HashMap::new();
-        ctx2.insert(@~"name", Str(@~"<b>"));
-        ctx0.insert(@~"names", Vec(@mut ~[Map(ctx1), Map(ctx2)]));
+        ctx2.insert(~"name", Str(~"<b>"));
+        ctx0.insert(~"names", Vec(~[Map(ctx1), Map(ctx2)]));
         assert_eq!(
             template.render_data(Map(ctx0)),
             ~"<h2>Names</h2>\n  <strong>a</strong>\n\n  <strong>&lt;b&gt;</strong>\n\n");
@@ -1476,7 +1456,7 @@ mod tests {
     }
 
 /*
-    fn convert_json_map(map: json::Object) -> HashMap<@~str, Data> {
+    fn convert_json_map(map: json::Object) -> HashMap<~str, Data> {
         let mut d = HashMap::new();
         for (key, value) in map.move_iter() {
             d.insert(@key.to_owned(), convert_json(value));
@@ -1493,7 +1473,7 @@ mod tests {
           }
           json::String(s) => { Str(@s.to_owned()) }
           json::Boolean(b) => { Bool(b) }
-          json::List(v) => { Vec(@mut v.map(convert_json)) }
+          json::List(v) => { Vec(v.map(convert_json)) }
           json::Object(d) => { Map(convert_json_map(d)) }
           _ => { fail!("%?", value) }
         }
@@ -1669,23 +1649,23 @@ mod tests {
                     |_text| {~">" }
                 }
                 json::String(~"Section") => {
-                    |text: @~str| {if *text == ~"{{x}}" { ~"yes" } else { ~"no" } }
+                    |text: ~str| {if *text == ~"{{x}}" { ~"yes" } else { ~"no" } }
                 }
                 json::String(~"Section - Expansion") => {
-                    |text: @~str| {*text + "{{planet}}" + *text }
+                    |text: ~str| {*text + "{{planet}}" + *text }
                 }
                 json::String(~"Section - Alternate Delimiters") => {
-                    |text: @~str| {*text + "{{planet}} => |planet|" + *text }
+                    |text: ~str| {*text + "{{planet}} => |planet|" + *text }
                 }
                 json::String(~"Section - Multiple Calls") => {
-                    |text: @~str| {~"__" + *text + ~"__" }
+                    |text: ~str| {~"__" + *text + ~"__" }
                 }
                 json::String(~"Inverted Section") => {
                     |_text| {~"" }
                 }
                 value => { fail!("%?", value) }
             };
-            //ctx.insert(@~"lambda", Fun(f));
+            //ctx.insert(~"lambda", Fun(f));
 
             run_test(test, Map(ctx));
         }
