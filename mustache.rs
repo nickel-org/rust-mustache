@@ -721,11 +721,18 @@ impl Parser {
                 }
             }
             _ => {
-                let name = self.check_content(content);
-                let name = @name.split_terminator_iter('.')
-                    .map(|x| x.to_owned())
-                    .collect();
-                self.tokens.push(ETag(name, tag));
+                // If the name is "." then we want the top element, which we represent with
+                // an empty name.
+                let name = match self.check_content(content) {
+                    ~"." => ~[],
+                    name => {
+                        name.split_terminator_iter('.')
+                            .map(|x| x.to_owned())
+                            .collect()
+                    }
+                };
+
+                self.tokens.push(ETag(@name, tag));
             }
         }
     }
@@ -861,6 +868,33 @@ struct RenderContext {
     indent: @~str,
 }
 
+fn to_str(data: &Data) -> ~str {
+    match *data {
+        Str(ref s) => format!("{}", **s),
+        Bool(b) => format!("{}", b),
+        Vec(ref v) => {
+            let mut s = ~"[";
+
+            for (i, x) in v.iter().enumerate() {
+                if i != 0 { s.push_str(", "); }
+                s.push_str(to_str(x));
+            }
+
+            s.push_str("]");
+            s
+        }
+        Map(ref m) => {
+            let mut s = ~"{\n";
+            for (i, (k, v)) in m.iter().enumerate() {
+                if i != 0 { s.push_str(", "); }
+                s.push_str(format!("  {} => {:?}\n", **k, to_str(v)));
+            }
+            s.push_str("}");
+            s
+        }
+    }
+}
+
 fn render_helper(ctx: &RenderContext) -> ~str {
     fn find(stack: &[Data], path: &[~str]) -> Option<Data> {
         // If we have an empty path, we just want the top value in our stack.
@@ -885,7 +919,6 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     i -= 1u;
                 }
                 _ => {
-                    println!("hey: {:?}", stack.last());
                     fail!("%? %?", stack, path)
                 }
             }
@@ -1093,7 +1126,6 @@ fn render_fun(ctx: &RenderContext,
 mod tests {
     use std::hashmap::HashMap;
     use std::io;
-    use std::os;
     use extra::json;
     use extra::serialize::Encodable;
     use extra::serialize;
@@ -1101,7 +1133,7 @@ mod tests {
     use super::{compile_str, render_str};
     use super::{compile_file};
     use super::{Context, Encoder};
-    use super::{Data, Str, Bool, Vec, Map};
+    use super::{Data, Str, Vec, Map};
     use super::{Token, Text, ETag, UTag, Section, Partial};
 
     fn token_to_str(token: &Token) -> ~str {
@@ -1536,13 +1568,13 @@ mod tests {
                 }
             }
 
-            println(fmt!("desc:     %s", test.find(&~"desc").unwrap().to_str()));
-            println(fmt!("context:  %s", test.find(&~"data").unwrap().to_str()));
-            println("=>");
-            println(fmt!("template: %?", template));
-            println(fmt!("expected: %?", expected));
-            println(fmt!("actual:   %?", result));
-            println("");
+            println!("desc:     {}", test.find(&~"desc").unwrap().to_str());
+            println!("context:  {}", test.find(&~"data").unwrap().to_str());
+            println!("=>");
+            println!("template: {:?}", template);
+            println!("expected: {:?}", expected);
+            println!("actual:   {:?}", result);
+            println!("");
         }
         assert_eq!(result, expected);
     }
@@ -1592,12 +1624,10 @@ mod tests {
         run_tests("spec/specs/partials.json");
     }
 
-    /*
     #[test]
     fn test_spec_sections() {
         run_tests("spec/specs/sections.json");
     }
-    */
 
 /*
     #[test]
