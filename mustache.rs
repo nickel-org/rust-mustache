@@ -468,9 +468,9 @@ impl Parser {
                             self.bump();
                         }
                     } else {
-                        fail!("character %? is not part of CTAG: %?",
-                            self.ch,
-                            self.ctag_chars[self.tag_position]);
+                        fail!("character {} is not part of CTAG: {}",
+                              self.ch,
+                              self.ctag_chars[self.tag_position]);
                     }
                 }
             }
@@ -487,8 +487,8 @@ impl Parser {
         for token in self.tokens.iter() {
             match *token {
                 IncompleteSection(name, _, _, _) => {
-                    fail!("Unclosed mustache section %s",
-                        (*name).connect("."));
+                    fail!("Unclosed mustache section {}",
+                          (*name).connect("."));
               }
               _ => {}
             }
@@ -892,7 +892,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     i -= 1;
                 }
                 _ => {
-                    fail!("%? %?", stack, path)
+                    fail!("{:?} {:?}", stack, path)
                 }
             }
         }
@@ -920,7 +920,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
     }
 
     let mut output = ~"";
-    
+
     for token in ctx.tokens.iter() {
         match token {
             &Text(ref value) => {
@@ -1121,18 +1121,18 @@ mod tests {
                     ref tag,
                     ref ctag) => {
                 let children = children.map(|x| token_to_str(x));
-                fmt!("Section(%?, %?, %?, %?, %?, %?, %?, %?)",
-                    name,
-                    inverted,
-                    children,
-                    otag,
-                    osection,
-                    src,
-                    tag,
-                    ctag)
+                format!("Section({:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?})",
+                        name,
+                        inverted,
+                        children,
+                        otag,
+                        osection,
+                        src,
+                        tag,
+                        ctag)
             }
             _ => {
-                fmt!("%?", token)
+                format!("{:?}", token)
             }
         }
     }
@@ -1142,7 +1142,7 @@ mod tests {
         let actual = do actual.map |x| {token_to_str(x)};
         let expected = do expected.map |x| {token_to_str(x)};
         if actual !=  expected {
-            io::stderr().write_line(fmt!("Found %?, but expected %?", actual, expected));
+            io::stderr().write_line(format!("Found {:?}, but expected {:?}", actual, expected));
             return false;
         }
         return true;
@@ -1444,10 +1444,10 @@ mod tests {
                                 let mut d = d;
                                 match d.pop(&~"tests") {
                                     Some(json::List(tests)) => tests,
-                                    _ => fail!("%s: tests key not a list", src),
+                                    _ => fail!("{}: tests key not a list", src),
                                 }
                             }
-                            _ => fail!("%s: JSON value not a map", src),
+                            _ => fail!("{}: JSON value not a map", src),
                         }
                     }
                 }
@@ -1467,15 +1467,15 @@ mod tests {
     fn convert_json(value: json::Json) -> Data {
         match value {
           json::Number(n) => {
-            // We have to cheat and use %? because %f doesn't convert 3.3 to
+            // We have to cheat and use {:?} because %f doesn't convert 3.3 to
             // 3.3.
-            Str(@fmt!("%?", n))
+            Str(@fmt!("{:?}", n))
           }
           json::String(s) => { Str(@s.to_owned()) }
           json::Boolean(b) => { Bool(b) }
           json::List(v) => { Vec(v.map(convert_json)) }
           json::Object(d) => { Map(convert_json_map(d)) }
-          _ => { fail!("%?", value) }
+          _ => { fail!("{:?}", value) }
         }
     }
     */
@@ -1663,7 +1663,7 @@ mod tests {
                 json::String(~"Inverted Section") => {
                     |_text| {~"" }
                 }
-                value => { fail!("%?", value) }
+                value => { fail!("{:?}", value) }
             };
             //ctx.insert(~"lambda", Fun(f));
 
