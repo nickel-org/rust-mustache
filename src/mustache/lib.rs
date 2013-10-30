@@ -1121,7 +1121,6 @@ mod tests {
     use extra::serialize;
     use extra::tempfile;
     use super::{compile_str, render_str};
-    use super::{compile_path};
     use super::{Context, Encoder};
     use super::{Data, Str, Vec, Map};
     use super::{Token, Text, ETag, UTag, Section, Partial};
@@ -1419,7 +1418,9 @@ mod tests {
 
     #[test]
     fn test_render_partial() {
-        let template = compile_path(Path::new("base")).unwrap();
+        let template = Context::new(Path::new("src/test-data"))
+            .compile_path(Path::new("base"))
+            .unwrap();
 
         let mut ctx0 = HashMap::new();
         assert_eq!(template.render_data(Map(ctx0.clone())), ~"<h2>Names</h2>\n");
