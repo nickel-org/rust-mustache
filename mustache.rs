@@ -326,7 +326,7 @@ pub enum TokenClass {
 
 pub struct Parser<'self, T> {
     rdr: &'self mut T,
-    ch: char,
+    ch: Option<char>,
     lookahead: Option<char>,
     line: uint,
     col: uint,
@@ -345,20 +345,25 @@ enum ParserState { TEXT, OTAG, TAG, CTAG }
 
 impl<'self, T: Iterator<char>> Parser<'self, T> {
     fn eof(&self) -> bool {
-        self.ch == unsafe { ::std::cast::transmute(-1u32) } // FIXME: #rust/8971: unsound
+        self.ch.is_none()
     }
 
     fn bump(&mut self) {
         match self.lookahead.take() {
-            None => { self.ch = self.rdr.next().unwrap(); }
-            Some(ch) => { self.ch = ch; }
+            None => { self.ch = self.rdr.next(); }
+            Some(ch) => { self.ch = Some(ch); }
         }
 
-        if self.ch == '\n' {
-            self.line += 1;
-            self.col = 1;
-        } else {
-            self.col += 1;
+        match self.ch {
+            Some(ch) => {
+                if ch == '\n' {
+                    self.line += 1;
+                    self.col = 1;
+                } else {
+                    self.col += 1;
+                }
+            }
+            None => { }
         }
     }
 
@@ -379,7 +384,7 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
         while !self.eof() {
             match self.state {
                 TEXT => {
-                    if self.ch == self.otag_chars[0] {
+                    if *self.ch.get_ref() == self.otag_chars[0] {
                         if self.otag_chars.len() > 1 {
                             self.tag_position = 1;
                             self.state = OTAG;
@@ -388,12 +393,12 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                             self.state = TAG;
                         }
                     } else {
-                        self.content.push_char(self.ch);
+                        self.content.push_char(*self.ch.get_ref());
                     }
                     self.bump();
                 }
                 OTAG => {
-                    if self.ch == self.otag_chars[self.tag_position] {
+                    if *self.ch.get_ref() == self.otag_chars[self.tag_position] {
                         if self.tag_position == self.otag_chars.len() - 1 {
                             self.add_text();
                             curly_brace_tag = false;
@@ -406,20 +411,20 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                         // so far to the string.
                         self.state = TEXT;
                         self.not_otag();
-                        self.content.push_char(self.ch);
+                        self.content.push_char(*self.ch.get_ref());
                     }
                     self.bump();
                 }
                 TAG => {
-                    if self.content == ~"" && self.ch == '{' {
+                    if self.content == ~"" && *self.ch.get_ref() == '{' {
                         curly_brace_tag = true;
-                        self.content.push_char(self.ch);
+                        self.content.push_char(*self.ch.get_ref());
                         self.bump();
-                    } else if curly_brace_tag && self.ch == '}' {
+                    } else if curly_brace_tag && *self.ch.get_ref() == '}' {
                         curly_brace_tag = false;
-                        self.content.push_char(self.ch);
+                        self.content.push_char(*self.ch.get_ref());
                         self.bump();
-                    } else if self.ch == self.ctag_chars[0] {
+                    } else if *self.ch.get_ref() == self.ctag_chars[0] {
                         if self.ctag_chars.len() > 1 {
                             self.tag_position = 1;
                             self.state = CTAG;
@@ -429,24 +434,24 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                             self.state = TEXT;
                         }
                     } else {
-                        self.content.push_char(self.ch);
+                        self.content.push_char(*self.ch.get_ref());
                         self.bump();
                     }
                 }
                 CTAG => {
-                    if self.ch == self.ctag_chars[self.tag_position] {
+                    if *self.ch.get_ref() == self.ctag_chars[self.tag_position] {
                         if self.tag_position == self.ctag_chars.len() - 1 {
                             self.add_tag();
                             self.state = TEXT;
                         } else {
                             self.state = TAG;
                             self.not_ctag();
-                            self.content.push_char(self.ch);
+                            self.content.push_char(*self.ch.get_ref());
                             self.bump();
                         }
                     } else {
                         fail!("character {} is not part of CTAG: {}",
-                              self.ch,
+                              *self.ch.get_ref(),
                               self.ctag_chars[self.tag_position]);
                     }
                 }
@@ -488,8 +493,8 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
     fn classify_token(&mut self) -> TokenClass {
         // Exit early if the next character is not '\n' or '\r\n'.
         if self.eof() ||
-           self.ch == '\n' ||
-           (self.ch == '\r' || self.peek() == '\n') {
+           *self.ch.get_ref() == '\n' ||
+           (*self.ch.get_ref() == '\r' || self.peek() == '\n') {
 
             // If the last token ends with a newline (or there is no previous
             // token), then this token is standalone.
@@ -533,12 +538,12 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
         match self.classify_token() {
             Normal => { false }
             StandAlone => {
-                if self.ch == '\r' { self.bump(); }
+                if *self.ch.get_ref() == '\r' { self.bump(); }
                 self.bump();
                 true
             }
             WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
-                if self.ch == '\r' { self.bump(); }
+                if *self.ch.get_ref() == '\r' { self.bump(); }
                 self.bump();
 
                 // Trim the whitespace from the last token.
@@ -718,12 +723,12 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
         let indent = match token_class.clone() {
             Normal => ~"",
             StandAlone => {
-                if self.ch == '\r' { self.bump(); }
+                if *self.ch.get_ref() == '\r' { self.bump(); }
                 self.bump();
                 ~""
             }
             WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
-                if self.ch == '\r' { self.bump(); }
+                if *self.ch.get_ref() == '\r' { self.bump(); }
                 self.bump();
 
                 let ws = s.slice(pos, s.len());
@@ -784,7 +789,7 @@ impl<'self, T: Iterator<char>> CompileContext<'self, T> {
     fn compile(&mut self) -> ~[Token] {
         let mut parser = Parser {
             rdr: self.rdr,
-            ch: '\0',
+            ch: None,
             lookahead: None,
             line: 1,
             col: 1,
