@@ -6,12 +6,23 @@
 extern mod std;
 extern mod extra;
 
-use extra::serialize;
-use std::io;
-use std::str;
 use std::char;
-use std::util;
 use std::hashmap::HashMap;
+use std::rt::io::file::FileInfo;
+use std::rt::io::mem::BufReader;
+use std::rt::io::{Reader, Open};
+use std::str;
+use std::util;
+use extra::serialize;
+
+/// Temporary hack.
+trait ReadChar {
+    fn read_char(&mut self) -> char;
+}
+
+impl<'self> ReadChar for &'self Reader {
+    fn read_char(&mut self) -> char { fail!() }
+}
 
 /// Represents template data.
 #[deriving(Clone)]
@@ -20,13 +31,11 @@ pub enum Data {
     Bool(bool),
     Vec(~[Data]),
     Map(HashMap<~str, Data>),
-    //Fun(@fn(~str) -> ~str),
+    //Fun(fn(~str) -> ~str),
 }
 
-/**
- * Represents the shared metadata needed to compile and render a mustache
- * template.
- */
+/// Represents the shared metadata needed to compile and render a mustache
+/// template.
 #[deriving(Clone)]
 pub struct Context {
     template_path: ~str,
@@ -35,13 +44,11 @@ pub struct Context {
 
 pub struct Template {
     ctx: Context,
-    tokens: @~[Token],
-    partials: @mut HashMap<~str, @~[Token]>
+    tokens: ~[Token],
+    partials: HashMap<~str, ~[Token]>
 }
 
-/**
- * Configures a mustache context with the partial template path and extension.
- */
+/// Configures a mustache context with the partial template path and extension.
 pub fn Context(template_path: ~str, template_extension: ~str) -> Context {
     Context {
         template_path: template_path,
@@ -49,20 +56,16 @@ pub fn Context(template_path: ~str, template_extension: ~str) -> Context {
     }
 }
 
-/**
- * Configures a mustache context looking for partial files in the current
- * directory.
- */
+/// Configures a mustache context looking for partial files in the current
+/// directory.
 pub fn default_context() -> Context { Context(~".", ~".mustache") }
 
 impl Context {
-    /// Compiles a template from an `io::Reader`.
-    fn compile_reader(&self, rdr: @Reader) -> Template {
-        let partials = @mut HashMap::new();
-
+    /// Compiles a template from an `io::rt::Reader`.
+    fn compile_reader(&self, rdr: &Reader) -> Template {
         let mut ctx = CompileContext {
             rdr: rdr,
-            partials: partials,
+            partials: HashMap::new(),
             otag: ~"{{",
             ctag: ~"}}",
             template_path: self.template_path.to_owned(),
@@ -74,38 +77,40 @@ impl Context {
         Template {
             ctx: self.clone(),
             tokens: tokens,
-            partials: partials
+            partials: ctx.partials,
         }
     }
 
     /// Compiles a template from a file.
-    fn compile_file(&self, file: &str) -> Template {
+    fn compile_file(&self, file: &str) -> Option<Template> {
         let mut path = Path::new(self.template_path.as_slice());
         path.push(file.to_owned() + self.template_extension);
 
-        match io::file_reader(&path) {
-          Ok(rdr) => self.compile_reader(rdr),
-          Err(e) => fail!(e),
+        do path.open_reader(Open).and_then |rdr| {
+            Some(self.compile_reader(&rdr as &Reader))
         }
     }
 
     /// Compiles a template from a string.
     fn compile_str(&self, src: &str) -> Template {
-        io::with_str_reader(src, |rdr| self.compile_reader(rdr))
+        let rdr = BufReader::new(src.as_bytes());
+        self.compile_reader(&rdr as &Reader)
     }
 
     /// Renders a template from an Reader.
     fn render_reader<
         T: serialize::Encodable<Encoder>
-    >(&self, rdr: @Reader, data: &T) -> ~str {
+    >(&self, rdr: &Reader, data: &T) -> ~str {
         self.compile_reader(rdr).render(data)
     }
 
     /// Renders a template from a file.
     fn render_file<
         T: serialize::Encodable<Encoder>
-    >(&self, file: &str, data: &T) -> ~str {
-        self.compile_file(file).render(data)
+    >(&self, file: &str, data: &T) -> Option<~str> {
+        do self.compile_file(file).and_then |template| {
+            Some(template.render(data))
+        }
     }
 
     /// Renders a template from a string.
@@ -117,12 +122,12 @@ impl Context {
 }
 
 /// Compiles a template from an `Reader`.
-pub fn compile_reader(rdr: @Reader) -> Template {
+pub fn compile_reader(rdr: &Reader) -> Template {
     default_context().compile_reader(rdr)
 }
 
 /// Compiles a template from a file.
-pub fn compile_file(file: &str) -> Template {
+pub fn compile_file(file: &str) -> Option<Template> {
     default_context().compile_file(file)
 }
 
@@ -134,15 +139,17 @@ pub fn compile_str(template: &str) -> Template {
 /// Renders a template from an `Reader`.
 pub fn render_reader<
     T: serialize::Encodable<Encoder>
->(rdr: @Reader, data: &T) -> ~str {
+>(rdr: &Reader, data: &T) -> ~str {
     default_context().compile_reader(rdr).render(data)
 }
 
 /// Renders a template from a file.
 pub fn render_file<
     T: serialize::Encodable<Encoder>
->(file: &str, data: &T) -> ~str {
-    default_context().compile_file(file).render(data)
+>(file: &str, data: &T) -> Option<~str> {
+    do default_context().compile_file(file).and_then |template| {
+        Some(template.render(data))
+    }
 }
 
 /// Renders a template from a string.
@@ -321,9 +328,11 @@ impl Template {
     fn render_data(&self, data: Data) -> ~str {
         render_helper(&RenderContext {
             ctx: self.ctx.clone(),
-            tokens: self.tokens,
-            partials: self.partials,
-            stack: @~[data],
+            // FIXME: #rust/9382
+            // This should be `tokens: self.tokens,` but that's broken
+            tokens: self.tokens.as_slice(),
+            partials: &self.partials,
+            stack: ~[data],
             indent: ~""
         })
     }
@@ -332,10 +341,10 @@ impl Template {
 #[deriving(Clone)]
 pub enum Token {
     Text(~str),
-    ETag(@~[~str], ~str),
-    UTag(@~[~str], ~str),
-    Section(@~[~str], bool, @~[Token], ~str, ~str, ~str, ~str, ~str),
-    IncompleteSection(@~[~str], bool, ~str, bool),
+    ETag(~[~str], ~str),
+    UTag(~[~str], ~str),
+    Section(~[~str], bool, ~[Token], ~str, ~str, ~str, ~str, ~str),
+    IncompleteSection(~[~str], bool, ~str, bool),
     Partial(~str, ~str, ~str),
 }
 
@@ -347,8 +356,8 @@ pub enum TokenClass {
     NewLineWhiteSpace(~str, uint),
 }
 
-pub struct Parser {
-    rdr: @Reader,
+pub struct Parser<'self> {
+    rdr: &'self Reader,
     ch: char,
     lookahead: Option<char>,
     line: uint,
@@ -357,8 +366,8 @@ pub struct Parser {
     state: ParserState,
     otag: ~str,
     ctag: ~str,
-    otag_chars: @~[char],
-    ctag_chars: @~[char],
+    otag_chars: ~[char],
+    ctag_chars: ~[char],
     tag_position: uint,
     tokens: ~[Token],
     partials: ~[~str],
@@ -366,7 +375,7 @@ pub struct Parser {
 
 enum ParserState { TEXT, OTAG, TAG, CTAG }
 
-impl Parser {
+impl<'self> Parser<'self> {
     fn eof(&self) -> bool {
         self.ch == unsafe { ::std::cast::transmute(-1u32) } // FIXME: #rust/8971: unsound
     }
@@ -486,9 +495,8 @@ impl Parser {
         // Check that we don't have any incomplete sections.
         for token in self.tokens.iter() {
             match *token {
-                IncompleteSection(name, _, _, _) => {
-                    fail!("Unclosed mustache section {}",
-                          (*name).connect("."));
+                IncompleteSection(ref path, _, _, _) => {
+                    fail!("Unclosed mustache section {}", path.connect("."));
               }
               _ => {}
             }
@@ -592,7 +600,7 @@ impl Parser {
             '&' => {
                 let name = content.slice(1, len);
                 let name = self.check_content(name);
-                let name = @name.split_terminator_iter('.')
+                let name = name.split_terminator_iter('.')
                     .map(|x| x.to_owned())
                     .collect();
                 self.tokens.push(UTag(name, tag));
@@ -601,7 +609,7 @@ impl Parser {
                 if content.ends_with("}") {
                     let name = content.slice(1, len - 1);
                     let name = self.check_content(name);
-                    let name = @name.split_terminator_iter('.')
+                    let name = name.split_terminator_iter('.')
                         .map(|x| x.to_owned())
                         .collect();
                     self.tokens.push(UTag(name, tag));
@@ -611,7 +619,7 @@ impl Parser {
                 let newlined = self.eat_whitespace();
 
                 let name = self.check_content(content.slice(1, len));
-                let name = @name.split_terminator_iter('.')
+                let name = name.split_terminator_iter('.')
                     .map(|x| x.to_owned())
                     .collect();
                 self.tokens.push(IncompleteSection(name, false, tag, newlined));
@@ -620,7 +628,7 @@ impl Parser {
                 let newlined = self.eat_whitespace();
 
                 let name = self.check_content(content.slice(1, len));
-                let name = @name.split_terminator_iter('.')
+                let name = name.split_terminator_iter('.')
                     .map(|x| x.to_owned())
                     .collect();
                 self.tokens.push(IncompleteSection(name, true, tag, newlined));
@@ -629,7 +637,7 @@ impl Parser {
                 self.eat_whitespace();
 
                 let name = self.check_content(content.slice(1, len));
-                let name = @name.split_terminator_iter('.')
+                let name = name.split_terminator_iter('.')
                     .map(|x| x.to_owned())
                     .collect();
                 let mut children: ~[Token] = ~[];
@@ -676,7 +684,7 @@ impl Parser {
                                     Section(
                                         name,
                                         inverted,
-                                        @children,
+                                        children,
                                         self.otag.to_owned(),
                                         osection,
                                         src,
@@ -705,7 +713,7 @@ impl Parser {
                     };
 
                     self.otag = s.slice(0, pos).to_str();
-                    self.otag_chars = @self.otag.iter().collect();
+                    self.otag_chars = self.otag.iter().collect();
 
                     let s2 = s.slice_from(pos);
                     let pos = s2.find(|c| !char::is_whitespace(c));
@@ -715,7 +723,7 @@ impl Parser {
                     };
 
                     self.ctag = s2.slice_from(pos).to_str();
-                    self.ctag_chars = @self.ctag.iter().collect();
+                    self.ctag_chars = self.ctag.iter().collect();
                 } else {
                     fail!("invalid change delimiter tag content");
                 }
@@ -732,7 +740,7 @@ impl Parser {
                     }
                 };
 
-                self.tokens.push(ETag(@name, tag));
+                self.tokens.push(ETag(name, tag));
             }
         }
     }
@@ -796,15 +804,15 @@ impl Parser {
 }
 
 struct CompileContext<'self> {
-    rdr: @Reader,
-    partials: @mut HashMap<~str, @~[Token]>,
+    rdr: &'self Reader,
+    partials: HashMap<~str, ~[Token]>,
     otag: ~str,
     ctag: ~str,
     template_path: ~str,
     template_extension: ~str,
 }
 
-fn compile_helper(ctx: &mut CompileContext) -> @~[Token] {
+fn compile_helper(ctx: &mut CompileContext) -> ~[Token] {
     let mut parser = Parser {
         rdr: ctx.rdr,
         ch: '\0',
@@ -815,8 +823,8 @@ fn compile_helper(ctx: &mut CompileContext) -> @~[Token] {
         state: TEXT,
         otag: ctx.otag.to_owned(),
         ctag: ctx.ctag.to_owned(),
-        otag_chars: @ctx.otag.iter().collect::<~[char]>(),
-        ctag_chars: @ctx.ctag.iter().collect::<~[char]>(),
+        otag_chars: ctx.otag.iter().collect::<~[char]>(),
+        ctag_chars: ctx.ctag.iter().collect::<~[char]>(),
         tag_position: 0,
         tokens: ~[],
         partials: ~[],
@@ -832,13 +840,12 @@ fn compile_helper(ctx: &mut CompileContext) -> @~[Token] {
 
         if !ctx.partials.contains_key(name) {
             // Insert a placeholder so we don't recurse off to infinity.
-            ctx.partials.insert(name.to_owned(), @~[]);
+            ctx.partials.insert(name.to_owned(), ~[]);
 
-            match io::file_reader(&path) {
-                Err(_e) => {}
-                Ok(rdr) => {
+            match path.open_reader(Open) {
+                Some(rdr) => {
                     let mut inner_ctx = CompileContext {
-                        rdr: rdr,
+                        rdr: &rdr as &Reader,
                         partials: ctx.partials.clone(),
                         otag: ~"{{",
                         ctag: ~"}}",
@@ -848,7 +855,8 @@ fn compile_helper(ctx: &mut CompileContext) -> @~[Token] {
                     let tokens = compile_helper(&mut inner_ctx);
 
                     ctx.partials.insert(name.to_owned(), tokens);
-              }
+                }
+                None => { }
             }
         }
     }
@@ -856,15 +864,15 @@ fn compile_helper(ctx: &mut CompileContext) -> @~[Token] {
     // Destructure the parser so we get get at the tokens without a copy.
     let Parser { tokens: tokens, _ } = parser;
 
-    @tokens
+    tokens
 }
 
 #[deriving(Clone)]
-struct RenderContext {
+struct RenderContext<'self> {
     ctx: Context,
-    tokens: @~[Token],
-    partials: @mut HashMap<~str, @~[Token]>,
-    stack: @~[Data],
+    tokens: &'self [Token],
+    partials: &'self HashMap<~str, ~[Token]>,
+    stack: ~[Data],
     indent: ~str,
 }
 
@@ -922,8 +930,8 @@ fn render_helper(ctx: &RenderContext) -> ~str {
     let mut output = ~"";
 
     for token in ctx.tokens.iter() {
-        match token {
-            &Text(ref value) => {
+        match *token {
+            Text(ref value) => {
                 // Indent the lines.
                 if ctx.indent.equiv(& &"") {
                     output = output + *value;
@@ -954,32 +962,37 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     }
                 }
             },
-            &ETag(path, _) => {
-                match find(*ctx.stack, *path) {
+            ETag(ref path, _) => {
+                match find(ctx.stack, *path) {
                     None => { }
                     Some(value) => {
                         output = output + ctx.indent + render_etag(value, ctx);
                     }
                 }
             }
-            &UTag(path, _) => {
-                match find(*ctx.stack, *path) {
+            UTag(ref path, _) => {
+                match find(ctx.stack, *path) {
                     None => { }
                     Some(value) => {
                         output = output + ctx.indent + render_utag(value, ctx);
                     }
                 }
             }
-            &Section(path, true, children, _, _, _, _, _) => {
-                let ctx = RenderContext { tokens: children, .. ctx.clone() };
+            Section(ref path, true, ref children, _, _, _, _, _) => {
+                let ctx = RenderContext {
+                    // FIXME: #rust/9382
+                    // This should be `tokens: *children,` but that's broken
+                    tokens: children.as_slice(),
+                    .. ctx.clone()
+                };
 
-                output = output + match find(*ctx.stack, *path) {
+                output = output + match find(ctx.stack, *path) {
                     None => { render_helper(&ctx) }
                     Some(value) => { render_inverted_section(value, &ctx) }
                 };
             }
-            &Section(path, false, children, ref otag, _, ref src, _, ref ctag) => {
-                match find(*ctx.stack, *path) {
+            Section(ref path, false, ref children, ref otag, _, ref src, _, ref ctag) => {
+                match find(ctx.stack, *path) {
                     None => { }
                     Some(value) => {
                         output = output + render_section(
@@ -987,17 +1000,24 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                             *src,
                             *otag,
                             *ctag,
-                            &RenderContext { tokens: children ,.. ctx.clone() }
+                            &RenderContext {
+                                // FIXME: #rust/9382
+                                // This should be `tokens: *children,` but that's broken
+                                tokens: children.as_slice(),
+                                .. ctx.clone()
+                            }
                         );
                     }
                 }
             }
-            &Partial(ref name, ref ind, _) => {
+            Partial(ref name, ref ind, _) => {
                 match ctx.partials.find(name) {
                     None => { }
                     Some(tokens) => {
                         output = output + render_helper(&RenderContext {
-                            tokens: *tokens,
+                            // FIXME: #rust/9382
+                            // This should be `tokens: *tokens,` but that's broken
+                            tokens: tokens.as_slice(),
                             indent: ctx.indent + *ind,
                             .. ctx.clone()
                         });
@@ -1059,14 +1079,14 @@ fn render_section(value: Data,
                 let mut stack = ctx.stack.to_owned();
                 stack.push(v.clone());
 
-                render_helper(&RenderContext { stack: @stack, .. (*ctx).clone() })
+                render_helper(&RenderContext { stack: stack, .. (*ctx).clone() })
             }.concat()
         }
         Map(_) => {
             let mut stack = ctx.stack.to_owned();
             stack.push(value);
 
-            render_helper(&RenderContext { stack: @stack, .. (*ctx).clone() })
+            render_helper(&RenderContext { stack: stack, .. (*ctx).clone() })
         }
         //Fun(f) => render_fun(ctx, src, otag, ctag, f),
         _ => fail!(),
@@ -1078,27 +1098,32 @@ fn render_fun(ctx: &RenderContext,
               otag: &str,
               ctag: &str,
               f: &fn(&str) -> ~str) -> ~str {
-    let tokens = do io::with_str_reader(f(src)) |rdr| {
-        let mut inner_ctx = CompileContext {
-            rdr: rdr,
-            partials: ctx.partials.clone(),
-            otag: otag.to_owned(),
-            ctag: ctag.to_owned(),
-            template_path: ctx.ctx.template_path.to_owned(),
-            template_extension: ctx.ctx.template_extension.to_owned(),
-        };
-        compile_helper(&mut inner_ctx)
+    let src = f(src);
+    let rdr = BufReader::new(src.as_bytes());
+    let mut inner_ctx = CompileContext {
+        rdr: &rdr as &Reader,
+        partials: ctx.partials.clone(),
+        otag: otag.to_owned(),
+        ctag: ctag.to_owned(),
+        template_path: ctx.ctx.template_path.to_owned(),
+        template_extension: ctx.ctx.template_extension.to_owned(),
     };
+    let tokens = compile_helper(&mut inner_ctx);
 
-    render_helper(&RenderContext { tokens: tokens ,.. ctx.clone() })
+    render_helper(&RenderContext {
+        // FIXME: #rust/9382
+        // This should be `tokens: tokens,` but that's broken
+        tokens: tokens.as_slice(),
+        .. ctx.clone()
+    })
 }
-
-
 
 #[cfg(test)]
 mod tests {
+    use std::str;
     use std::hashmap::HashMap;
-    use std::io;
+    use std::rt::io::file::FileInfo;
+    use std::rt::io::{CreateOrTruncate, Open, Writer};
     use extra::json;
     use extra::serialize::Encodable;
     use extra::serialize;
@@ -1112,9 +1137,9 @@ mod tests {
     fn token_to_str(token: &Token) -> ~str {
         match *token {
             // recursive enums crash %?
-            Section(name,
+            Section(ref name,
                     inverted,
-                    children,
+                    ref children,
                     ref otag,
                     ref osection,
                     ref src,
@@ -1142,7 +1167,7 @@ mod tests {
         let actual = do actual.map |x| {token_to_str(x)};
         let expected = do expected.map |x| {token_to_str(x)};
         if actual !=  expected {
-            io::stderr().write_line(format!("Found {:?}, but expected {:?}", actual, expected));
+            error!("Found {:?}, but expected {:?}", actual, expected);
             return false;
         }
         return true;
@@ -1150,65 +1175,65 @@ mod tests {
 
     #[test]
     fn test_compile_texts() {
-        assert!(check_tokens(*compile_str("hello world").tokens, [Text(~"hello world")]));
-        assert!(check_tokens(*compile_str("hello {world").tokens, [Text(~"hello {world")]));
-        assert!(check_tokens(*compile_str("hello world}").tokens, [Text(~"hello world}")]));
-        assert!(check_tokens(*compile_str("hello world}}").tokens, [Text(~"hello world}}")]));
+        assert!(check_tokens(compile_str("hello world").tokens, [Text(~"hello world")]));
+        assert!(check_tokens(compile_str("hello {world").tokens, [Text(~"hello {world")]));
+        assert!(check_tokens(compile_str("hello world}").tokens, [Text(~"hello world}")]));
+        assert!(check_tokens(compile_str("hello world}}").tokens, [Text(~"hello world}}")]));
     }
 
     #[test]
     fn test_compile_etags() {
-        assert!(check_tokens(*compile_str("{{ name }}").tokens, [
-            ETag(@~[~"name"], ~"{{ name }}")
+        assert!(check_tokens(compile_str("{{ name }}").tokens, [
+            ETag(~[~"name"], ~"{{ name }}")
         ]));
 
-        assert!(check_tokens(*compile_str("before {{name}} after").tokens, [
+        assert!(check_tokens(compile_str("before {{name}} after").tokens, [
             Text(~"before "),
-            ETag(@~[~"name"], ~"{{name}}"),
+            ETag(~[~"name"], ~"{{name}}"),
             Text(~" after")
         ]));
 
-        assert!(check_tokens(*compile_str("before {{name}}").tokens, [
+        assert!(check_tokens(compile_str("before {{name}}").tokens, [
             Text(~"before "),
-            ETag(@~[~"name"], ~"{{name}}")
+            ETag(~[~"name"], ~"{{name}}")
         ]));
 
-        assert!(check_tokens(*compile_str("{{name}} after").tokens, [
-            ETag(@~[~"name"], ~"{{name}}"),
+        assert!(check_tokens(compile_str("{{name}} after").tokens, [
+            ETag(~[~"name"], ~"{{name}}"),
             Text(~" after")
         ]));
     }
 
     #[test]
     fn test_compile_utags() {
-        assert!(check_tokens(*compile_str("{{{name}}}").tokens, [
-            UTag(@~[~"name"], ~"{{{name}}}")
+        assert!(check_tokens(compile_str("{{{name}}}").tokens, [
+            UTag(~[~"name"], ~"{{{name}}}")
         ]));
 
-        assert!(check_tokens(*compile_str("before {{{name}}} after").tokens, [
+        assert!(check_tokens(compile_str("before {{{name}}} after").tokens, [
             Text(~"before "),
-            UTag(@~[~"name"], ~"{{{name}}}"),
+            UTag(~[~"name"], ~"{{{name}}}"),
             Text(~" after")
         ]));
 
-        assert!(check_tokens(*compile_str("before {{{name}}}").tokens, [
+        assert!(check_tokens(compile_str("before {{{name}}}").tokens, [
             Text(~"before "),
-            UTag(@~[~"name"], ~"{{{name}}}")
+            UTag(~[~"name"], ~"{{{name}}}")
         ]));
 
-        assert!(check_tokens(*compile_str("{{{name}}} after").tokens, [
-            UTag(@~[~"name"], ~"{{{name}}}"),
+        assert!(check_tokens(compile_str("{{{name}}} after").tokens, [
+            UTag(~[~"name"], ~"{{{name}}}"),
             Text(~" after")
         ]));
     }
 
     #[test]
     fn test_compile_sections() {
-        assert!(check_tokens(*compile_str("{{# name}}{{/name}}").tokens, [
+        assert!(check_tokens(compile_str("{{# name}}{{/name}}").tokens, [
             Section(
-                @~[~"name"],
+                ~[~"name"],
                 false,
-                @~[],
+                ~[],
                 ~"{{",
                 ~"{{# name}}",
                 ~"",
@@ -1217,12 +1242,12 @@ mod tests {
             )
         ]));
 
-        assert!(check_tokens(*compile_str("before {{^name}}{{/name}} after").tokens, [
+        assert!(check_tokens(compile_str("before {{^name}}{{/name}} after").tokens, [
             Text(~"before "),
             Section(
-                @~[~"name"],
+                ~[~"name"],
                 true,
-                @~[],
+                ~[],
                 ~"{{",
                 ~"{{^name}}",
                 ~"",
@@ -1232,12 +1257,12 @@ mod tests {
             Text(~" after")
         ]));
 
-        assert!(check_tokens(*compile_str("before {{#name}}{{/name}}").tokens, [
+        assert!(check_tokens(compile_str("before {{#name}}{{/name}}").tokens, [
             Text(~"before "),
             Section(
-                @~[~"name"],
+                ~[~"name"],
                 false,
-                @~[],
+                ~[],
                 ~"{{",
                 ~"{{#name}}",
                 ~"",
@@ -1246,11 +1271,11 @@ mod tests {
             )
         ]));
 
-        assert!(check_tokens(*compile_str("{{#name}}{{/name}} after").tokens, [
+        assert!(check_tokens(compile_str("{{#name}}{{/name}} after").tokens, [
             Section(
-                @~[~"name"],
+                ~[~"name"],
                 false,
-                @~[],
+                ~[],
                 ~"{{",
                 ~"{{#name}}",
                 ~"",
@@ -1260,18 +1285,18 @@ mod tests {
             Text(~" after")
         ]));
 
-        assert!(check_tokens(*compile_str(
+        assert!(check_tokens(compile_str(
                 "before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after").tokens, [
             Text(~"before "),
             Section(
-                @~[~"a"],
+                ~[~"a"],
                 false,
-                @~[
+                ~[
                     Text(~" 1 "),
                     Section(
-                        @~[~"b"],
+                        ~[~"b"],
                         true,
-                        @~[Text(~" 2 ")],
+                        ~[Text(~" 2 ")],
                         ~"{{",
                         ~"{{^b}}",
                         ~" 2 ",
@@ -1292,22 +1317,22 @@ mod tests {
 
     #[test]
     fn test_compile_partials() {
-        assert!(check_tokens(*compile_str("{{> test}}").tokens, [
+        assert!(check_tokens(compile_str("{{> test}}").tokens, [
             Partial(~"test", ~"", ~"{{> test}}")
         ]));
 
-        assert!(check_tokens(*compile_str("before {{>test}} after").tokens, [
+        assert!(check_tokens(compile_str("before {{>test}} after").tokens, [
             Text(~"before "),
             Partial(~"test", ~"", ~"{{>test}}"),
             Text(~" after")
         ]));
 
-        assert!(check_tokens(*compile_str("before {{> test}}").tokens, [
+        assert!(check_tokens(compile_str("before {{> test}}").tokens, [
             Text(~"before "),
             Partial(~"test", ~"", ~"{{> test}}")
         ]));
 
-        assert!(check_tokens(*compile_str("{{>test}} after").tokens, [
+        assert!(check_tokens(compile_str("{{>test}} after").tokens, [
             Partial(~"test", ~"", ~"{{>test}}"),
             Text(~" after")
         ]));
@@ -1315,9 +1340,9 @@ mod tests {
 
     #[test]
     fn test_compile_delimiters() {
-        assert!(check_tokens(*compile_str("before {{=<% %>=}}<%name%> after").tokens, [
+        assert!(check_tokens(compile_str("before {{=<% %>=}}<%name%> after").tokens, [
             Text(~"before "),
-            ETag(@~[~"name"], ~"<%name%>"),
+            ETag(~[~"name"], ~"<%name%>"),
             Text(~" after")
         ]));
     }
@@ -1403,7 +1428,7 @@ mod tests {
     #[test]
     fn test_render_partial() {
         let path = ~"base";
-        let template = compile_file(path);
+        let template = compile_file(path).unwrap();
 
         let mut ctx0 = HashMap::new();
         assert_eq!(template.render_data(Map(ctx0.clone())), ~"<h2>Names</h2>\n");
@@ -1433,33 +1458,36 @@ mod tests {
 
     fn parse_spec_tests(src: &str) -> ~[json::Json] {
         let path = Path::new(src);
-        match io::read_whole_file_str(&path) {
-            Err(e) => fail!(e),
-            Ok(s) => {
-                match json::from_str(s) {
-                    Err(e) => fail!(e.to_str()),
-                    Ok(json) => {
-                        match json {
-                            json::Object(d) => {
-                                let mut d = d;
-                                match d.pop(&~"tests") {
-                                    Some(json::List(tests)) => tests,
-                                    _ => fail!("{}: tests key not a list", src),
-                                }
-                            }
-                            _ => fail!("{}: JSON value not a map", src),
+
+        let mut rdr = match path.open_reader(Open) {
+            Some(rdr) => rdr,
+            None => fail!(),
+        };
+
+        let s = str::from_utf8_owned(rdr.read_to_end());
+
+        match json::from_str(s) {
+            Err(e) => fail!(e.to_str()),
+            Ok(json) => {
+                match json {
+                    json::Object(d) => {
+                        let mut d = d;
+                        match d.pop(&~"tests") {
+                            Some(json::List(tests)) => tests,
+                            _ => fail!("{}: tests key not a list", src),
                         }
                     }
+                    _ => fail!("{}: JSON value not a map", src),
                 }
             }
         }
     }
 
-/*
+    /*
     fn convert_json_map(map: json::Object) -> HashMap<~str, Data> {
         let mut d = HashMap::new();
         for (key, value) in map.move_iter() {
-            d.insert(@key.to_owned(), convert_json(value));
+            d.insert(key.to_owned(), convert_json(value));
         }
         d
     }
@@ -1469,9 +1497,9 @@ mod tests {
           json::Number(n) => {
             // We have to cheat and use {:?} because %f doesn't convert 3.3 to
             // 3.3.
-            Str(@fmt!("{:?}", n))
+            Str(fmt!("{:?}", n))
           }
-          json::String(s) => { Str(@s.to_owned()) }
+          json::String(s) => { Str(s.to_owned()) }
           json::Boolean(b) => { Bool(b) }
           json::List(v) => { Vec(v.map(convert_json)) }
           json::Object(d) => { Map(convert_json_map(d)) }
@@ -1489,9 +1517,9 @@ mod tests {
                             let mut path = tmpdir.clone();
                             path.push(*key + ".mustache");
 
-                            match io::file_writer(&path, [io::Create, io::Truncate]) {
-                                Ok(wr) => wr.write_str(*s),
-                                Err(e) => fail!(e),
+                            match path.open_writer(CreateOrTruncate) {
+                                Some(mut wr) => wr.write(s.as_bytes()),
+                                None => fail!(),
                             }
                         }
                         _ => fail!(),
@@ -1642,7 +1670,7 @@ mod tests {
                     |_text| {~"|planet| => {{planet}}" }
                 }
                 json::String(~"Interpolation - Multiple Calls") => {
-                    let calls = @mut 0i;
+                    let calls = 0i;
                     |_text| {*calls = *calls + 1; calls.to_str() }
                 }
                 json::String(~"Escaping") => {
