@@ -9,6 +9,7 @@ extern mod extra;
 use std::char;
 use std::hashmap::HashMap;
 use std::rt::io::file::FileInfo;
+use std::rt::io::ignore_io_error;
 use std::rt::io::{Reader, Open};
 use std::str;
 use std::util;
@@ -43,7 +44,7 @@ impl Context {
     fn new(path: Path) -> Context {
         Context {
             template_path: path,
-            template_extension: ~".mustache",
+            template_extension: ~"mustache",
         }
     }
 
@@ -71,6 +72,9 @@ impl Context {
     fn compile_path(&self, path: Path) -> Option<Template> {
         // FIXME(#6164): This should use the file decoding tools when they are
         // written. For now we'll just read the file and treat it as UTF-8file.
+        let mut path = self.template_path.join(path);
+        path.set_extension(self.template_extension.clone());
+
         let s = match path.open_reader(Open) {
             Some(mut rdr) => str::from_utf8_owned(rdr.read_to_end()),
             None => { return None; }
@@ -367,24 +371,35 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
         }
     }
 
-    fn peek(&mut self) -> char {
+    fn peek(&mut self) -> Option<char> {
         match self.lookahead {
             None => {
-                let ch = self.rdr.next().unwrap();
-                self.lookahead = Some(ch);
-                ch
+                self.lookahead = self.rdr.next();
+                self.lookahead
             }
-            Some(ch) => ch,
+            Some(ch) => Some(ch),
+        }
+    }
+
+    fn ch_is(&self, ch: char) -> bool {
+        match self.ch {
+            Some(c) => c == ch,
+            None => false,
         }
     }
 
     fn parse(&mut self) {
         let mut curly_brace_tag = false;
 
-        while !self.eof() {
+        loop {
+            let ch = match self.ch {
+                Some(ch) => ch,
+                None => { break; }
+            };
+
             match self.state {
                 TEXT => {
-                    if *self.ch.get_ref() == self.otag_chars[0] {
+                    if ch == self.otag_chars[0] {
                         if self.otag_chars.len() > 1 {
                             self.tag_position = 1;
                             self.state = OTAG;
@@ -393,12 +408,12 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                             self.state = TAG;
                         }
                     } else {
-                        self.content.push_char(*self.ch.get_ref());
+                        self.content.push_char(ch);
                     }
                     self.bump();
                 }
                 OTAG => {
-                    if *self.ch.get_ref() == self.otag_chars[self.tag_position] {
+                    if ch == self.otag_chars[self.tag_position] {
                         if self.tag_position == self.otag_chars.len() - 1 {
                             self.add_text();
                             curly_brace_tag = false;
@@ -411,20 +426,20 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                         // so far to the string.
                         self.state = TEXT;
                         self.not_otag();
-                        self.content.push_char(*self.ch.get_ref());
+                        self.content.push_char(ch);
                     }
                     self.bump();
                 }
                 TAG => {
-                    if self.content == ~"" && *self.ch.get_ref() == '{' {
+                    if self.content == ~"" && ch == '{' {
                         curly_brace_tag = true;
-                        self.content.push_char(*self.ch.get_ref());
+                        self.content.push_char(ch);
                         self.bump();
-                    } else if curly_brace_tag && *self.ch.get_ref() == '}' {
+                    } else if curly_brace_tag && ch == '}' {
                         curly_brace_tag = false;
-                        self.content.push_char(*self.ch.get_ref());
+                        self.content.push_char(ch);
                         self.bump();
-                    } else if *self.ch.get_ref() == self.ctag_chars[0] {
+                    } else if ch == self.ctag_chars[0] {
                         if self.ctag_chars.len() > 1 {
                             self.tag_position = 1;
                             self.state = CTAG;
@@ -434,24 +449,24 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                             self.state = TEXT;
                         }
                     } else {
-                        self.content.push_char(*self.ch.get_ref());
+                        self.content.push_char(ch);
                         self.bump();
                     }
                 }
                 CTAG => {
-                    if *self.ch.get_ref() == self.ctag_chars[self.tag_position] {
+                    if ch == self.ctag_chars[self.tag_position] {
                         if self.tag_position == self.ctag_chars.len() - 1 {
                             self.add_tag();
                             self.state = TEXT;
                         } else {
                             self.state = TAG;
                             self.not_ctag();
-                            self.content.push_char(*self.ch.get_ref());
+                            self.content.push_char(ch);
                             self.bump();
                         }
                     } else {
                         fail!("character {} is not part of CTAG: {}",
-                              *self.ch.get_ref(),
+                              ch,
                               self.ctag_chars[self.tag_position]);
                     }
                 }
@@ -492,43 +507,47 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
     //
     fn classify_token(&mut self) -> TokenClass {
         // Exit early if the next character is not '\n' or '\r\n'.
-        if self.eof() ||
-           *self.ch.get_ref() == '\n' ||
-           (*self.ch.get_ref() == '\r' || self.peek() == '\n') {
+        match self.ch {
+            None => { }
+            Some(ch) => {
+                if !(ch == '\n' || (ch == '\r' && self.peek() == Some('\n'))) {
+                    return Normal;
+                }
+            }
+        }
 
-            // If the last token ends with a newline (or there is no previous
-            // token), then this token is standalone.
-            if self.tokens.len() == 0 { return StandAlone; }
+        // If the last token ends with a newline (or there is no previous
+        // token), then this token is standalone.
+        if self.tokens.len() == 0 { return StandAlone; }
 
-            match self.tokens[self.tokens.len() - 1] {
-                IncompleteSection(_, _, _, true) => { StandAlone }
+        match self.tokens[self.tokens.len() - 1] {
+            IncompleteSection(_, _, _, true) => { StandAlone }
 
-                Text(ref s) if !s.is_empty() => {
-                    // Look for the last newline character that may have whitespace
-                    // following it.
-                    match s.rfind(|c:char| c == '\n' || !char::is_whitespace(c)) {
-                        // It's all whitespace.
-                        None => {
-                            if self.tokens.len() == 1 {
-                                WhiteSpace(s.to_owned(), 0)
-                            } else {
-                                Normal
-                            }
-                        }
-                        Some(pos) => {
-                            if s.char_at(pos) == '\n' {
-                                if pos == s.len() - 1 {
-                                    StandAlone
-                                } else {
-                                    WhiteSpace(s.to_owned(), pos + 1)
-                                }
-                            } else { Normal }
+            Text(ref s) if !s.is_empty() => {
+                // Look for the last newline character that may have whitespace
+                // following it.
+                match s.rfind(|c:char| c == '\n' || !char::is_whitespace(c)) {
+                    // It's all whitespace.
+                    None => {
+                        if self.tokens.len() == 1 {
+                            WhiteSpace(s.to_owned(), 0)
+                        } else {
+                            Normal
                         }
                     }
+                    Some(pos) => {
+                        if s.char_at(pos) == '\n' {
+                            if pos == s.len() - 1 {
+                                StandAlone
+                            } else {
+                                WhiteSpace(s.to_owned(), pos + 1)
+                            }
+                        } else { Normal }
+                    }
                 }
-                _ => Normal,
             }
-        } else { Normal }
+            _ => Normal,
+        }
     }
 
     fn eat_whitespace(&mut self) -> bool {
@@ -538,12 +557,12 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
         match self.classify_token() {
             Normal => { false }
             StandAlone => {
-                if *self.ch.get_ref() == '\r' { self.bump(); }
+                if self.ch_is('\r') { self.bump(); }
                 self.bump();
                 true
             }
             WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
-                if *self.ch.get_ref() == '\r' { self.bump(); }
+                if self.ch_is('\r') { self.bump(); }
                 self.bump();
 
                 // Trim the whitespace from the last token.
@@ -719,16 +738,15 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
     }
 
     fn add_partial(&mut self, content: &str, tag: ~str) {
-        let token_class = self.classify_token();
-        let indent = match token_class.clone() {
+        let indent = match self.classify_token() {
             Normal => ~"",
             StandAlone => {
-                if *self.ch.get_ref() == '\r' { self.bump(); }
+                if self.ch_is('\r') { self.bump(); }
                 self.bump();
                 ~""
             }
             WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
-                if *self.ch.get_ref() == '\r' { self.bump(); }
+                if self.ch_is('\r') { self.bump(); }
                 self.bump();
 
                 let ws = s.slice(pos, s.len());
@@ -809,13 +827,13 @@ impl<'self, T: Iterator<char>> CompileContext<'self, T> {
 
         // Compile the partials if we haven't done so already.
         for name in parser.partials.iter() {
-            let path = self.template_path.join(*name + self.template_extension);
+            let path = self.template_path.join(*name + "." + self.template_extension);
 
             if !self.partials.contains_key(name) {
                 // Insert a placeholder so we don't recurse off to infinity.
                 self.partials.insert(name.to_owned(), ~[]);
 
-                match path.open_reader(Open) {
+                match ignore_io_error(|| path.open_reader(Open)) {
                     Some(mut rdr) => {
                         // XXX: HACK
                         let s = str::from_utf8_owned(rdr.read_to_end());
@@ -1461,30 +1479,28 @@ mod tests {
         }
     }
 
-    /*
-    fn convert_json_map(map: json::Object) -> HashMap<~str, Data> {
-        let mut d = HashMap::new();
-        for (key, value) in map.move_iter() {
-            d.insert(key.to_owned(), convert_json(value));
-        }
-        d
-    }
-
-    fn convert_json(value: json::Json) -> Data {
-        match value {
-          json::Number(n) => {
-            // We have to cheat and use {:?} because %f doesn't convert 3.3 to
-            // 3.3.
-            Str(fmt!("{:?}", n))
-          }
-          json::String(s) => { Str(s.to_owned()) }
-          json::Boolean(b) => { Bool(b) }
-          json::List(v) => { Vec(v.map(convert_json)) }
-          json::Object(d) => { Map(convert_json_map(d)) }
-          _ => { fail!("{:?}", value) }
-        }
-    }
-    */
+//    fn convert_json_map(map: json::Object) -> HashMap<~str, Data> {
+//        let mut d = HashMap::new();
+//        for (key, value) in map.move_iter() {
+//            d.insert(key.to_owned(), convert_json(value));
+//        }
+//        d
+//    }
+//
+//    fn convert_json(value: json::Json) -> Data {
+//        match value {
+//          json::Number(n) => {
+//            // We have to cheat and use {:?} because %f doesn't convert 3.3 to
+//            // 3.3.
+//            Str(fmt!("{:?}", n))
+//          }
+//          json::String(s) => { Str(s.to_owned()) }
+//          json::Boolean(b) => { Bool(b) }
+//          json::List(v) => { Vec(v.map(convert_json)) }
+//          json::Object(d) => { Map(convert_json_map(d)) }
+//          _ => { fail!("{:?}", value) }
+//        }
+//    }
 
     fn write_partials(tmpdir: &Path, value: &json::Json) {
         match value {
@@ -1615,66 +1631,64 @@ mod tests {
         run_tests("spec/specs/sections.json");
     }
 
-/*
-    #[test]
-    fn test_spec_lambdas() {
-        for json in parse_spec_tests(~"spec/specs/~lambdas.json").iter() {
-            let test = match json {
-                &json::Object(m) => m,
-                _ => fail!(),
-            };
-
-            // Replace the lambda with rust code.
-            let data = match test.find(&~"data") {
-                Some(data) => (*data).clone(),
-                None => fail!(),
-            };
-
-            let encoder = Encoder::new();
-            data.encode(&encoder);
-            let ctx = match encoder.data {
-                [Map(ctx)] => ctx,
-                _ => fail!(),
-            };
-
-            let f = match *test.find(&~"name").unwrap() {
-                json::String(~"Interpolation") => {
-                    |_text| {~"world" }
-                }
-                json::String(~"Interpolation - Expansion") => {
-                    |_text| {~"{{planet}}" }
-                }
-                json::String(~"Interpolation - Alternate Delimiters") => {
-                    |_text| {~"|planet| => {{planet}}" }
-                }
-                json::String(~"Interpolation - Multiple Calls") => {
-                    let calls = 0i;
-                    |_text| {*calls = *calls + 1; calls.to_str() }
-                }
-                json::String(~"Escaping") => {
-                    |_text| {~">" }
-                }
-                json::String(~"Section") => {
-                    |text: ~str| {if *text == ~"{{x}}" { ~"yes" } else { ~"no" } }
-                }
-                json::String(~"Section - Expansion") => {
-                    |text: ~str| {*text + "{{planet}}" + *text }
-                }
-                json::String(~"Section - Alternate Delimiters") => {
-                    |text: ~str| {*text + "{{planet}} => |planet|" + *text }
-                }
-                json::String(~"Section - Multiple Calls") => {
-                    |text: ~str| {~"__" + *text + ~"__" }
-                }
-                json::String(~"Inverted Section") => {
-                    |_text| {~"" }
-                }
-                value => { fail!("{:?}", value) }
-            };
-            //ctx.insert(~"lambda", Fun(f));
-
-            run_test(test, Map(ctx));
-        }
-    }
-*/
+//    #[test]
+//    fn test_spec_lambdas() {
+//        for json in parse_spec_tests(~"spec/specs/~lambdas.json").iter() {
+//            let test = match json {
+//                &json::Object(m) => m,
+//                _ => fail!(),
+//            };
+//
+//            // Replace the lambda with rust code.
+//            let data = match test.find(&~"data") {
+//                Some(data) => (*data).clone(),
+//                None => fail!(),
+//            };
+//
+//            let encoder = Encoder::new();
+//            data.encode(&encoder);
+//            let ctx = match encoder.data {
+//                [Map(ctx)] => ctx,
+//                _ => fail!(),
+//            };
+//
+//            let f = match *test.find(&~"name").unwrap() {
+//                json::String(~"Interpolation") => {
+//                    |_text| {~"world" }
+//                }
+//                json::String(~"Interpolation - Expansion") => {
+//                    |_text| {~"{{planet}}" }
+//                }
+//                json::String(~"Interpolation - Alternate Delimiters") => {
+//                    |_text| {~"|planet| => {{planet}}" }
+//                }
+//                json::String(~"Interpolation - Multiple Calls") => {
+//                    let calls = 0i;
+//                    |_text| {*calls = *calls + 1; calls.to_str() }
+//                }
+//                json::String(~"Escaping") => {
+//                    |_text| {~">" }
+//                }
+//                json::String(~"Section") => {
+//                    |text: ~str| {if *text == ~"{{x}}" { ~"yes" } else { ~"no" } }
+//                }
+//                json::String(~"Section - Expansion") => {
+//                    |text: ~str| {*text + "{{planet}}" + *text }
+//                }
+//                json::String(~"Section - Alternate Delimiters") => {
+//                    |text: ~str| {*text + "{{planet}} => |planet|" + *text }
+//                }
+//                json::String(~"Section - Multiple Calls") => {
+//                    |text: ~str| {~"__" + *text + ~"__" }
+//                }
+//                json::String(~"Inverted Section") => {
+//                    |_text| {~"" }
+//                }
+//                value => { fail!("{:?}", value) }
+//            };
+//            //ctx.insert(~"lambda", Fun(f));
+//
+//            run_test(test, Map(ctx));
+//        }
+//    }
 }
