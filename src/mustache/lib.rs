@@ -1,8 +1,3 @@
-#[link(name = "mustache",
-       vers = "0.4pre",
-       uuid = "afecaa07-75c5-466c-b3a3-fae5d32e04aa")];
-#[crate_type = "lib"];
-
 extern mod std;
 extern mod extra;
 

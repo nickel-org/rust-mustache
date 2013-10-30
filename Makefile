@@ -1,12 +1,12 @@
 RUSTC ?= rustc
-
-dummy1 := $(shell mkdir bin 2> /dev/null)
+RUSTPKG ?= rustpkg
 
 all:
-	$(RUSTC) --lib -o bin/mustache mustache.rs
+	$(RUSTPKG) install mustache
 
 check:
-	$(RUSTC) --test -o bin/test-mustache mustache.rs && ./bin/test-mustache
+	$(RUSTC) --test -o bin/test-mustache src/mustache/lib.rs
+	./bin/test-mustache
 
 clean:
-	rm -rf bin
+	rm -rf bin build lib

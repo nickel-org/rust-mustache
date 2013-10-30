@@ -1,4 +1,7 @@
 *.swp
 *.dylib
 *.dSYM
-mustache
+bin/
+build/
+lib/
+.rust/
