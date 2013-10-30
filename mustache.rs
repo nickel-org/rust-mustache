@@ -9,20 +9,10 @@ extern mod extra;
 use std::char;
 use std::hashmap::HashMap;
 use std::rt::io::file::FileInfo;
-use std::rt::io::mem::BufReader;
 use std::rt::io::{Reader, Open};
 use std::str;
 use std::util;
 use extra::serialize;
-
-/// Temporary hack.
-trait ReadChar {
-    fn read_char(&mut self) -> char;
-}
-
-impl<'self> ReadChar for &'self Reader {
-    fn read_char(&mut self) -> char { fail!() }
-}
 
 /// Represents template data.
 #[deriving(Clone)]
@@ -38,7 +28,7 @@ pub enum Data {
 /// template.
 #[deriving(Clone)]
 pub struct Context {
-    template_path: ~str,
+    template_path: Path,
     template_extension: ~str,
 }
 
@@ -48,31 +38,28 @@ pub struct Template {
     partials: HashMap<~str, ~[Token]>
 }
 
-/// Configures a mustache context with the partial template path and extension.
-pub fn Context(template_path: ~str, template_extension: ~str) -> Context {
-    Context {
-        template_path: template_path,
-        template_extension: template_extension,
-    }
-}
-
-/// Configures a mustache context looking for partial files in the current
-/// directory.
-pub fn default_context() -> Context { Context(~".", ~".mustache") }
-
 impl Context {
-    /// Compiles a template from an `io::rt::Reader`.
-    fn compile_reader(&self, rdr: &Reader) -> Template {
+    /// Configures a mustache context the specified path to the templates.
+    fn new(path: Path) -> Context {
+        Context {
+            template_path: path,
+            template_extension: ~".mustache",
+        }
+    }
+
+    /// Compiles a template from an iterator
+    fn compile<IT: Iterator<char>>(&self, rdr: IT) -> Template {
+        let mut rdr = rdr;
         let mut ctx = CompileContext {
-            rdr: rdr,
+            rdr: &mut rdr,
             partials: HashMap::new(),
             otag: ~"{{",
             ctag: ~"}}",
-            template_path: self.template_path.to_owned(),
+            template_path: self.template_path.clone(),
             template_extension: self.template_extension.to_owned(),
         };
 
-        let tokens = compile_helper(&mut ctx);
+        let tokens = ctx.compile();
 
         Template {
             ctx: self.clone(),
@@ -81,73 +68,54 @@ impl Context {
         }
     }
 
-    /// Compiles a template from a file.
-    fn compile_file(&self, file: &str) -> Option<Template> {
-        let mut path = Path::new(self.template_path.as_slice());
-        path.push(file.to_owned() + self.template_extension);
+    fn compile_path(&self, path: Path) -> Option<Template> {
+        // FIXME(#6164): This should use the file decoding tools when they are
+        // written. For now we'll just read the file and treat it as UTF-8file.
+        let s = match path.open_reader(Open) {
+            Some(mut rdr) => str::from_utf8_owned(rdr.read_to_end()),
+            None => { return None; }
+        };
 
-        do path.open_reader(Open).and_then |rdr| {
-            Some(self.compile_reader(&rdr as &Reader))
-        }
+        Some(self.compile(s.iter()))
     }
 
-    /// Compiles a template from a string.
-    fn compile_str(&self, src: &str) -> Template {
-        let rdr = BufReader::new(src.as_bytes());
-        self.compile_reader(&rdr as &Reader)
-    }
-
-    /// Renders a template from an Reader.
-    fn render_reader<
+    /// Renders a template from an iterator.
+    fn render<
+        IT: Iterator<char>,
         T: serialize::Encodable<Encoder>
-    >(&self, rdr: &Reader, data: &T) -> ~str {
-        self.compile_reader(rdr).render(data)
-    }
-
-    /// Renders a template from a file.
-    fn render_file<
-        T: serialize::Encodable<Encoder>
-    >(&self, file: &str, data: &T) -> Option<~str> {
-        do self.compile_file(file).and_then |template| {
-            Some(template.render(data))
-        }
-    }
-
-    /// Renders a template from a string.
-    fn render_str<
-        T: serialize::Encodable<Encoder>
-    >(&self, template: &str, data: &T) -> ~str {
-        self.compile_str(template).render(data)
+    >(&self, rdr: IT, data: &T) -> ~str {
+        self.compile(rdr).render(data)
     }
 }
 
-/// Compiles a template from an `Reader`.
-pub fn compile_reader(rdr: &Reader) -> Template {
-    default_context().compile_reader(rdr)
+/// Compiles a template from an `Iterator<char>`.
+pub fn compile_iter<T: Iterator<char>>(iter: T) -> Template {
+    Context::new(Path::new(".")).compile(iter)
 }
 
-/// Compiles a template from a file.
-pub fn compile_file(file: &str) -> Option<Template> {
-    default_context().compile_file(file)
+/// Compiles a template from a path.
+pub fn compile_path(path: Path) -> Option<Template> {
+    Context::new(Path::new(".")).compile_path(path)
 }
 
 /// Compiles a template from a string.
 pub fn compile_str(template: &str) -> Template {
-    default_context().compile_str(template)
+    Context::new(Path::new(".")).compile(template.iter())
 }
 
-/// Renders a template from an `Reader`.
-pub fn render_reader<
+/// Renders a template from an `Iterator<char>`.
+pub fn render_iter<
+    IT: Iterator<char>,
     T: serialize::Encodable<Encoder>
->(rdr: &Reader, data: &T) -> ~str {
-    default_context().compile_reader(rdr).render(data)
+>(rdr: IT, data: &T) -> ~str {
+    compile_iter(rdr).render(data)
 }
 
 /// Renders a template from a file.
-pub fn render_file<
+pub fn render_path<
     T: serialize::Encodable<Encoder>
->(file: &str, data: &T) -> Option<~str> {
-    do default_context().compile_file(file).and_then |template| {
+>(path: Path, data: &T) -> Option<~str> {
+    do compile_path(path).and_then |template| {
         Some(template.render(data))
     }
 }
@@ -156,7 +124,7 @@ pub fn render_file<
 pub fn render_str<
     T: serialize::Encodable<Encoder>
 >(template: &str, data: &T) -> ~str {
-    default_context().compile_str(template).render(data)
+    compile_str(template).render(data)
 }
 
 pub struct Encoder {
@@ -356,8 +324,8 @@ pub enum TokenClass {
     NewLineWhiteSpace(~str, uint),
 }
 
-pub struct Parser<'self> {
-    rdr: &'self Reader,
+pub struct Parser<'self, T> {
+    rdr: &'self mut T,
     ch: char,
     lookahead: Option<char>,
     line: uint,
@@ -375,14 +343,14 @@ pub struct Parser<'self> {
 
 enum ParserState { TEXT, OTAG, TAG, CTAG }
 
-impl<'self> Parser<'self> {
+impl<'self, T: Iterator<char>> Parser<'self, T> {
     fn eof(&self) -> bool {
         self.ch == unsafe { ::std::cast::transmute(-1u32) } // FIXME: #rust/8971: unsound
     }
 
     fn bump(&mut self) {
         match self.lookahead.take() {
-            None => { self.ch = self.rdr.read_char(); }
+            None => { self.ch = self.rdr.next().unwrap(); }
             Some(ch) => { self.ch = ch; }
         }
 
@@ -397,7 +365,7 @@ impl<'self> Parser<'self> {
     fn peek(&mut self) -> char {
         match self.lookahead {
             None => {
-                let ch = self.rdr.read_char();
+                let ch = self.rdr.next().unwrap();
                 self.lookahead = Some(ch);
                 ch
             }
@@ -803,68 +771,73 @@ impl<'self> Parser<'self> {
     }
 }
 
-struct CompileContext<'self> {
-    rdr: &'self Reader,
+struct CompileContext<'self, T> {
+    rdr: &'self mut T,
     partials: HashMap<~str, ~[Token]>,
     otag: ~str,
     ctag: ~str,
-    template_path: ~str,
+    template_path: Path,
     template_extension: ~str,
 }
 
-fn compile_helper(ctx: &mut CompileContext) -> ~[Token] {
-    let mut parser = Parser {
-        rdr: ctx.rdr,
-        ch: '\0',
-        lookahead: None,
-        line: 1,
-        col: 1,
-        content: ~"",
-        state: TEXT,
-        otag: ctx.otag.to_owned(),
-        ctag: ctx.ctag.to_owned(),
-        otag_chars: ctx.otag.iter().collect::<~[char]>(),
-        ctag_chars: ctx.ctag.iter().collect::<~[char]>(),
-        tag_position: 0,
-        tokens: ~[],
-        partials: ~[],
-    };
+impl<'self, T: Iterator<char>> CompileContext<'self, T> {
+    fn compile(&mut self) -> ~[Token] {
+        let mut parser = Parser {
+            rdr: self.rdr,
+            ch: '\0',
+            lookahead: None,
+            line: 1,
+            col: 1,
+            content: ~"",
+            state: TEXT,
+            otag: self.otag.to_owned(),
+            ctag: self.ctag.to_owned(),
+            otag_chars: self.otag.iter().collect::<~[char]>(),
+            ctag_chars: self.ctag.iter().collect::<~[char]>(),
+            tag_position: 0,
+            tokens: ~[],
+            partials: ~[],
+        };
 
-    parser.bump();
-    parser.parse();
+        parser.bump();
+        parser.parse();
 
-    // Compile the partials if we haven't done so already.
-    for name in parser.partials.iter() {
-        let mut path = Path::new(ctx.template_path.as_slice());
-        path.push(*name + ctx.template_extension);
+        // Compile the partials if we haven't done so already.
+        for name in parser.partials.iter() {
+            let path = self.template_path.join(*name + self.template_extension);
 
-        if !ctx.partials.contains_key(name) {
-            // Insert a placeholder so we don't recurse off to infinity.
-            ctx.partials.insert(name.to_owned(), ~[]);
+            if !self.partials.contains_key(name) {
+                // Insert a placeholder so we don't recurse off to infinity.
+                self.partials.insert(name.to_owned(), ~[]);
 
-            match path.open_reader(Open) {
-                Some(rdr) => {
-                    let mut inner_ctx = CompileContext {
-                        rdr: &rdr as &Reader,
-                        partials: ctx.partials.clone(),
-                        otag: ~"{{",
-                        ctag: ~"}}",
-                        template_path: ctx.template_path.to_owned(),
-                        template_extension: ctx.template_extension.to_owned(),
-                    };
-                    let tokens = compile_helper(&mut inner_ctx);
+                match path.open_reader(Open) {
+                    Some(mut rdr) => {
+                        // XXX: HACK
+                        let s = str::from_utf8_owned(rdr.read_to_end());
+                        let mut iter = s.iter();
 
-                    ctx.partials.insert(name.to_owned(), tokens);
+                        let mut inner_ctx = CompileContext {
+                            rdr: &mut iter,
+                            partials: self.partials.clone(),
+                            otag: ~"{{",
+                            ctag: ~"}}",
+                            template_path: self.template_path.clone(),
+                            template_extension: self.template_extension.to_owned(),
+                        };
+                        let tokens = inner_ctx.compile();
+
+                        self.partials.insert(name.to_owned(), tokens);
+                    }
+                    None => { }
                 }
-                None => { }
             }
         }
+
+        // Destructure the parser so we get get at the tokens without a copy.
+        let Parser { tokens: tokens, _ } = parser;
+
+        tokens
     }
-
-    // Destructure the parser so we get get at the tokens without a copy.
-    let Parser { tokens: tokens, _ } = parser;
-
-    tokens
 }
 
 #[deriving(Clone)]
@@ -1099,16 +1072,17 @@ fn render_fun(ctx: &RenderContext,
               ctag: &str,
               f: &fn(&str) -> ~str) -> ~str {
     let src = f(src);
-    let rdr = BufReader::new(src.as_bytes());
+    let mut iter = src.iter();
+
     let mut inner_ctx = CompileContext {
-        rdr: &rdr as &Reader,
+        rdr: &mut iter,
         partials: ctx.partials.clone(),
         otag: otag.to_owned(),
         ctag: ctag.to_owned(),
-        template_path: ctx.ctx.template_path.to_owned(),
+        template_path: ctx.ctx.template_path.clone(),
         template_extension: ctx.ctx.template_extension.to_owned(),
     };
-    let tokens = compile_helper(&mut inner_ctx);
+    let tokens = inner_ctx.compile();
 
     render_helper(&RenderContext {
         // FIXME: #rust/9382
@@ -1129,7 +1103,7 @@ mod tests {
     use extra::serialize;
     use extra::tempfile;
     use super::{compile_str, render_str};
-    use super::{compile_file};
+    use super::{compile_path};
     use super::{Context, Encoder};
     use super::{Data, Str, Vec, Map};
     use super::{Token, Text, ETag, UTag, Section, Partial};
@@ -1427,8 +1401,7 @@ mod tests {
 
     #[test]
     fn test_render_partial() {
-        let path = ~"base";
-        let template = compile_file(path).unwrap();
+        let template = compile_path(Path::new("base")).unwrap();
 
         let mut ctx0 = HashMap::new();
         assert_eq!(template.render_data(Map(ctx0.clone())), ~"<h2>Names</h2>\n");
@@ -1553,8 +1526,8 @@ mod tests {
             None => {},
         }
 
-        let ctx = Context(tmpdir.path().as_str().unwrap().to_owned(), ~".mustache");
-        let template = ctx.compile_str(template);
+        let ctx = Context::new(tmpdir.path().clone());
+        let template = ctx.compile(template.iter());
         let result = template.render_data(data);
 
         if result != expected {
