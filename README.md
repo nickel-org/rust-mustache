@@ -22,16 +22,15 @@ Install It
 Use It
 ======
 
-    extern mod std;
-    use mustache;
+    extern mod mustache;
 
-    #[auto_serialize]
+    #[deriving(Encodable)]
     struct Name { name: ~str }
 
     fn main() {
         let name = Name { name: ~"world" };
         let s = mustache::render_str("hello {{name}}!", ctx);
-        io::println(s);
+        println(s);
     }
 
 [1]: http://code.google.com/p/google-ctemplate/
