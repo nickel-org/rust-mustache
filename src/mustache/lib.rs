@@ -3,9 +3,7 @@ extern mod extra;
 
 use std::char;
 use std::hashmap::HashMap;
-use std::rt::io::file::FileInfo;
-use std::rt::io::ignore_io_error;
-use std::rt::io::{Reader, Open};
+use std::io::{ignore_io_error, File};
 use std::str;
 use std::util;
 use extra::serialize;
@@ -70,7 +68,7 @@ impl Context {
         let mut path = self.template_path.join(path);
         path.set_extension(self.template_extension.clone());
 
-        let s = match path.open_reader(Open) {
+        let s = match File::open(&path) {
             Some(mut rdr) => str::from_utf8_owned(rdr.read_to_end()),
             None => { return None; }
         };
@@ -828,7 +826,7 @@ impl<'self, T: Iterator<char>> CompileContext<'self, T> {
                 // Insert a placeholder so we don't recurse off to infinity.
                 self.partials.insert(name.to_owned(), ~[]);
 
-                match ignore_io_error(|| path.open_reader(Open)) {
+                match ignore_io_error(|| File::open(&path)) {
                     Some(mut rdr) => {
                         // XXX: HACK
                         let s = str::from_utf8_owned(rdr.read_to_end());
@@ -1114,8 +1112,7 @@ fn render_fun(ctx: &RenderContext,
 mod tests {
     use std::str;
     use std::hashmap::HashMap;
-    use std::rt::io::file::FileInfo;
-    use std::rt::io::{CreateOrTruncate, Open, Writer};
+    use std::io::File;
     use extra::json;
     use extra::serialize::Encodable;
     use extra::serialize;
@@ -1451,7 +1448,7 @@ mod tests {
     fn parse_spec_tests(src: &str) -> ~[json::Json] {
         let path = Path::new(src);
 
-        let mut rdr = match path.open_reader(Open) {
+        let mut rdr = match File::open(&path) {
             Some(rdr) => rdr,
             None => fail!(),
         };
@@ -1507,7 +1504,7 @@ mod tests {
                             let mut path = tmpdir.clone();
                             path.push(*key + ".mustache");
 
-                            match path.open_writer(CreateOrTruncate) {
+                            match File::create(&path) {
                                 Some(mut wr) => wr.write(s.as_bytes()),
                                 None => fail!(),
                             }
