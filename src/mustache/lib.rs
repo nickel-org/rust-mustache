@@ -73,7 +73,7 @@ impl Context {
             None => { return None; }
         };
 
-        Some(self.compile(s.iter()))
+        Some(self.compile(s.chars()))
     }
 
     /// Renders a template from an iterator.
@@ -87,17 +87,17 @@ impl Context {
 
 /// Compiles a template from an `Iterator<char>`.
 pub fn compile_iter<T: Iterator<char>>(iter: T) -> Template {
-    Context::new(Path::new(".")).compile(iter)
+    Context::new(Path::init(".")).compile(iter)
 }
 
 /// Compiles a template from a path.
 pub fn compile_path(path: Path) -> Option<Template> {
-    Context::new(Path::new(".")).compile_path(path)
+    Context::new(Path::init(".")).compile_path(path)
 }
 
 /// Compiles a template from a string.
 pub fn compile_str(template: &str) -> Template {
-    Context::new(Path::new(".")).compile(template.iter())
+    Context::new(Path::init(".")).compile(template.chars())
 }
 
 /// Renders a template from an `Iterator<char>`.
@@ -112,9 +112,9 @@ pub fn render_iter<
 pub fn render_path<
     T: serialize::Encodable<Encoder>
 >(path: Path, data: &T) -> Option<~str> {
-    do compile_path(path).and_then |template| {
+    compile_path(path).and_then(|template| {
         Some(template.render(data))
-    }
+    })
 }
 
 /// Renders a template from a string.
@@ -168,15 +168,15 @@ impl serialize::Encoder for Encoder {
         self.data.push(Str(v.to_owned()));
     }
 
-    fn emit_enum(&mut self, _name: &str, _f: &fn(&mut Encoder)) {
+    fn emit_enum(&mut self, _name: &str, _f: |&mut Encoder|) {
         fail!()
     }
 
-    fn emit_enum_variant(&mut self, _name: &str, _id: uint, _len: uint, _f: &fn(&mut Encoder)) {
+    fn emit_enum_variant(&mut self, _name: &str, _id: uint, _len: uint, _f: |&mut Encoder|) {
         fail!()
     }
 
-    fn emit_enum_variant_arg(&mut self, _a_idx: uint, _f: &fn(&mut Encoder)) {
+    fn emit_enum_variant_arg(&mut self, _a_idx: uint, _f: |&mut Encoder|) {
         fail!()
     }
 
@@ -184,23 +184,23 @@ impl serialize::Encoder for Encoder {
                                 _v_name: &str,
                                 _v_id: uint,
                                 _len: uint,
-                                _f: &fn(&mut Encoder)) {
+                                _f: |&mut Encoder|) {
         fail!()
     }
 
     fn emit_enum_struct_variant_field(&mut self,
                                       _f_name: &str,
                                       _f_idx: uint,
-                                      _f: &fn(&mut Encoder)) {
+                                      _f: |&mut Encoder|) {
         fail!()
     }
 
-    fn emit_struct(&mut self, _name: &str, _len: uint, f: &fn(&mut Encoder)) {
+    fn emit_struct(&mut self, _name: &str, _len: uint, f: |&mut Encoder|) {
         self.data.push(Map(HashMap::new()));
         f(self);
     }
 
-    fn emit_struct_field(&mut self, name: &str, _idx: uint, f: &fn(&mut Encoder)) {
+    fn emit_struct_field(&mut self, name: &str, _idx: uint, f: |&mut Encoder|) {
         let mut m = match self.data.pop() {
             Map(m) => m,
             _ => fail!(),
@@ -210,24 +210,24 @@ impl serialize::Encoder for Encoder {
         self.data.push(Map(m));
     }
 
-    fn emit_tuple(&mut self, len: uint, f: &fn(&mut Encoder)) {
+    fn emit_tuple(&mut self, len: uint, f: |&mut Encoder|) {
         self.emit_seq(len, f)
     }
 
-    fn emit_tuple_arg(&mut self, idx: uint, f: &fn(&mut Encoder)) {
+    fn emit_tuple_arg(&mut self, idx: uint, f: |&mut Encoder|) {
         self.emit_seq_elt(idx, f)
     }
 
-    fn emit_tuple_struct(&mut self, _name: &str, len: uint, f: &fn(&mut Encoder)) {
+    fn emit_tuple_struct(&mut self, _name: &str, len: uint, f: |&mut Encoder|) {
         self.emit_seq(len, f)
     }
 
-    fn emit_tuple_struct_arg(&mut self, idx: uint, f: &fn(&mut Encoder)) {
+    fn emit_tuple_struct_arg(&mut self, idx: uint, f: |&mut Encoder|) {
         self.emit_seq_elt(idx, f)
     }
 
     // Specialized types:
-    fn emit_option(&mut self, _f: &fn(&mut Encoder)) {
+    fn emit_option(&mut self, _f: |&mut Encoder|) {
         fail!()
     }
 
@@ -235,16 +235,16 @@ impl serialize::Encoder for Encoder {
         fail!()
     }
 
-    fn emit_option_some(&mut self, _f: &fn(&mut Encoder)) {
+    fn emit_option_some(&mut self, _f: |&mut Encoder|) {
         fail!()
     }
 
-    fn emit_seq(&mut self, _len: uint, f: &fn(&mut Encoder)) {
+    fn emit_seq(&mut self, _len: uint, f: |&mut Encoder|) {
         self.data.push(Vec(~[]));
         f(self);
     }
 
-    fn emit_seq_elt(&mut self, _idx: uint, f: &fn(&mut Encoder)) {
+    fn emit_seq_elt(&mut self, _idx: uint, f: |&mut Encoder|) {
         let mut v = match self.data.pop() {
             Vec(v) => v,
             _ => fail!(),
@@ -254,12 +254,12 @@ impl serialize::Encoder for Encoder {
         self.data.push(Vec(v));
     }
 
-    fn emit_map(&mut self, _len: uint, f: &fn(&mut Encoder)) {
+    fn emit_map(&mut self, _len: uint, f: |&mut Encoder|) {
         self.data.push(Map(HashMap::new()));
         f(self);
     }
 
-    fn emit_map_elt_key(&mut self, _idx: uint, f: &fn(&mut Encoder)) {
+    fn emit_map_elt_key(&mut self, _idx: uint, f: |&mut Encoder|) {
         f(self);
         match *self.data.last() {
             Str(_) => {}
@@ -267,7 +267,7 @@ impl serialize::Encoder for Encoder {
         }
     }
 
-    fn emit_map_elt_val(&mut self, _idx: uint, f: &fn(&mut Encoder)) {
+    fn emit_map_elt_val(&mut self, _idx: uint, f: |&mut Encoder|) {
         let k = match self.data.pop() {
             Str(s) => s,
             _ => fail!(),
@@ -585,7 +585,7 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
             '&' => {
                 let name = content.slice(1, len);
                 let name = self.check_content(name);
-                let name = name.split_terminator_iter('.')
+                let name = name.split_terminator('.')
                     .map(|x| x.to_owned())
                     .collect();
                 self.tokens.push(UTag(name, tag));
@@ -594,7 +594,7 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                 if content.ends_with("}") {
                     let name = content.slice(1, len - 1);
                     let name = self.check_content(name);
-                    let name = name.split_terminator_iter('.')
+                    let name = name.split_terminator('.')
                         .map(|x| x.to_owned())
                         .collect();
                     self.tokens.push(UTag(name, tag));
@@ -604,7 +604,7 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                 let newlined = self.eat_whitespace();
 
                 let name = self.check_content(content.slice(1, len));
-                let name = name.split_terminator_iter('.')
+                let name = name.split_terminator('.')
                     .map(|x| x.to_owned())
                     .collect();
                 self.tokens.push(IncompleteSection(name, false, tag, newlined));
@@ -613,7 +613,7 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                 let newlined = self.eat_whitespace();
 
                 let name = self.check_content(content.slice(1, len));
-                let name = name.split_terminator_iter('.')
+                let name = name.split_terminator('.')
                     .map(|x| x.to_owned())
                     .collect();
                 self.tokens.push(IncompleteSection(name, true, tag, newlined));
@@ -622,7 +622,7 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                 self.eat_whitespace();
 
                 let name = self.check_content(content.slice(1, len));
-                let name = name.split_terminator_iter('.')
+                let name = name.split_terminator('.')
                     .map(|x| x.to_owned())
                     .collect();
                 let mut children: ~[Token] = ~[];
@@ -698,7 +698,7 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                     };
 
                     self.otag = s.slice(0, pos).to_str();
-                    self.otag_chars = self.otag.iter().collect();
+                    self.otag_chars = self.otag.chars().collect();
 
                     let s2 = s.slice_from(pos);
                     let pos = s2.find(|c| !char::is_whitespace(c));
@@ -708,7 +708,7 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                     };
 
                     self.ctag = s2.slice_from(pos).to_str();
-                    self.ctag_chars = self.ctag.iter().collect();
+                    self.ctag_chars = self.ctag.chars().collect();
                 } else {
                     fail!("invalid change delimiter tag content");
                 }
@@ -719,7 +719,7 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
                 let name = match self.check_content(content) {
                     ~"." => ~[],
                     name => {
-                        name.split_terminator_iter('.')
+                        name.split_terminator('.')
                             .map(|x| x.to_owned())
                             .collect()
                     }
@@ -808,8 +808,8 @@ impl<'self, T: Iterator<char>> CompileContext<'self, T> {
             state: TEXT,
             otag: self.otag.to_owned(),
             ctag: self.ctag.to_owned(),
-            otag_chars: self.otag.iter().collect::<~[char]>(),
-            ctag_chars: self.ctag.iter().collect::<~[char]>(),
+            otag_chars: self.otag.chars().collect::<~[char]>(),
+            ctag_chars: self.ctag.chars().collect::<~[char]>(),
             tag_position: 0,
             tokens: ~[],
             partials: ~[],
@@ -830,7 +830,7 @@ impl<'self, T: Iterator<char>> CompileContext<'self, T> {
                     Some(mut rdr) => {
                         // XXX: HACK
                         let s = str::from_utf8_owned(rdr.read_to_end());
-                        let mut iter = s.iter();
+                        let mut iter = s.chars();
 
                         let mut inner_ctx = CompileContext {
                             rdr: &mut iter,
@@ -850,7 +850,7 @@ impl<'self, T: Iterator<char>> CompileContext<'self, T> {
         }
 
         // Destructure the parser so we get get at the tokens without a copy.
-        let Parser { tokens: tokens, _ } = parser;
+        let Parser { tokens: tokens, .. } = parser;
 
         tokens
     }
@@ -1023,7 +1023,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
 fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
     let mut escaped = ~"";
     let utag = render_utag(value, ctx);
-    for c in utag.iter() {
+    for c in utag.chars() {
         match c {
             '<' => { escaped.push_str("&lt;"); }
             '>' => { escaped.push_str("&gt;"); }
@@ -1064,12 +1064,12 @@ fn render_section(value: Data,
         Bool(true) => render_helper(ctx),
         Bool(false) => ~"",
         Vec(vs) => {
-            do vs.map |v| {
+            vs.map(|v| {
                 let mut stack = ctx.stack.to_owned();
                 stack.push(v.clone());
 
                 render_helper(&RenderContext { stack: stack, .. (*ctx).clone() })
-            }.concat()
+            }).concat()
         }
         Map(_) => {
             let mut stack = ctx.stack.to_owned();
@@ -1086,9 +1086,9 @@ fn render_fun(ctx: &RenderContext,
               src: &str,
               otag: &str,
               ctag: &str,
-              f: &fn(&str) -> ~str) -> ~str {
+              f: |&str| -> ~str) -> ~str {
     let src = f(src);
-    let mut iter = src.iter();
+    let mut iter = src.chars();
 
     let mut inner_ctx = CompileContext {
         rdr: &mut iter,
