@@ -87,17 +87,17 @@ impl Context {
 
 /// Compiles a template from an `Iterator<char>`.
 pub fn compile_iter<T: Iterator<char>>(iter: T) -> Template {
-    Context::new(Path::init(".")).compile(iter)
+    Context::new(Path::new(".")).compile(iter)
 }
 
 /// Compiles a template from a path.
 pub fn compile_path(path: Path) -> Option<Template> {
-    Context::new(Path::init(".")).compile_path(path)
+    Context::new(Path::new(".")).compile_path(path)
 }
 
 /// Compiles a template from a string.
 pub fn compile_str(template: &str) -> Template {
-    Context::new(Path::init(".")).compile(template.chars())
+    Context::new(Path::new(".")).compile(template.chars())
 }
 
 /// Renders a template from an `Iterator<char>`.
@@ -321,8 +321,8 @@ pub enum TokenClass {
     NewLineWhiteSpace(~str, uint),
 }
 
-pub struct Parser<'self, T> {
-    rdr: &'self mut T,
+pub struct Parser<'a, T> {
+    rdr: &'a mut T,
     ch: Option<char>,
     lookahead: Option<char>,
     line: uint,
@@ -340,7 +340,7 @@ pub struct Parser<'self, T> {
 
 enum ParserState { TEXT, OTAG, TAG, CTAG }
 
-impl<'self, T: Iterator<char>> Parser<'self, T> {
+impl<'a, T: Iterator<char>> Parser<'a, T> {
     fn eof(&self) -> bool {
         self.ch.is_none()
     }
@@ -787,8 +787,8 @@ impl<'self, T: Iterator<char>> Parser<'self, T> {
     }
 }
 
-struct CompileContext<'self, T> {
-    rdr: &'self mut T,
+struct CompileContext<'a, T> {
+    rdr: &'a mut T,
     partials: HashMap<~str, ~[Token]>,
     otag: ~str,
     ctag: ~str,
@@ -796,7 +796,7 @@ struct CompileContext<'self, T> {
     template_extension: ~str,
 }
 
-impl<'self, T: Iterator<char>> CompileContext<'self, T> {
+impl<'a, T: Iterator<char>> CompileContext<'a, T> {
     fn compile(&mut self) -> ~[Token] {
         let mut parser = Parser {
             rdr: self.rdr,
@@ -826,7 +826,8 @@ impl<'self, T: Iterator<char>> CompileContext<'self, T> {
                 // Insert a placeholder so we don't recurse off to infinity.
                 self.partials.insert(name.to_owned(), ~[]);
 
-                match ignore_io_error(|| File::open(&path)) {
+                let _ignore = ignore_io_error();
+                match File::open(&path) {
                     Some(mut rdr) => {
                         // XXX: HACK
                         let s = str::from_utf8_owned(rdr.read_to_end());
@@ -857,10 +858,10 @@ impl<'self, T: Iterator<char>> CompileContext<'self, T> {
 }
 
 #[deriving(Clone)]
-struct RenderContext<'self> {
+struct RenderContext<'a> {
     ctx: Context,
-    tokens: &'self [Token],
-    partials: &'self HashMap<~str, ~[Token]>,
+    tokens: &'a [Token],
+    partials: &'a HashMap<~str, ~[Token]>,
     stack: ~[Data],
     indent: ~str,
 }
