@@ -77,7 +77,7 @@ impl Context {
     }
 
     /// Renders a template from an iterator.
-    fn render<
+    pub fn render<
         IT: Iterator<char>,
         T: serialize::Encodable<Encoder>
     >(&self, rdr: IT, data: &T) -> ~str {
@@ -341,10 +341,6 @@ pub struct Parser<'a, T> {
 enum ParserState { TEXT, OTAG, TAG, CTAG }
 
 impl<'a, T: Iterator<char>> Parser<'a, T> {
-    fn eof(&self) -> bool {
-        self.ch.is_none()
-    }
-
     fn bump(&mut self) {
         match self.lookahead.take() {
             None => { self.ch = self.rdr.next(); }
@@ -1083,6 +1079,7 @@ fn render_section(value: Data,
     }
 }
 
+/*
 fn render_fun(ctx: &RenderContext,
               src: &str,
               otag: &str,
@@ -1108,6 +1105,7 @@ fn render_fun(ctx: &RenderContext,
         .. ctx.clone()
     })
 }
+*/
 
 #[cfg(test)]
 mod tests {
@@ -1116,7 +1114,6 @@ mod tests {
     use std::io::File;
     use extra::json;
     use extra::serialize::Encodable;
-    use extra::serialize;
     use extra::tempfile;
     use super::{compile_str, render_str};
     use super::{Context, Encoder};
@@ -1153,12 +1150,14 @@ mod tests {
 
     fn check_tokens(actual: &[Token], expected: &[Token]) -> bool {
         // TODO: equality is currently broken for enums
-        let actual = do actual.map |x| {token_to_str(x)};
-        let expected = do expected.map |x| {token_to_str(x)};
-        if actual !=  expected {
+        let actual = actual.map(token_to_str);
+        let expected = expected.map(token_to_str);
+
+        if actual != expected {
             error!("Found {:?}, but expected {:?}", actual, expected);
             return false;
         }
+
         return true;
     }
 
@@ -1364,14 +1363,6 @@ mod tests {
         assert!(render_str("hello {{{name}}}", ctx) == ~"hello world");
     }
 
-    struct StrHash<V>(HashMap<~str, V>);
-
-    impl<E: serialize::Encoder, V> serialize::Encodable<E> for StrHash<V> {
-        fn encode(&self, e: &mut E) {
-            (*self).encode(e)
-        }
-    }
-
     #[test]
     fn test_render_sections() {
         let mut ctx0 = HashMap::new();
@@ -1542,28 +1533,10 @@ mod tests {
         }
 
         let ctx = Context::new(tmpdir.path().clone());
-        let template = ctx.compile(template.iter());
+        let template = ctx.compile(template.chars());
         let result = template.render_data(data);
 
         if result != expected {
-            fn to_list(x: &json::Json) -> json::Json {
-                match x {
-                    &json::Object(ref d) => {
-                        let mut xs = ~[];
-                        for (k, v) in d.iter() {
-                            let k = json::String(k.clone());
-                            let v = to_list(v);
-                            xs.push(json::List(~[k, v]));
-                        }
-                        json::List(xs)
-                    },
-                    &json::List(ref xs) => {
-                        json::List(xs.map(|x| to_list(x)))
-                    },
-                    _ => { x.clone() }
-                }
-            }
-
             println!("desc:     {}", test.find(&~"desc").unwrap().to_str());
             println!("context:  {}", test.find(&~"data").unwrap().to_str());
             println!("=>");
