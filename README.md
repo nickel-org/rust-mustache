@@ -17,12 +17,19 @@ The different Mustache tags are documented at [mustache(5)][4].
 Install It
 ==========
 
-    rustpkg(?) install mustache
+    git clone https://github.com/erickt/rust-mustache.git
+    cd rust-mustache
+    make 
+
+    (If you want to run the test cases you'll ned the spec as well)
+    git submodule init
+    git submodule update
+    make test
 
 Use It
 ======
 
-    extern mod mustache;
+    extern crate mustache;
 
     #[deriving(Encodable)]
     struct Name { name: ~str }
