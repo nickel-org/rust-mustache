@@ -1,10 +1,11 @@
 extern crate std;
 extern crate extra;
 extern crate serialize;
+extern crate collections;
 
 use std::io::File;
 use std::str;
-use std::hashmap::HashMap;
+use collections::hashmap::HashMap;
 
 pub use parser::{Token, Parser};
 pub use encoder::{Encoder, Data, Map, Vec, Bool, Str};

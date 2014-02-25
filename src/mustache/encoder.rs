@@ -1,7 +1,8 @@
 extern crate serialize;
+extern crate collections;
 
 use std::str;
-use std::hashmap::HashMap;
+use collections::hashmap::HashMap;
 
 /// Represents template data.
 #[deriving(Clone)]
