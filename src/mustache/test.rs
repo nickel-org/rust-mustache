@@ -1,14 +1,14 @@
 extern crate mustache;
 extern crate extra;
 extern crate serialize;
-
+extern crate collections;
 
 #[cfg(test)]
 mod test {
     use std::str;
-    use std::hashmap::HashMap;
+    use collections::hashmap::HashMap;
     use std::io::File;
-    use extra::json;
+    use serialize::json;
     use extra::tempfile;
     use serialize::Encodable;
     use mustache::{compile_str, render_str};
