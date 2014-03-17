@@ -8,6 +8,7 @@ extern crate collections;
 #[cfg(test)]
 mod test {
     use std::str;
+    use std::vec_ng::Vec;
     use collections::hashmap::HashMap;
     use std::io::{File, TempDir};
     use serialize::json;
@@ -15,7 +16,7 @@ mod test {
     use mustache::{compile_str, render_str};
     use mustache::{Context};
     use mustache::encoder::{Encoder, Data, Str, Vec, Map};
-    use mustache::parser::{Token, Text, ETag, UTag, Section, Partial};
+    use mustache::parser::{Token, Text, ETag, UTag, Section, IncompleteSection, Partial};
 
     fn token_to_str(token: &Token) -> ~str {
         match *token {
@@ -28,16 +29,33 @@ mod test {
                     ref src,
                     ref tag,
                     ref ctag) => {
-                let children = children.map(|x| token_to_str(x));
-                format!("Section({:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?})",
-                        name,
+                let name = name.iter().map(|e| format!("{:?}", *e)).collect::<Vec<~str>>();
+                let children = children.iter().map(|x| token_to_str(x)).collect::<Vec<~str>>();
+                format!("Section(vec!({}), {:?}, vec!({}), {:?}, {:?}, {:?}, {:?}, {:?})",
+                        name.connect(", "),
                         inverted,
-                        children,
+                        children.connect(", "),
                         otag,
                         osection,
                         src,
                         tag,
                         ctag)
+            }
+            ETag(ref name, ref tag) => {
+                let name = name.iter().map(|e| format!("{:?}", *e)).collect::<Vec<~str>>();
+                format!("ETag(vec!({:?}), {:?})", name.connect(", "), *tag)
+            }
+            UTag(ref name, ref tag) => {
+                let name = name.iter().map(|e| format!("{:?}", *e)).collect::<Vec<~str>>();
+                format!("UTag(vec!({:?}), {:?})", name.connect(", "), *tag)
+            }
+            IncompleteSection(ref name, ref inverted, ref osection, ref newlined) => {
+                let name = name.iter().map(|e| format!("{:?}", *e)).collect::<Vec<~str>>();
+                format!("IncompleteSection(vec!({:?}), {:?}, {:?}, {:?})",
+                        name.connect(", "),
+                        *inverted,
+                        *osection,
+                        *newlined)
             }
             _ => {
                 format!("{:?}", token)
@@ -45,13 +63,13 @@ mod test {
         }
     }
 
-    fn check_tokens(actual: &[Token], expected: &[Token]) -> bool {
+    fn check_tokens(actual: Vec<Token>, expected: &[Token]) -> bool {
         // TODO: equality is currently broken for enums
-        let actual = actual.map(token_to_str);
-        let expected = expected.map(token_to_str);
+        let actual: Vec<~str> = actual.iter().map(token_to_str).collect();
+        let expected = expected.iter().map(token_to_str).collect();
 
         if actual != expected {
-            error!("Found {:?}, but expected {:?}", actual, expected);
+            error!("Found {:?}, but expected {:?}", actual.as_slice(), expected.as_slice());
             return false;
         }
 
@@ -60,31 +78,39 @@ mod test {
 
     #[test]
     fn test_compile_texts() {
-        assert!(check_tokens(compile_str("hello world").tokens, [Text(~"hello world")]));
-        assert!(check_tokens(compile_str("hello {world").tokens, [Text(~"hello {world")]));
-        assert!(check_tokens(compile_str("hello world}").tokens, [Text(~"hello world}")]));
-        assert!(check_tokens(compile_str("hello world}}").tokens, [Text(~"hello world}}")]));
+        assert!(check_tokens(compile_str("hello world").tokens, [
+            Text(~"hello world")
+        ]));
+        assert!(check_tokens(compile_str("hello {world").tokens, [
+            Text(~"hello {world")
+        ]));
+        assert!(check_tokens(compile_str("hello world}").tokens, [
+            Text(~"hello world}")
+        ]));
+        assert!(check_tokens(compile_str("hello world}}").tokens, [
+            Text(~"hello world}}")
+        ]));
     }
 
     #[test]
     fn test_compile_etags() {
         assert!(check_tokens(compile_str("{{ name }}").tokens, [
-            ETag(~[~"name"], ~"{{ name }}")
+            ETag(vec!(~"name"), ~"{{ name }}")
         ]));
 
         assert!(check_tokens(compile_str("before {{name}} after").tokens, [
             Text(~"before "),
-            ETag(~[~"name"], ~"{{name}}"),
+            ETag(vec!(~"name"), ~"{{name}}"),
             Text(~" after")
         ]));
 
         assert!(check_tokens(compile_str("before {{name}}").tokens, [
             Text(~"before "),
-            ETag(~[~"name"], ~"{{name}}")
+            ETag(vec!(~"name"), ~"{{name}}")
         ]));
 
         assert!(check_tokens(compile_str("{{name}} after").tokens, [
-            ETag(~[~"name"], ~"{{name}}"),
+            ETag(vec!(~"name"), ~"{{name}}"),
             Text(~" after")
         ]));
     }
@@ -92,22 +118,22 @@ mod test {
     #[test]
     fn test_compile_utags() {
         assert!(check_tokens(compile_str("{{{name}}}").tokens, [
-            UTag(~[~"name"], ~"{{{name}}}")
+            UTag(vec!(~"name"), ~"{{{name}}}")
         ]));
 
         assert!(check_tokens(compile_str("before {{{name}}} after").tokens, [
             Text(~"before "),
-            UTag(~[~"name"], ~"{{{name}}}"),
+            UTag(vec!(~"name"), ~"{{{name}}}"),
             Text(~" after")
         ]));
 
         assert!(check_tokens(compile_str("before {{{name}}}").tokens, [
             Text(~"before "),
-            UTag(~[~"name"], ~"{{{name}}}")
+            UTag(vec!(~"name"), ~"{{{name}}}")
         ]));
 
         assert!(check_tokens(compile_str("{{{name}}} after").tokens, [
-            UTag(~[~"name"], ~"{{{name}}}"),
+            UTag(vec!(~"name"), ~"{{{name}}}"),
             Text(~" after")
         ]));
     }
@@ -116,9 +142,9 @@ mod test {
     fn test_compile_sections() {
         assert!(check_tokens(compile_str("{{# name}}{{/name}}").tokens, [
             Section(
-                ~[~"name"],
+                vec!(~"name"),
                 false,
-                ~[],
+                Vec::new(),
                 ~"{{",
                 ~"{{# name}}",
                 ~"",
@@ -130,9 +156,9 @@ mod test {
         assert!(check_tokens(compile_str("before {{^name}}{{/name}} after").tokens, [
             Text(~"before "),
             Section(
-                ~[~"name"],
+                vec!(~"name"),
                 true,
-                ~[],
+                Vec::new(),
                 ~"{{",
                 ~"{{^name}}",
                 ~"",
@@ -145,9 +171,9 @@ mod test {
         assert!(check_tokens(compile_str("before {{#name}}{{/name}}").tokens, [
             Text(~"before "),
             Section(
-                ~[~"name"],
+                vec!(~"name"),
                 false,
-                ~[],
+                Vec::new(),
                 ~"{{",
                 ~"{{#name}}",
                 ~"",
@@ -158,9 +184,9 @@ mod test {
 
         assert!(check_tokens(compile_str("{{#name}}{{/name}} after").tokens, [
             Section(
-                ~[~"name"],
+                vec!(~"name"),
                 false,
-                ~[],
+                Vec::new(),
                 ~"{{",
                 ~"{{#name}}",
                 ~"",
@@ -174,14 +200,14 @@ mod test {
                 "before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after").tokens, [
             Text(~"before "),
             Section(
-                ~[~"a"],
+                vec!(~"a"),
                 false,
-                ~[
+                vec!(
                     Text(~" 1 "),
                     Section(
-                        ~[~"b"],
+                        vec!(~"b"),
                         true,
-                        ~[Text(~" 2 ")],
+                        vec!(Text(~" 2 ")),
                         ~"{{",
                         ~"{{^b}}",
                         ~" 2 ",
@@ -189,7 +215,7 @@ mod test {
                         ~"}}"
                     ),
                     Text(~" ")
-                ],
+                ),
                 ~"{{",
                 ~"{{#a}}",
                 ~" 1 {{^b}} 2 {{/b}} ",
@@ -227,7 +253,7 @@ mod test {
     fn test_compile_delimiters() {
         assert!(check_tokens(compile_str("before {{=<% %>=}}<%name%> after").tokens, [
             Text(~"before "),
-            ETag(~[~"name"], ~"<%name%>"),
+            ETag(vec!(~"name"), ~"<%name%>"),
             Text(~" after")
         ]));
     }
@@ -267,17 +293,17 @@ mod test {
 
         assert!(template.render_data(Map(ctx0.clone())) == ~"05");
 
-        ctx0.insert(~"a", Vec(~[]));
+        ctx0.insert(~"a", Vec(Vec::new()));
         assert!(template.render_data(Map(ctx0.clone())) == ~"05");
 
         let ctx1: HashMap<~str, Data> = HashMap::new();
-        ctx0.insert(~"a", Vec(~[Map(ctx1.clone())]));
+        ctx0.insert(~"a", Vec(vec!(Map(ctx1.clone()))));
 
         assert!(template.render_data(Map(ctx0.clone())) == ~"01  35");
 
         let mut ctx1 = HashMap::new();
         ctx1.insert(~"n", Str(~"a"));
-        ctx0.insert(~"a", Vec(~[Map(ctx1.clone())]));
+        ctx0.insert(~"a", Vec(vec!(Map(ctx1.clone()))));
         assert!(template.render_data(Map(ctx0.clone())) == ~"01 a 35");
 
         //ctx0.insert(~"a", Fun(|_text| {~"foo"}));
@@ -291,11 +317,11 @@ mod test {
         let mut ctx0 = HashMap::new();
         assert!(template.render_data(Map(ctx0.clone())) == ~"01 35");
 
-        ctx0.insert(~"a", Vec(~[]));
+        ctx0.insert(~"a", Vec(vec!()));
         assert!(template.render_data(Map(ctx0.clone())) == ~"01 35");
 
         let mut ctx1 = HashMap::new();
-        ctx0.insert(~"a", Vec(~[Map(ctx1.clone())]));
+        ctx0.insert(~"a", Vec(vec!(Map(ctx1.clone()))));
         assert!(template.render_data(Map(ctx0.clone())) == ~"05");
 
         ctx1.insert(~"n", Str(~"a"));
@@ -311,30 +337,30 @@ mod test {
         let mut ctx0 = HashMap::new();
         assert_eq!(template.render_data(Map(ctx0.clone())), ~"<h2>Names</h2>\n");
 
-        ctx0.insert(~"names", Vec(~[]));
+        ctx0.insert(~"names", Vec(vec!()));
         assert_eq!(template.render_data(Map(ctx0.clone())), ~"<h2>Names</h2>\n");
 
         let mut ctx1 = HashMap::new();
-        ctx0.insert(~"names", Vec(~[Map(ctx1.clone())]));
+        ctx0.insert(~"names", Vec(vec!(Map(ctx1.clone()))));
         assert_eq!(
             template.render_data(Map(ctx0.clone())),
             ~"<h2>Names</h2>\n  <strong></strong>\n\n");
 
         ctx1.insert(~"name", Str(~"a"));
-        ctx0.insert(~"names", Vec(~[Map(ctx1.clone())]));
+        ctx0.insert(~"names", Vec(vec!(Map(ctx1.clone()))));
         assert_eq!(
             template.render_data(Map(ctx0.clone())),
             ~"<h2>Names</h2>\n  <strong>a</strong>\n\n");
 
         let mut ctx2 = HashMap::new();
         ctx2.insert(~"name", Str(~"<b>"));
-        ctx0.insert(~"names", Vec(~[Map(ctx1), Map(ctx2)]));
+        ctx0.insert(~"names", Vec(vec!(Map(ctx1), Map(ctx2))));
         assert_eq!(
             template.render_data(Map(ctx0)),
             ~"<h2>Names</h2>\n  <strong>a</strong>\n\n  <strong>&lt;b&gt;</strong>\n\n");
     }
 
-    fn parse_spec_tests(src: &str) -> ~[json::Json] {
+    fn parse_spec_tests(src: &str) -> Vec<json::Json> {
         let path = Path::new(src);
 
         let file_contents = match File::open(&path).read_to_end() {
@@ -354,7 +380,7 @@ mod test {
                     json::Object(d) => {
                         let mut d = d;
                         match d.pop(&~"tests") {
-                            Some(json::List(tests)) => tests,
+                            Some(json::List(tests)) => tests.move_iter().collect(),
                             _ => fail!("{}: tests key not a list", src),
                         }
                     }

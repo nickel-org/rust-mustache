@@ -1,4 +1,4 @@
-
+use std::vec_ng::Vec;
 use std::char;
 use std::mem;
 
@@ -6,10 +6,10 @@ use std::mem;
 #[deriving(Clone)]
 pub enum Token {
     Text(~str),
-    ETag(~[~str], ~str),
-    UTag(~[~str], ~str),
-    Section(~[~str], bool, ~[Token], ~str, ~str, ~str, ~str, ~str),
-    IncompleteSection(~[~str], bool, ~str, bool),
+    ETag(Vec<~str>, ~str),
+    UTag(Vec<~str>, ~str),
+    Section(Vec<~str>, bool, Vec<Token>, ~str, ~str, ~str, ~str, ~str),
+    IncompleteSection(Vec<~str>, bool, ~str, bool),
     Partial(~str, ~str, ~str),
 }
 
@@ -31,11 +31,11 @@ pub struct Parser<'a, T> {
     state: ParserState,
     otag: ~str,
     ctag: ~str,
-    otag_chars: ~[char],
-    ctag_chars: ~[char],
+    otag_chars: Vec<char>,
+    ctag_chars: Vec<char>,
     tag_position: uint,
-    tokens: ~[Token],
-    partials: ~[~str],
+    tokens: Vec<Token>,
+    partials: Vec<~str>,
 }
 
 pub enum ParserState { TEXT, OTAG, TAG, CTAG }
@@ -88,7 +88,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
 
             match self.state {
                 TEXT => {
-                    if ch == self.otag_chars[0] {
+                    if ch == *self.otag_chars.get(0) {
                         if self.otag_chars.len() > 1 {
                             self.tag_position = 1;
                             self.state = OTAG;
@@ -102,7 +102,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                     self.bump();
                 }
                 OTAG => {
-                    if ch == self.otag_chars[self.tag_position] {
+                    if ch == *self.otag_chars.get(self.tag_position) {
                         if self.tag_position == self.otag_chars.len() - 1 {
                             self.add_text();
                             curly_brace_tag = false;
@@ -128,7 +128,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                         curly_brace_tag = false;
                         self.content.push_char(ch);
                         self.bump();
-                    } else if ch == self.ctag_chars[0] {
+                    } else if ch == *self.ctag_chars.get(0) {
                         if self.ctag_chars.len() > 1 {
                             self.tag_position = 1;
                             self.state = CTAG;
@@ -143,7 +143,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                     }
                 }
                 CTAG => {
-                    if ch == self.ctag_chars[self.tag_position] {
+                    if ch == *self.ctag_chars.get(self.tag_position) {
                         if self.tag_position == self.ctag_chars.len() - 1 {
                             self.add_tag();
                             self.state = TEXT;
@@ -156,7 +156,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                     } else {
                         fail!("character {} is not part of CTAG: {}",
                               ch,
-                              self.ctag_chars[self.tag_position]);
+                              *self.ctag_chars.get(self.tag_position));
                     }
                 }
             }
@@ -205,14 +205,14 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
             }
         }
 
-        // If the last token ends with a newline (or there is no previous
-        // token), then this token is standalone.
-        if self.tokens.len() == 0 { return StandAlone; }
+        match self.tokens.last() {
+            // If the last token ends with a newline (or there is no previous
+            // token), then this token is standalone.
+            None => { StandAlone }
 
-        match self.tokens[self.tokens.len() - 1] {
-            IncompleteSection(_, _, _, true) => { StandAlone }
+            Some(&IncompleteSection(_, _, _, true)) => { StandAlone }
 
-            Text(ref s) if !s.is_empty() => {
+            Some(&Text(ref s)) if !s.is_empty() => {
                 // Look for the last newline character that may have whitespace
                 // following it.
                 match s.rfind(|c:char| c == '\n' || !char::is_whitespace(c)) {
@@ -235,7 +235,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                     }
                 }
             }
-            _ => Normal,
+            Some(_) => Normal,
         }
     }
 
@@ -321,7 +321,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                 let name = name.split_terminator('.')
                     .map(|x| x.to_owned())
                     .collect();
-                let mut children: ~[Token] = ~[];
+                let mut children: Vec<Token> = Vec::new();
 
                 loop {
                     if self.tokens.len() == 0 {
@@ -335,7 +335,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                             children.reverse();
 
                             // Collect all the children's sources.
-                            let mut srcs = ~[];
+                            let mut srcs = Vec::new();
                             for child in children.iter() {
                                 match *child {
                                     Text(ref s)
@@ -418,7 +418,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                 // an empty name.
                 let name = self.check_content(content);
                 let name = if name == ~"." {
-                    ~[]
+                    Vec::new()
                 } else {
                     name.split_terminator('.')
                         .map(|x| x.to_owned())
@@ -465,7 +465,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
     fn not_otag(&mut self) {
         let mut i = 0;
         while i < self.tag_position {
-            self.content.push_char(self.otag_chars[i]);
+            self.content.push_char(*self.otag_chars.get(i));
             i += 1;
         }
     }
@@ -473,7 +473,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
     fn not_ctag(&mut self) {
         let mut i = 0;
         while i < self.tag_position {
-            self.content.push_char(self.ctag_chars[i]);
+            self.content.push_char(*self.ctag_chars.get(i));
             i += 1;
         }
     }

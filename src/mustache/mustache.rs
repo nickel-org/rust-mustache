@@ -6,6 +6,7 @@ extern crate collections;
 
 use std::io::File;
 use std::str;
+use std::vec_ng::Vec;
 use collections::hashmap::HashMap;
 
 pub use parser::{Token, Parser};
@@ -25,8 +26,8 @@ pub struct Context {
 
 pub struct Template {
     ctx: Context,
-    tokens: ~[Token],
-    partials: HashMap<~str, ~[Token]>
+    tokens: Vec<Token>,
+    partials: HashMap<~str, Vec<Token>>
 }
 
 impl Context {
@@ -141,7 +142,7 @@ impl Template {
             // This should be `tokens: self.tokens,` but that's broken
             tokens: self.tokens.as_slice(),
             partials: self.partials.clone(),
-            stack: ~[data],
+            stack: vec!(data),
             indent: ~""
         })
     }
@@ -150,7 +151,7 @@ impl Template {
 
 struct CompileContext<'a, T> {
     reader: &'a mut T,
-    partials: HashMap<~str, ~[Token]>,
+    partials: HashMap<~str, Vec<Token>>,
     otag: ~str,
     ctag: ~str,
     template_path: Path,
@@ -158,7 +159,7 @@ struct CompileContext<'a, T> {
 }
 
 impl<'a, T: Iterator<char>> CompileContext<'a, T> {
-    pub fn compile(&mut self) -> ~[Token] {
+    pub fn compile(&mut self) -> Vec<Token> {
         let mut parser = Parser {
             reader: self.reader,
             ch: None,
@@ -169,11 +170,11 @@ impl<'a, T: Iterator<char>> CompileContext<'a, T> {
             state: parser::TEXT,
             otag: self.otag.to_owned(),
             ctag: self.ctag.to_owned(),
-            otag_chars: self.otag.chars().collect::<~[char]>(),
-            ctag_chars: self.ctag.chars().collect::<~[char]>(),
+            otag_chars: self.otag.chars().collect(),
+            ctag_chars: self.ctag.chars().collect(),
             tag_position: 0,
-            tokens: ~[],
-            partials: ~[],
+            tokens: Vec::new(),
+            partials: Vec::new(),
         };
 
         parser.bump();
@@ -185,7 +186,7 @@ impl<'a, T: Iterator<char>> CompileContext<'a, T> {
 
             if !self.partials.contains_key(name) {
                 // Insert a placeholder so we don't recurse off to infinity.
-                self.partials.insert(name.to_owned(), ~[]);
+                self.partials.insert(name.to_owned(), Vec::new());
                 match File::open(&path).read_to_end() {
                     Ok(contents) => {
 
@@ -222,8 +223,8 @@ impl<'a, T: Iterator<char>> CompileContext<'a, T> {
 struct RenderContext<'a> {
     ctx: Context,
     tokens: &'a [Token],
-    partials: HashMap<~str, ~[Token]>,
-    stack: ~[Data],
+    partials: HashMap<~str, Vec<Token>>,
+    stack: Vec<Data>,
     indent: ~str,
 }
 
@@ -314,7 +315,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                 }
             },
             parser::ETag(ref path, _) => {
-                match find(ctx.stack, *path) {
+                match find(ctx.stack.as_slice(), path.as_slice()) {
                     None => { }
                     Some(value) => {
                         output = output + ctx.indent + render_etag(value, ctx);
@@ -322,7 +323,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                 }
             }
             parser::UTag(ref path, _) => {
-                match find(ctx.stack, *path) {
+                match find(ctx.stack.as_slice(), path.as_slice()) {
                     None => { }
                     Some(value) => {
                         output = output + ctx.indent + render_utag(value, ctx);
@@ -337,13 +338,13 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     .. ctx.clone()
                 };
 
-                output = output + match find(ctx.stack, *path) {
+                output = output + match find(ctx.stack.as_slice(), path.as_slice()) {
                     None => { render_helper(&ctx) }
                     Some(value) => { render_inverted_section(value, &ctx) }
                 };
             }
             parser::Section(ref path, false, ref children, ref otag, _, ref src, _, ref ctag) => {
-                match find(ctx.stack, *path) {
+                match find(ctx.stack.as_slice(), path.as_slice()) {
                     None => { }
                     Some(value) => {
                         output = output + render_section(
@@ -426,15 +427,15 @@ fn render_section(value: Data,
         Bool(true) => render_helper(ctx),
         Bool(false) => ~"",
         Vec(vs) => {
-            vs.map(|v| {
-                let mut stack = ctx.stack.to_owned();
+            vs.move_iter().map(|v| {
+                let mut stack = ctx.stack.clone();
                 stack.push(v.clone());
 
                 render_helper(&RenderContext { stack: stack, .. (*ctx).clone() })
-            }).concat()
+            }).collect::<Vec<~str>>().concat()
         }
         Map(_) => {
-            let mut stack = ctx.stack.to_owned();
+            let mut stack = ctx.stack.clone();
             stack.push(value);
 
             render_helper(&RenderContext { stack: stack, .. (*ctx).clone() })
