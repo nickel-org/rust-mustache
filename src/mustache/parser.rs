@@ -463,18 +463,20 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
     }
 
     fn not_otag(&mut self) {
-        let mut i = 0;
-        while i < self.tag_position {
-            self.content.push_char(*self.otag_chars.get(i));
-            i += 1;
+        for (i, ch) in self.otag_chars.iter().enumerate() {
+            if !(i < self.tag_position) {
+                break
+            }
+            self.content.push_char(*ch);
         }
     }
 
     fn not_ctag(&mut self) {
-        let mut i = 0;
-        while i < self.tag_position {
-            self.content.push_char(*self.ctag_chars.get(i));
-            i += 1;
+        for (i, ch) in self.ctag_chars.iter().enumerate() {
+            if !(i < self.tag_position) {
+                break
+            }
+            self.content.push_char(*ch);
         }
     }
 
