@@ -2,6 +2,7 @@ extern crate serialize;
 extern crate collections;
 
 use std::str;
+use std::vec_ng::Vec;
 use collections::hashmap::HashMap;
 
 /// Represents template data.
@@ -9,18 +10,18 @@ use collections::hashmap::HashMap;
 pub enum Data {
     Str(~str),
     Bool(bool),
-    Vec(~[Data]),
+    Vec(Vec<Data>),
     Map(HashMap<~str, Data>),
     //Fun(fn(~str) -> ~str),
 }
 
 pub struct Encoder {
-    data: ~[Data],
+    data: Vec<Data>,
 }
 
 impl Encoder {
     pub fn new() -> Encoder {
-        Encoder { data: ~[] }
+        Encoder { data: Vec::new() }
     }
 }
 
@@ -134,7 +135,7 @@ impl serialize::Encoder for Encoder {
     }
 
     fn emit_seq(&mut self, _len: uint, f: |&mut Encoder|) {
-        self.data.push(Vec(~[]));
+        self.data.push(Vec(Vec::new()));
         f(self);
     }
 
