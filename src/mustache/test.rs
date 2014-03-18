@@ -1,5 +1,7 @@
+#[feature(phase)];
+#[phase(syntax, link)] extern crate log;
+
 extern crate mustache;
-extern crate extra;
 extern crate serialize;
 extern crate collections;
 
@@ -7,9 +9,8 @@ extern crate collections;
 mod test {
     use std::str;
     use collections::hashmap::HashMap;
-    use std::io::File;
+    use std::io::{File, TempDir};
     use serialize::json;
-    use extra::tempfile;
     use serialize::Encodable;
     use mustache::{compile_str, render_str};
     use mustache::{Context};
@@ -421,7 +422,7 @@ mod test {
 
         // Make a temporary dir where we'll store our partials. This is to
         // avoid a race on filenames.
-        let tmpdir = match tempfile::TempDir::new("") {
+        let tmpdir = match TempDir::new("") {
             Some(tmpdir) => tmpdir,
             None => fail!(),
         };

@@ -1,7 +1,6 @@
 #[crate_id = "github.com/erickt/rust-mustache#mustache:0.1.0"];
 
 extern crate std;
-extern crate extra;
 extern crate serialize;
 extern crate collections;
 

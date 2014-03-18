@@ -416,13 +416,13 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
             _ => {
                 // If the name is "." then we want the top element, which we represent with
                 // an empty name.
-                let name = match self.check_content(content) {
-                    ~"." => ~[],
-                    name => {
-                        name.split_terminator('.')
-                            .map(|x| x.to_owned())
-                            .collect()
-                    }
+                let name = self.check_content(content);
+                let name = if name == ~"." {
+                    ~[]
+                } else {
+                    name.split_terminator('.')
+                        .map(|x| x.to_owned())
+                        .collect()
                 };
 
                 self.tokens.push(ETag(name, tag));
