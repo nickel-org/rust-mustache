@@ -8,7 +8,6 @@ extern crate collections;
 #[cfg(test)]
 mod test {
     use std::str;
-    use std::vec_ng::Vec;
     use collections::hashmap::HashMap;
     use std::io::{File, TempDir};
     use serialize::json;

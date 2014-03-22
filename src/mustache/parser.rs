@@ -1,4 +1,3 @@
-use std::vec_ng::Vec;
 use std::char;
 use std::mem;
 
