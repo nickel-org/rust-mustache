@@ -2,7 +2,6 @@ extern crate serialize;
 extern crate collections;
 
 use std::str;
-use std::vec_ng::Vec;
 use collections::hashmap::HashMap;
 
 /// Represents template data.

@@ -6,7 +6,6 @@ extern crate collections;
 
 use std::io::File;
 use std::str;
-use std::vec_ng::Vec;
 use collections::hashmap::HashMap;
 
 pub use parser::{Token, Parser};
@@ -79,7 +78,7 @@ impl Context {
         // TODO: maybe allow UTF-16 as well?
         let template = match str::from_utf8(s) {
             Some(string) => string,
-            None() => {println!("Error: File is not UTF-8 encoded"); return None;}
+            None => {println!("Error: File is not UTF-8 encoded"); return None;}
         };
         Some(self.compile(template.chars()))
     }
