@@ -1,14 +1,16 @@
 RUSTC ?= rustc
-RUSTPKG ?= rustpkg
-RUST_FLAGS ?= -Z debug-info -O
+RUST_FLAGS ?= -O --crate-type=rlib,dylib
+
+
+.PHONY: install clean test
 
 all:
-	$(RUSTPKG) $(RUST_FLAGS) install mustache
+	test -d build || mkdir build
+	$(RUSTC) $(RUST_FLAGS) --out-dir=build src/mustache/mustache.rs
 
-check:
-	mkdir -p bin
-	$(RUSTC) $(RUST_FLAGS) --test -o bin/test-mustache src/mustache/lib.rs
-	./bin/test-mustache
+test: 
+	test -d build || mkdir build
+	$(RUSTC) --test src/mustache/test.rs -o build/libtest~ -L build && ./build/libtest~
 
 clean:
-	rm -rf bin build lib
+	rm -rf bin/* build/* lib/*
