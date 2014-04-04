@@ -11,7 +11,7 @@ mod test {
     use serialize::Encodable;
     use mustache::{compile_str, render_str};
     use mustache::{Context};
-    use mustache::encoder::{Encoder, Data, Str, Vec, Map};
+    use mustache::encoder::{Encoder, Data, Str, Vec, Map, Fun};
     use mustache::{Token, Text, ETag, UTag, Section, IncompleteSection, Partial};
 
     fn token_to_str(token: &Token) -> ~str {
@@ -520,64 +520,91 @@ mod test {
         run_tests("spec/specs/sections.json");
     }
 
-//    #[test]
-//    fn test_spec_lambdas() {
-//        for json in parse_spec_tests(~"spec/specs/~lambdas.json").iter() {
-//            let test = match json {
-//                &json::Object(m) => m,
-//                _ => fail!(),
-//            };
-//
-//            // Replace the lambda with rust code.
-//            let data = match test.find(&~"data") {
-//                Some(data) => (*data).clone(),
-//                None => fail!(),
-//            };
-//
-//            let encoder = Encoder::new();
-//            data.encode(&encoder);
-//            let ctx = match encoder.data {
-//                [Map(ctx)] => ctx,
-//                _ => fail!(),
-//            };
-//
-//            let f = match *test.find(&~"name").unwrap() {
-//                json::String(~"Interpolation") => {
-//                    |_text| {~"world" }
-//                }
-//                json::String(~"Interpolation - Expansion") => {
-//                    |_text| {~"{{planet}}" }
-//                }
-//                json::String(~"Interpolation - Alternate Delimiters") => {
-//                    |_text| {~"|planet| => {{planet}}" }
-//                }
-//                json::String(~"Interpolation - Multiple Calls") => {
-//                    let calls = 0i;
-//                    |_text| {*calls = *calls + 1; calls.to_str() }
-//                }
-//                json::String(~"Escaping") => {
-//                    |_text| {~">" }
-//                }
-//                json::String(~"Section") => {
-//                    |text: ~str| {if *text == ~"{{x}}" { ~"yes" } else { ~"no" } }
-//                }
-//                json::String(~"Section - Expansion") => {
-//                    |text: ~str| {*text + "{{planet}}" + *text }
-//                }
-//                json::String(~"Section - Alternate Delimiters") => {
-//                    |text: ~str| {*text + "{{planet}} => |planet|" + *text }
-//                }
-//                json::String(~"Section - Multiple Calls") => {
-//                    |text: ~str| {~"__" + *text + ~"__" }
-//                }
-//                json::String(~"Inverted Section") => {
-//                    |_text| {~"" }
-//                }
-//                value => { fail!("{:?}", value) }
-//            };
-//            //ctx.insert(~"lambda", Fun(f));
-//
-//            run_test(test, Map(ctx));
-//        }
-//    }
+   #[test]
+   fn test_spec_lambdas() {
+       for json in parse_spec_tests("spec/specs/~lambdas.json").move_iter() {
+           let mut test = match json {
+               json::Object(m) => m,
+               value => { fail!("{:?}", value) }
+           };
+
+           // Replace the lambda with rust code.
+           let data = match test.pop(&~"data") {
+               Some(data) => data,
+               None => fail!(),
+           };
+
+           let mut encoder = Encoder::new();
+           data.encode(&mut encoder).unwrap();
+
+           let mut ctx = match encoder.data.pop().unwrap() {
+               Map(ctx) => ctx,
+               _ => fail!(),
+           };
+
+           let s = match test.pop(&~"name") {
+               Some(json::String(s)) => s,
+               value => { fail!("{:?}", value) }
+           };
+
+           let f = match s.as_slice() {
+               "Interpolation" => {
+                   fn f(_text: ~str) -> ~str {~"world" }
+                   f
+               }
+               "Interpolation - Expansion" => {
+                   fn f(_text: ~str) -> ~str {~"{{planet}}" }
+                   f
+               }
+               "Interpolation - Alternate Delimiters" => {
+                   fn f(_text: ~str) -> ~str {~"|planet| => {{planet}}" }
+                   f
+               }
+               "Interpolation - Multiple Calls" => {
+                   // We can't do closures yet because of a rust bug.
+                   continue;
+                   /*
+                   let calls = 0i;
+                   fn _f(_text: ~str) {*calls = *calls + 1; calls.to_str() }
+                   */
+               }
+               "Escaping" => {
+                   fn f(_text: ~str) -> ~str {~">" }
+                   f
+               }
+               "Section" => {
+                   fn f(text: ~str) -> ~str {
+                       if text == ~"{{x}}" { ~"yes" } else { ~"no" }
+                   }
+                   f
+               }
+               "Section - Expansion" => {
+                   fn f(text: ~str) -> ~str {
+                       text + "{{planet}}" + text
+                   }
+                   f
+               }
+               "Section - Alternate Delimiters" => {
+                   fn f(text: ~str) -> ~str {
+                       text + "{{planet}} => |planet|" + text
+                   }
+                   f
+               }
+               "Section - Multiple Calls" => {
+                   fn f(text: ~str) -> ~str {
+                       ~"__" + text + "__"
+                   }
+                   f
+               }
+               "Inverted Section" => {
+                   fn f(_text: ~str) -> ~str { ~"" }
+                   f
+               }
+               value => { fail!("{:?}", value) }
+           };
+           ctx.insert(~"lambda", Fun(f));
+
+           run_test(test, Map(ctx));
+       }
+   }
 }

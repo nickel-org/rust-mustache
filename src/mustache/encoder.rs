@@ -13,7 +13,7 @@ pub enum Data {
     Bool(bool),
     Vec(Vec<Data>),
     Map(HashMap<~str, Data>),
-    //Fun(fn(~str) -> ~str),
+    Fun(fn(~str) -> ~str),
 }
 
 pub struct Encoder {
@@ -233,7 +233,7 @@ impl serialize::Encoder<Error> for Encoder {
     }
 }
 
-pub fn encode<T: serialize::Encodable<Encoder, Error>>(data: &T) -> Result<Data, Error> {
+pub fn encode<'a, T: serialize::Encodable<Encoder, Error>>(data: &T) -> Result<Data, Error> {
     let mut encoder = Encoder::new();
     try!(data.encode(&mut encoder))
     assert_eq!(encoder.data.len(), 1);

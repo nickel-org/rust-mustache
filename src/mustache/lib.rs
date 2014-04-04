@@ -11,7 +11,7 @@ use std::str;
 use collections::hashmap::HashMap;
 
 //pub use parser::{Token, Parser, CompileContext};
-pub use encoder::{Encoder, EncoderResult, Data, Map, Vec, Bool, Str};
+pub use encoder::{Encoder, EncoderResult, Data, Map, Vec, Bool, Str, Fun};
 pub use encoder::{Error, InvalidStr, IoError};
 
 //pub mod parser;
@@ -89,6 +89,7 @@ impl Context {
 
     /// Renders a template from a string.
     pub fn render<
+        'a,
         T: serialize::Encodable<Encoder, Error>
     >(&self, reader: &str, data: &T) -> Result<~str, Error> {
         let template = self.compile(reader.chars());
@@ -114,6 +115,7 @@ pub fn compile_str(template: &str) -> Template {
 
 /// Renders a template from an `Iterator<char>`.
 pub fn render_iter<
+    'a,
     IT: Iterator<char>,
     T: serialize::Encodable<Encoder, Error>
 >(reader: IT, data: &T) -> Result<~str, Error> {
@@ -122,6 +124,7 @@ pub fn render_iter<
 
 /// Renders a template from a file.
 pub fn render_path<
+    'a,
     T: serialize::Encodable<Encoder, Error>
 >(path: Path, data: &T) -> Result<~str, Error> {
     compile_path(path).and_then(|template| template.render(data))
@@ -129,6 +132,7 @@ pub fn render_path<
 
 /// Renders a template from a string.
 pub fn render_str<
+    'a,
     T: serialize::Encodable<Encoder, Error>
 >(template: &str, data: &T) -> Result<~str, Error> {
     compile_str(template).render(data)
@@ -892,12 +896,12 @@ fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
     escaped
 }
 
-fn render_utag(value: Data, _ctx: &RenderContext) -> ~str {
+fn render_utag(value: Data, ctx: &RenderContext) -> ~str {
     match value {
         Str(ref s) => s.clone(),
 
         // etags and utags use the default delimiter.
-        //Fun(f) => render_fun(ctx, ~"", ~"{{", ~"}}", f),
+        Fun(f) => render_fun(ctx, "", "{{", "}}", f),
 
         _ => fail!(),
     }
@@ -912,9 +916,9 @@ fn render_inverted_section(value: Data, ctx: &RenderContext) -> ~str {
 }
 
 fn render_section(value: Data,
-                  _src: &str,
-                  _otag: &str,
-                  _ctag: &str,
+                  src: &str,
+                  otag: &str,
+                  ctag: &str,
                   ctx: &RenderContext) -> ~str {
     match value {
         Bool(true) => render_helper(ctx),
@@ -933,18 +937,17 @@ fn render_section(value: Data,
 
             render_helper(&RenderContext { stack: stack, .. (*ctx).clone() })
         }
-        //Fun(f) => render_fun(ctx, src, otag, ctag, f),
+        Fun(f) => render_fun(ctx, src, otag, ctag, f),
         _ => fail!(),
     }
 }
 
-/*
 fn render_fun(ctx: &RenderContext,
               src: &str,
               otag: &str,
               ctag: &str,
-              f: |&str| -> ~str) -> ~str {
-    let src = f(src);
+              f: fn(~str) -> ~str) -> ~str {
+    let src = f(src.to_owned());
     let mut iter = src.chars();
 
     let mut inner_ctx = CompileContext {
@@ -964,4 +967,3 @@ fn render_fun(ctx: &RenderContext,
         .. ctx.clone()
     })
 }
-*/
