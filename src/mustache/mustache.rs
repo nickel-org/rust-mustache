@@ -1,19 +1,21 @@
-#[crate_id = "github.com/erickt/rust-mustache#mustache:0.1.0"];
+#![crate_id = "github.com/erickt/rust-mustache#mustache:0.1.0"]
 
 extern crate std;
 extern crate serialize;
 extern crate collections;
 
+use std::char;
 use std::io::File;
+use std::mem;
 use std::str;
 use collections::hashmap::HashMap;
 
-pub use parser::{Token, Parser};
-pub use encoder::{Encoder, Data, Map, Vec, Bool, Str};
+//pub use parser::{Token, Parser, CompileContext};
+pub use encoder::{Encoder, EncoderResult, Data, Map, Vec, Bool, Str};
+pub use encoder::{Error, InvalidStr, IoError};
 
-pub mod parser;
+//pub mod parser;
 pub mod encoder;
-
 
 /// Represents the shared metadata needed to compile and render a mustache
 /// template.
@@ -25,7 +27,7 @@ pub struct Context {
 
 pub struct Template {
     ctx: Context,
-    tokens: Vec<Token>,
+    pub tokens: Vec<Token>,
     partials: HashMap<~str, Vec<Token>>
 }
 
@@ -61,7 +63,7 @@ impl Context {
         }
     }
 
-    pub fn compile_path(&self, path: Path) -> Option<Template> {
+    pub fn compile_path(&self, path: Path) -> Result<Template, Error> {
         // FIXME(#6164): This should use the file decoding tools when they are
         // written. For now we'll just read the file and treat it as UTF-8file.
         let mut path = self.template_path.join(path);
@@ -72,20 +74,25 @@ impl Context {
         //    None => { return None; }
         //};
         let s = match File::open(&path).read_to_end() {
-            Ok(str) => str,
-            Err(e) => {println!("failed to read file: {}", e); return None;}
+            Ok(s) => s,
+            Err(err) => { return Err(IoError(err)); }
         };
+
         // TODO: maybe allow UTF-16 as well?
         let template = match str::from_utf8(s) {
             Some(string) => string,
-            None => {println!("Error: File is not UTF-8 encoded"); return None;}
+            None => { return Err(InvalidStr); }
         };
-        Some(self.compile(template.chars()))
+
+        Ok(self.compile(template.chars()))
     }
 
     /// Renders a template from a string.
-    pub fn render<T: serialize::Encodable<Encoder>>(&self, reader: &str, data: &T) -> ~str {
-        self.compile(reader.chars()).render(data)
+    pub fn render<
+        T: serialize::Encodable<Encoder, Error>
+    >(&self, reader: &str, data: &T) -> Result<~str, Error> {
+        let template = self.compile(reader.chars());
+        template.render(data)
     }
 }
 
@@ -96,7 +103,7 @@ pub fn compile_iter<T: Iterator<char>>(iter: T) -> Template {
 
 /// Compiles a template from a path.
 // returns None if the file cannot be read OR the file is not UTF-8 encoded
-pub fn compile_path(path: Path) -> Option<Template> {
+pub fn compile_path(path: Path) -> Result<Template, Error> {
     Context::new(Path::new(".")).compile_path(path)
 }
 
@@ -106,32 +113,520 @@ pub fn compile_str(template: &str) -> Template {
 }
 
 /// Renders a template from an `Iterator<char>`.
-pub fn render_iter<IT: Iterator<char>, T: serialize::Encodable<Encoder>>(reader: IT, data: &T) -> ~str {
+pub fn render_iter<
+    IT: Iterator<char>,
+    T: serialize::Encodable<Encoder, Error>
+>(reader: IT, data: &T) -> Result<~str, Error> {
     compile_iter(reader).render(data)
 }
 
 /// Renders a template from a file.
-pub fn render_path<T: serialize::Encodable<Encoder>>(path: Path, data: &T) -> Option<~str> {
-    compile_path(path).and_then(|template| {
-        Some(template.render(data))
-    })
+pub fn render_path<
+    T: serialize::Encodable<Encoder, Error>
+>(path: Path, data: &T) -> Result<~str, Error> {
+    compile_path(path).and_then(|template| template.render(data))
 }
 
 /// Renders a template from a string.
-pub fn render_str<T: serialize::Encodable<Encoder>>(template: &str, data: &T) -> ~str {
+pub fn render_str<
+    T: serialize::Encodable<Encoder, Error>
+>(template: &str, data: &T) -> Result<~str, Error> {
     compile_str(template).render(data)
 }
 
-impl Template {
-    pub fn render<T: serialize::Encodable<Encoder> >(&self, data: &T) -> ~str {
-        let mut encoder = Encoder::new();
-        data.encode(&mut encoder);
-        assert_eq!(encoder.data.len(), 1);
-        let popped = match encoder.data.pop() {
-            Some(p) => p,
-            None => fail!("Error: Nothing to pop!"),
+#[deriving(Clone)]
+pub enum Token {
+    Text(~str),
+    ETag(Vec<~str>, ~str),
+    UTag(Vec<~str>, ~str),
+    Section(Vec<~str>, bool, Vec<Token>, ~str, ~str, ~str, ~str, ~str),
+    IncompleteSection(Vec<~str>, bool, ~str, bool),
+    Partial(~str, ~str, ~str),
+}
+
+#[deriving(Clone)]
+pub enum TokenClass {
+    Normal,
+    StandAlone,
+    WhiteSpace(~str, uint),
+    NewLineWhiteSpace(~str, uint),
+}
+
+pub struct Parser<'a, T> {
+    reader: &'a mut T,
+    ch: Option<char>,
+    lookahead: Option<char>,
+    line: uint,
+    col: uint,
+    content: ~str,
+    state: ParserState,
+    otag: ~str,
+    ctag: ~str,
+    otag_chars: Vec<char>,
+    ctag_chars: Vec<char>,
+    tag_position: uint,
+    tokens: Vec<Token>,
+    partials: Vec<~str>,
+}
+
+pub enum ParserState { TEXT, OTAG, TAG, CTAG }
+
+impl<'a, T: Iterator<char>> Parser<'a, T> {
+    pub fn bump(&mut self) {
+        match self.lookahead.take() {
+            None => { self.ch = self.reader.next(); }
+            Some(ch) => { self.ch = Some(ch); }
+        }
+
+        match self.ch {
+            Some(ch) => {
+                if ch == '\n' {
+                    self.line += 1;
+                    self.col = 1;
+                } else {
+                    self.col += 1;
+                }
+            }
+            None => { }
+        }
+    }
+
+    fn peek(&mut self) -> Option<char> {
+        match self.lookahead {
+            None => {
+                self.lookahead = self.reader.next();
+                self.lookahead
+            }
+            Some(ch) => Some(ch),
+        }
+    }
+
+    fn ch_is(&self, ch: char) -> bool {
+        match self.ch {
+            Some(c) => c == ch,
+            None => false,
+        }
+    }
+
+    pub fn parse(&mut self) {
+        let mut curly_brace_tag = false;
+
+        loop {
+            let ch = match self.ch {
+                Some(ch) => ch,
+                None => { break; }
+            };
+
+            match self.state {
+                TEXT => {
+                    if ch == *self.otag_chars.get(0) {
+                        if self.otag_chars.len() > 1 {
+                            self.tag_position = 1;
+                            self.state = OTAG;
+                        } else {
+                            self.add_text();
+                            self.state = TAG;
+                        }
+                    } else {
+                        self.content.push_char(ch);
+                    }
+                    self.bump();
+                }
+                OTAG => {
+                    if ch == *self.otag_chars.get(self.tag_position) {
+                        if self.tag_position == self.otag_chars.len() - 1 {
+                            self.add_text();
+                            curly_brace_tag = false;
+                            self.state = TAG;
+                        } else {
+                            self.tag_position = self.tag_position + 1;
+                        }
+                    } else {
+                        // We don't have a tag, so add all the tag parts we've seen
+                        // so far to the string.
+                        self.state = TEXT;
+                        self.not_otag();
+                        self.content.push_char(ch);
+                    }
+                    self.bump();
+                }
+                TAG => {
+                    if self.content == ~"" && ch == '{' {
+                        curly_brace_tag = true;
+                        self.content.push_char(ch);
+                        self.bump();
+                    } else if curly_brace_tag && ch == '}' {
+                        curly_brace_tag = false;
+                        self.content.push_char(ch);
+                        self.bump();
+                    } else if ch == *self.ctag_chars.get(0) {
+                        if self.ctag_chars.len() > 1 {
+                            self.tag_position = 1;
+                            self.state = CTAG;
+                            self.bump();
+                        } else {
+                            self.add_tag();
+                            self.state = TEXT;
+                        }
+                    } else {
+                        self.content.push_char(ch);
+                        self.bump();
+                    }
+                }
+                CTAG => {
+                    if ch == *self.ctag_chars.get(self.tag_position) {
+                        if self.tag_position == self.ctag_chars.len() - 1 {
+                            self.add_tag();
+                            self.state = TEXT;
+                        } else {
+                            self.state = TAG;
+                            self.not_ctag();
+                            self.content.push_char(ch);
+                            self.bump();
+                        }
+                    } else {
+                        fail!("character {} is not part of CTAG: {}",
+                              ch,
+                              *self.ctag_chars.get(self.tag_position));
+                    }
+                }
+            }
+        }
+
+        match self.state {
+            TEXT => { self.add_text(); }
+            OTAG => { self.not_otag(); self.add_text(); }
+            TAG => { fail!(~"unclosed tag"); }
+            CTAG => { self.not_ctag(); self.add_text(); }
+        }
+
+        // Check that we don't have any incomplete sections.
+        for token in self.tokens.iter() {
+            match *token {
+                IncompleteSection(ref path, _, _, _) => {
+                    fail!("Unclosed mustache section {}", path.connect("."));
+              }
+              _ => {}
+            }
         };
-        self.render_data(popped)
+    }
+
+    fn add_text(&mut self) {
+        if self.content != ~"" {
+            let mut content = ~"";
+            mem::swap(&mut content, &mut self.content);
+
+            self.tokens.push(Text(content));
+        }
+    }
+
+    // This function classifies whether or not a token is standalone, or if it
+    // has trailing whitespace. It's looking for this pattern:
+    //
+    //   ("\n" | "\r\n") whitespace* token ("\n" | "\r\n")
+    //
+    fn classify_token(&mut self) -> TokenClass {
+        // Exit early if the next character is not '\n' or '\r\n'.
+        match self.ch {
+            None => { }
+            Some(ch) => {
+                if !(ch == '\n' || (ch == '\r' && self.peek() == Some('\n'))) {
+                    return Normal;
+                }
+            }
+        }
+
+        match self.tokens.last() {
+            // If the last token ends with a newline (or there is no previous
+            // token), then this token is standalone.
+            None => { StandAlone }
+
+            Some(&IncompleteSection(_, _, _, true)) => { StandAlone }
+
+            Some(&Text(ref s)) if !s.is_empty() => {
+                // Look for the last newline character that may have whitespace
+                // following it.
+                match s.rfind(|c:char| c == '\n' || !char::is_whitespace(c)) {
+                    // It's all whitespace.
+                    None => {
+                        if self.tokens.len() == 1 {
+                            WhiteSpace(s.to_owned(), 0)
+                        } else {
+                            Normal
+                        }
+                    }
+                    Some(pos) => {
+                        if s.char_at(pos) == '\n' {
+                            if pos == s.len() - 1 {
+                                StandAlone
+                            } else {
+                                WhiteSpace(s.to_owned(), pos + 1)
+                            }
+                        } else { Normal }
+                    }
+                }
+            }
+            Some(_) => Normal,
+        }
+    }
+
+    fn eat_whitespace(&mut self) -> bool {
+        // If the next character is a newline, and the last token ends with a
+        // newline and whitespace, clear out the whitespace.
+
+        match self.classify_token() {
+            Normal => { false }
+            StandAlone => {
+                if self.ch_is('\r') { self.bump(); }
+                self.bump();
+                true
+            }
+            WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
+                if self.ch_is('\r') { self.bump(); }
+                self.bump();
+
+                // Trim the whitespace from the last token.
+                self.tokens.pop();
+                self.tokens.push(Text(s.slice(0, pos).to_str()));
+
+                true
+            }
+        }
+    }
+
+    fn add_tag(&mut self) {
+        self.bump();
+
+        let tag = self.otag + self.content + self.ctag;
+
+        // Move the content to avoid a copy.
+        let mut content = ~"";
+        mem::swap(&mut content, &mut self.content);
+        let len = content.len();
+
+        match content[0] as char {
+            '!' => {
+                // ignore comments
+                self.eat_whitespace();
+            }
+            '&' => {
+                let name = content.slice(1, len);
+                let name = self.check_content(name);
+                let name = name.split_terminator('.')
+                    .map(|x| x.to_owned())
+                    .collect();
+                self.tokens.push(UTag(name, tag));
+            }
+            '{' => {
+                if content.ends_with("}") {
+                    let name = content.slice(1, len - 1);
+                    let name = self.check_content(name);
+                    let name = name.split_terminator('.')
+                        .map(|x| x.to_owned())
+                        .collect();
+                    self.tokens.push(UTag(name, tag));
+                } else { fail!(~"unbalanced \"{\" in tag"); }
+            }
+            '#' => {
+                let newlined = self.eat_whitespace();
+
+                let name = self.check_content(content.slice(1, len));
+                let name = name.split_terminator('.')
+                    .map(|x| x.to_owned())
+                    .collect();
+                self.tokens.push(IncompleteSection(name, false, tag, newlined));
+            }
+            '^' => {
+                let newlined = self.eat_whitespace();
+
+                let name = self.check_content(content.slice(1, len));
+                let name = name.split_terminator('.')
+                    .map(|x| x.to_owned())
+                    .collect();
+                self.tokens.push(IncompleteSection(name, true, tag, newlined));
+            }
+            '/' => {
+                self.eat_whitespace();
+
+                let name = self.check_content(content.slice(1, len));
+                let name = name.split_terminator('.')
+                    .map(|x| x.to_owned())
+                    .collect();
+                let mut children: Vec<Token> = Vec::new();
+
+                loop {
+                    if self.tokens.len() == 0 {
+                        fail!(~"closing unopened section");
+                    }
+
+                    let last = self.tokens.pop();
+
+                    match last {
+                        Some(IncompleteSection(section_name, inverted, osection, _)) => {
+                            children.reverse();
+
+                            // Collect all the children's sources.
+                            let mut srcs = Vec::new();
+                            for child in children.iter() {
+                                match *child {
+                                    Text(ref s)
+                                    | ETag(_, ref s)
+                                    | UTag(_, ref s)
+                                    | Partial(_, _, ref s) => {
+                                        srcs.push(s.clone())
+                                    }
+                                    Section(_, _, _, _, ref osection, ref src, ref csection, _) => {
+                                        srcs.push(osection.clone());
+                                        srcs.push(src.clone());
+                                        srcs.push(csection.clone());
+                                    }
+                                    _ => fail!(),
+                                }
+                            }
+
+                            if section_name == name {
+                                // Cache the combination of all the sources in the
+                                // section. It's unfortunate, but we need to do this in
+                                // case the user uses a function to instantiate the
+                                // tag.
+                                let mut src = ~"";
+                                for s in srcs.iter() { src.push_str(*s); }
+
+                                self.tokens.push(
+                                    Section(
+                                        name,
+                                        inverted,
+                                        children,
+                                        self.otag.to_owned(),
+                                        osection,
+                                        src,
+                                        tag,
+                                        self.ctag.to_owned()));
+                                break;
+                            } else {
+                                fail!(~"Unclosed section");
+                            }
+                        }
+                        _ => { match last {
+                            Some(last_token) => {children.push(last_token); }
+                            None => ()
+                            }
+                        }
+                    }
+                }
+            }
+            '>' => { self.add_partial(content, tag); }
+            '=' => {
+                self.eat_whitespace();
+
+                if len > 2u && content.ends_with("=") {
+                    let s = self.check_content(content.slice(1, len - 1));
+
+                    let pos = s.find(char::is_whitespace);
+                    let pos = match pos {
+                      None => { fail!("invalid change delimiter tag content"); }
+                      Some(pos) => { pos }
+                    };
+
+                    self.otag = s.slice(0, pos).to_str();
+                    self.otag_chars = self.otag.chars().collect();
+
+                    let s2 = s.slice_from(pos);
+                    let pos = s2.find(|c| !char::is_whitespace(c));
+                    let pos = match pos {
+                      None => { fail!("invalid change delimiter tag content"); }
+                      Some(pos) => { pos }
+                    };
+
+                    self.ctag = s2.slice_from(pos).to_str();
+                    self.ctag_chars = self.ctag.chars().collect();
+                } else {
+                    fail!("invalid change delimiter tag content");
+                }
+            }
+            _ => {
+                // If the name is "." then we want the top element, which we represent with
+                // an empty name.
+                let name = self.check_content(content);
+                let name = if name == ~"." {
+                    Vec::new()
+                } else {
+                    name.split_terminator('.')
+                        .map(|x| x.to_owned())
+                        .collect()
+                };
+
+                self.tokens.push(ETag(name, tag));
+            }
+        }
+    }
+
+    fn add_partial(&mut self, content: &str, tag: ~str) {
+        let indent = match self.classify_token() {
+            Normal => ~"",
+            StandAlone => {
+                if self.ch_is('\r') { self.bump(); }
+                self.bump();
+                ~""
+            }
+            WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
+                if self.ch_is('\r') { self.bump(); }
+                self.bump();
+
+                let ws = s.slice(pos, s.len());
+
+                // Trim the whitespace from the last token.
+                self.tokens.pop();
+                self.tokens.push(Text(s.slice(0, pos).to_str()));
+
+                ws.to_owned()
+            }
+        };
+
+        // We can't inline the tokens directly as we may have a recursive
+        // partial. So instead, we'll cache the partials we used and look them
+        // up later.
+        let name = content.slice(1, content.len());
+        let name = self.check_content(name);
+
+        self.tokens.push(Partial(name.to_owned(), indent, tag));
+        self.partials.push(name);
+    }
+
+    fn not_otag(&mut self) {
+        for (i, ch) in self.otag_chars.iter().enumerate() {
+            if !(i < self.tag_position) {
+                break
+            }
+            self.content.push_char(*ch);
+        }
+    }
+
+    fn not_ctag(&mut self) {
+        for (i, ch) in self.ctag_chars.iter().enumerate() {
+            if !(i < self.tag_position) {
+                break
+            }
+            self.content.push_char(*ch);
+        }
+    }
+
+    fn check_content(&self, content: &str) -> ~str {
+        let trimmed = content.trim();
+        if trimmed.len() == 0 {
+            fail!(~"empty tag");
+        }
+        trimmed.to_owned()
+    }
+}
+
+
+impl Template {
+    pub fn render<
+        T: serialize::Encodable<Encoder, Error>
+    >(&self, data: &T) -> Result<~str, Error> {
+        let data = try!(encoder::encode(data));
+        Ok(self.render_data(data))
     }
 
     pub fn render_data(&self, data: Data) -> ~str {
@@ -146,7 +641,6 @@ impl Template {
         })
     }
 }
-
 
 struct CompileContext<'a, T> {
     reader: &'a mut T,
@@ -166,7 +660,7 @@ impl<'a, T: Iterator<char>> CompileContext<'a, T> {
             line: 1,
             col: 1,
             content: ~"",
-            state: parser::TEXT,
+            state: TEXT,
             otag: self.otag.to_owned(),
             ctag: self.ctag.to_owned(),
             otag_chars: self.otag.chars().collect(),
@@ -282,7 +776,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
 
     for token in ctx.tokens.iter() {
         match *token {
-            parser::Text(ref value) => {
+            Text(ref value) => {
                 // Indent the lines.
                 if ctx.indent.equiv(& &"") {
                     output = output + *value;
@@ -313,7 +807,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     }
                 }
             },
-            parser::ETag(ref path, _) => {
+            ETag(ref path, _) => {
                 match find(ctx.stack.as_slice(), path.as_slice()) {
                     None => { }
                     Some(value) => {
@@ -321,7 +815,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     }
                 }
             }
-            parser::UTag(ref path, _) => {
+            UTag(ref path, _) => {
                 match find(ctx.stack.as_slice(), path.as_slice()) {
                     None => { }
                     Some(value) => {
@@ -329,7 +823,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     }
                 }
             }
-            parser::Section(ref path, true, ref children, _, _, _, _, _) => {
+            Section(ref path, true, ref children, _, _, _, _, _) => {
                 let ctx = RenderContext {
                     // FIXME: #rust/9382
                     // This should be `tokens: *children,` but that's broken
@@ -342,7 +836,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     Some(value) => { render_inverted_section(value, &ctx) }
                 };
             }
-            parser::Section(ref path, false, ref children, ref otag, _, ref src, _, ref ctag) => {
+            Section(ref path, false, ref children, ref otag, _, ref src, _, ref ctag) => {
                 match find(ctx.stack.as_slice(), path.as_slice()) {
                     None => { }
                     Some(value) => {
@@ -361,7 +855,7 @@ fn render_helper(ctx: &RenderContext) -> ~str {
                     }
                 }
             }
-            parser::Partial(ref name, ref ind, _) => {
+            Partial(ref name, ref ind, _) => {
                 match ctx.partials.find(name) {
                     None => { }
                     Some(tokens) => {

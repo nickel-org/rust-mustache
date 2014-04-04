@@ -1,6 +1,3 @@
-#[feature(phase)];
-#[phase(syntax, link)] extern crate log;
-
 extern crate mustache;
 extern crate serialize;
 extern crate collections;
@@ -15,7 +12,7 @@ mod test {
     use mustache::{compile_str, render_str};
     use mustache::{Context};
     use mustache::encoder::{Encoder, Data, Str, Vec, Map};
-    use mustache::parser::{Token, Text, ETag, UTag, Section, IncompleteSection, Partial};
+    use mustache::{Token, Text, ETag, UTag, Section, IncompleteSection, Partial};
 
     fn token_to_str(token: &Token) -> ~str {
         match *token {
@@ -68,7 +65,7 @@ mod test {
         let expected = expected.iter().map(token_to_str).collect();
 
         if actual != expected {
-            error!("Found {:?}, but expected {:?}", actual.as_slice(), expected.as_slice());
+            println!("Found {:?}, but expected {:?}", actual.as_slice(), expected.as_slice());
             return false;
         }
 
@@ -264,25 +261,25 @@ mod test {
     fn test_render_texts() {
         let ctx = &Name { name: ~"world" };
 
-        assert_eq!(render_str("hello world", ctx), ~"hello world");
-        assert_eq!(render_str("hello {world", ctx), ~"hello {world");
-        assert_eq!(render_str("hello world}", ctx), ~"hello world}");
-        assert_eq!(render_str("hello {world}", ctx), ~"hello {world}");
-        assert_eq!(render_str("hello world}}", ctx), ~"hello world}}");
+        assert_eq!(render_str("hello world", ctx).unwrap(), ~"hello world");
+        assert_eq!(render_str("hello {world", ctx).unwrap(), ~"hello {world");
+        assert_eq!(render_str("hello world}", ctx).unwrap(), ~"hello world}");
+        assert_eq!(render_str("hello {world}", ctx).unwrap(), ~"hello {world}");
+        assert_eq!(render_str("hello world}}", ctx).unwrap(), ~"hello world}}");
     }
 
     #[test]
     fn test_render_etags() {
         let ctx = &Name { name: ~"world" };
 
-        assert!(render_str("hello {{name}}", ctx) == ~"hello world");
+        assert_eq!(render_str("hello {{name}}", ctx).unwrap(), ~"hello world");
     }
 
     #[test]
     fn test_render_utags() {
         let ctx = &Name { name: ~"world" };
 
-        assert!(render_str("hello {{{name}}}", ctx) == ~"hello world");
+        assert_eq!(render_str("hello {{{name}}}", ctx).unwrap(), ~"hello world");
     }
 
     #[test]
@@ -290,15 +287,15 @@ mod test {
         let mut ctx0 = HashMap::new();
         let template = compile_str("0{{#a}}1 {{n}} 3{{/a}}5");
 
-        assert!(template.render_data(Map(ctx0.clone())) == ~"05");
+        assert_eq!(template.render_data(Map(ctx0.clone())), ~"05");
 
         ctx0.insert(~"a", Vec(Vec::new()));
-        assert!(template.render_data(Map(ctx0.clone())) == ~"05");
+        assert_eq!(template.render_data(Map(ctx0.clone())), ~"05");
 
         let ctx1: HashMap<~str, Data> = HashMap::new();
         ctx0.insert(~"a", Vec(vec!(Map(ctx1.clone()))));
 
-        assert!(template.render_data(Map(ctx0.clone())) == ~"01  35");
+        assert_eq!(template.render_data(Map(ctx0.clone())), ~"01  35");
 
         let mut ctx1 = HashMap::new();
         ctx1.insert(~"n", Str(~"a"));
@@ -420,7 +417,7 @@ mod test {
                         &json::String(ref s) => {
                             let mut path = tmpdir.clone();
                             path.push(*key + ".mustache");
-                            File::create(&path).write(s.as_bytes());
+                            File::create(&path).write(s.as_bytes()).unwrap();
                             // match File::create(&path).write(s.as_bytes()) {
                             //     Some(mut wr) => wr.write(s.as_bytes()),
                             //     None => fail!(),
@@ -486,7 +483,7 @@ mod test {
             };
 
             let mut encoder = Encoder::new();
-            data.encode(&mut encoder);
+            data.encode(&mut encoder).unwrap();
             assert_eq!(encoder.data.len(), 1);
 
             run_test(test, encoder.data.pop().unwrap());
