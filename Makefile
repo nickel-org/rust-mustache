@@ -6,7 +6,7 @@ RUST_FLAGS ?= -O --crate-type=rlib,dylib
 
 all:
 	test -d build || mkdir build
-	$(RUSTC) $(RUST_FLAGS) --out-dir=build src/mustache/mustache.rs
+	$(RUSTC) $(RUST_FLAGS) --out-dir=build src/mustache/lib.rs
 
 test: 
 	test -d build || mkdir build
