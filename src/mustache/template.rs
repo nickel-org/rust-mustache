@@ -4,15 +4,17 @@ use std::str;
 use serialize::Encodable;
 use collections::HashMap;
 
+use compiler::Compiler;
+use parser::{Token, Text, ETag, UTag, Section, Partial};
+
 use encoder;
 use encoder::{Encoder, Error, Data, Bool, Str, Vec, Map, Fun};
 
-use super::{Context, Token, CompileContext};
-use super::{Text, ETag, UTag, Section, Partial};
+use super::Context;
 
 pub struct Template {
     ctx: Context,
-    pub tokens: Vec<Token>,
+    tokens: Vec<Token>,
     partials: HashMap<~str, Vec<Token>>
 }
 
@@ -292,15 +294,13 @@ impl<'a> RenderContext<'a> {
         f: & 'b |~str| -> ~str
     ) -> Vec<Token> {
         let src = (*f)(src.to_owned());
-        let mut iter = src.chars();
 
-        let mut inner_ctx = CompileContext {
-            reader: &mut iter,
+        let mut inner_ctx = Compiler {
+            ctx: self.template.ctx.clone(),
+            reader: src.chars(),
             partials: self.template.partials.clone(),
             otag: otag.to_owned(),
             ctag: ctag.to_owned(),
-            template_path: self.template.ctx.template_path.clone(),
-            template_extension: self.template.ctx.template_extension.to_owned(),
         };
 
         inner_ctx.compile()
