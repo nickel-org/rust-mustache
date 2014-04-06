@@ -4,9 +4,13 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
-extern crate std;
-extern crate serialize;
+#![feature(phase)]
+
 extern crate collections;
+extern crate serialize;
+
+#[phase(syntax, link)]
+extern crate log;
 
 use std::io::{File, MemWriter};
 use std::str;

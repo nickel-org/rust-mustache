@@ -1,4 +1,4 @@
-use std::io::File;
+use std::io::{File, FileNotFound};
 use std::str;
 use collections::HashMap;
 
@@ -14,6 +14,7 @@ pub struct Compiler<T> {
 }
 
 impl<T: Iterator<char>> Compiler<T> {
+    /// Construct a default compiler.
     pub fn new(ctx: Context, reader: T) -> Compiler<T> {
         Compiler {
             ctx: ctx,
@@ -24,6 +25,7 @@ impl<T: Iterator<char>> Compiler<T> {
         }
     }
 
+    /// Compiles a template into a series of tokens.
     pub fn compile(&mut self) -> Vec<Token> {
         let mut parser = Parser {
             reader: &mut self.reader,
@@ -52,17 +54,17 @@ impl<T: Iterator<char>> Compiler<T> {
             if !self.partials.contains_key(name) {
                 // Insert a placeholder so we don't recurse off to infinity.
                 self.partials.insert(name.to_owned(), Vec::new());
+
                 match File::open(&path).read_to_end() {
                     Ok(contents) => {
-
-                        let iter = match str::from_utf8_owned(contents) {
-                            Some(string) => string, //.chars().clone(),
-                            None => {fail!("Failed to parse file as UTF-8");}
+                        let string = match str::from_utf8_owned(contents) {
+                            Some(string) => string,
+                            None => { fail!("Failed to parse file as UTF-8"); }
                         };
 
                         let mut inner_ctx = Compiler {
                             ctx: self.ctx.clone(),
-                            reader: iter.chars(),
+                            reader: string.chars(),
                             partials: self.partials.clone(),
                             otag: ~"{{",
                             ctag: ~"}}",
@@ -71,8 +73,15 @@ impl<T: Iterator<char>> Compiler<T> {
 
                         self.partials.insert(name.to_owned(), tokens);
                     },
-                    Err(e) => {println!("failed to read file {}", e);}
-                };
+                    Err(e) => {
+                        // Ignore missing files.
+                        if e.kind == FileNotFound {
+                            debug!("failed to read file {}", path.display());
+                        } else {
+                            fail!("error reading file: {}", e);
+                        }
+                    }
+                }
             }
         }
 
