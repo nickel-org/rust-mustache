@@ -45,10 +45,10 @@ impl Context {
 
     /// Compiles a template from a string
     pub fn compile<IT: Iterator<char>>(&self, reader: IT) -> Template {
-        let mut compiler = Compiler::new(self.clone(), reader);
-        let tokens = compiler.compile();
+        let compiler = Compiler::new(self.clone(), reader);
+        let (tokens, partials) = compiler.compile();
 
-        Template::new(self.clone(), tokens, compiler.partials)
+        Template::new(self.clone(), tokens, partials)
     }
 
     /// Compiles a template from a path.

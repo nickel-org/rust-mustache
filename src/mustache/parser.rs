@@ -11,8 +11,7 @@ pub enum Token {
     Partial(~str, ~str, ~str),
 }
 
-#[deriving(Clone)]
-pub enum TokenClass {
+enum TokenClass {
     Normal,
     StandAlone,
     WhiteSpace(~str, uint),
@@ -20,26 +19,48 @@ pub enum TokenClass {
 }
 
 pub struct Parser<'a, T> {
-    pub reader: &'a mut T,
-    pub ch: Option<char>,
-    pub lookahead: Option<char>,
-    pub line: uint,
-    pub col: uint,
-    pub content: ~str,
-    pub state: ParserState,
-    pub otag: ~str,
-    pub ctag: ~str,
-    pub otag_chars: Vec<char>,
-    pub ctag_chars: Vec<char>,
-    pub tag_position: uint,
-    pub tokens: Vec<Token>,
-    pub partials: Vec<~str>,
+    reader: &'a mut T,
+    ch: Option<char>,
+    lookahead: Option<char>,
+    line: uint,
+    col: uint,
+    content: ~str,
+    state: ParserState,
+    otag: ~str,
+    ctag: ~str,
+    otag_chars: Vec<char>,
+    ctag_chars: Vec<char>,
+    tag_position: uint,
+    tokens: Vec<Token>,
+    partials: Vec<~str>,
 }
 
-pub enum ParserState { TEXT, OTAG, TAG, CTAG }
+enum ParserState { TEXT, OTAG, TAG, CTAG }
 
 impl<'a, T: Iterator<char>> Parser<'a, T> {
-    pub fn bump(&mut self) {
+    pub fn new(reader: &'a mut T, otag: &str, ctag: &str) -> Parser<'a, T> {
+        let mut parser = Parser {
+            reader: reader,
+            ch: None,
+            lookahead: None,
+            line: 1,
+            col: 1,
+            content: ~"",
+            state: TEXT,
+            otag: otag.to_owned(),
+            ctag: ctag.to_owned(),
+            otag_chars: otag.chars().collect(),
+            ctag_chars: ctag.chars().collect(),
+            tag_position: 0,
+            tokens: Vec::new(),
+            partials: Vec::new(),
+        };
+
+        parser.bump();
+        parser
+    }
+
+    fn bump(&mut self) {
         match self.lookahead.take() {
             None => { self.ch = self.reader.next(); }
             Some(ch) => { self.ch = Some(ch); }
@@ -75,7 +96,8 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
         }
     }
 
-    pub fn parse(&mut self) {
+    /// Parse the template into tokens and a list of partial files.
+    pub fn parse(mut self) -> (Vec<Token>, Vec<~str>) {
         let mut curly_brace_tag = false;
 
         loop {
@@ -176,6 +198,10 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
               _ => {}
             }
         };
+
+        let Parser { tokens, partials, .. } = self;
+
+        (tokens, partials)
     }
 
     fn add_text(&mut self) {

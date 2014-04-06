@@ -2,15 +2,15 @@ use std::io::{File, FileNotFound};
 use std::str;
 use collections::HashMap;
 
-use parser::{Parser, Token, TEXT};
+use parser::{Parser, Token};
 use super::Context;
 
 pub struct Compiler<T> {
-    pub ctx: Context,
-    pub reader: T,
-    pub partials: HashMap<~str, Vec<Token>>,
-    pub otag: ~str,
-    pub ctag: ~str,
+    ctx: Context,
+    reader: T,
+    partials: HashMap<~str, Vec<Token>>,
+    otag: ~str,
+    ctag: ~str,
 }
 
 impl<T: Iterator<char>> Compiler<T> {
@@ -25,33 +25,35 @@ impl<T: Iterator<char>> Compiler<T> {
         }
     }
 
+    /// Construct a default compiler.
+    pub fn new_with(
+        ctx: Context,
+        reader: T,
+        partials: HashMap<~str, Vec<Token>>,
+        otag: ~str,
+        ctag: ~str
+    ) -> Compiler<T> {
+        Compiler {
+            ctx: ctx,
+            reader: reader,
+            partials: partials,
+            otag: otag,
+            ctag: ctag,
+        }
+    }
+
     /// Compiles a template into a series of tokens.
-    pub fn compile(&mut self) -> Vec<Token> {
-        let mut parser = Parser {
-            reader: &mut self.reader,
-            ch: None,
-            lookahead: None,
-            line: 1,
-            col: 1,
-            content: ~"",
-            state: TEXT,
-            otag: self.otag.to_owned(),
-            ctag: self.ctag.to_owned(),
-            otag_chars: self.otag.chars().collect(),
-            ctag_chars: self.ctag.chars().collect(),
-            tag_position: 0,
-            tokens: Vec::new(),
-            partials: Vec::new(),
+    pub fn compile(mut self) -> (Vec<Token>, HashMap<~str, Vec<Token>>) {
+        let (tokens, partials) = {
+            let parser = Parser::new(&mut self.reader, self.otag, self.ctag);
+            parser.parse()
         };
 
-        parser.bump();
-        parser.parse();
-
         // Compile the partials if we haven't done so already.
-        for name in parser.partials.iter() {
-            let path = self.ctx.template_path.join(*name + "." + self.ctx.template_extension);
+        for name in partials.move_iter() {
+            let path = self.ctx.template_path.join(name + "." + self.ctx.template_extension);
 
-            if !self.partials.contains_key(name) {
+            if !self.partials.contains_key(&name) {
                 // Insert a placeholder so we don't recurse off to infinity.
                 self.partials.insert(name.to_owned(), Vec::new());
 
@@ -62,16 +64,17 @@ impl<T: Iterator<char>> Compiler<T> {
                             None => { fail!("Failed to parse file as UTF-8"); }
                         };
 
-                        let mut inner_ctx = Compiler {
+                        let compiler = Compiler {
                             ctx: self.ctx.clone(),
                             reader: string.chars(),
                             partials: self.partials.clone(),
                             otag: ~"{{",
                             ctag: ~"}}",
                         };
-                        let tokens = inner_ctx.compile();
 
-                        self.partials.insert(name.to_owned(), tokens);
+                        let (tokens, _) = compiler.compile();
+
+                        self.partials.insert(name, tokens);
                     },
                     Err(e) => {
                         // Ignore missing files.
@@ -85,10 +88,9 @@ impl<T: Iterator<char>> Compiler<T> {
             }
         }
 
-        // Destructure the parser so we get get at the tokens without a copy.
-        let Parser { tokens: tokens, .. } = parser;
+        let Compiler { partials, .. } = self;
 
-        tokens
+        (tokens, partials)
     }
 }
 
@@ -100,7 +102,8 @@ mod tests {
 
     fn compile_str(template: &str) -> Vec<Token> {
         let ctx = Context::new(Path::new("."));
-        Compiler::new(ctx, template.chars()).compile()
+        let (tokens, _) = Compiler::new(ctx, template.chars()).compile();
+        tokens
     }
 
     fn token_to_str(token: &Token) -> ~str {

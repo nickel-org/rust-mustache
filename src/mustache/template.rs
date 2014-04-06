@@ -295,15 +295,15 @@ impl<'a> RenderContext<'a> {
     ) -> Vec<Token> {
         let src = (*f)(src.to_owned());
 
-        let mut inner_ctx = Compiler {
-            ctx: self.template.ctx.clone(),
-            reader: src.chars(),
-            partials: self.template.partials.clone(),
-            otag: otag.to_owned(),
-            ctag: ctag.to_owned(),
-        };
+        let compiler = Compiler::new_with(
+            self.template.ctx.clone(),
+            src.chars(),
+            self.template.partials.clone(),
+            otag.to_owned(),
+            ctag.to_owned());
 
-        inner_ctx.compile()
+        let (tokens, _) = compiler.compile();
+        tokens
     }
 
     fn find<'b, 'c>(&self, path: &[~str], stack: &mut Vec<&'c Data<'b>>) -> Option<&'c Data<'b>> {
