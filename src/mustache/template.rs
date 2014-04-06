@@ -29,9 +29,8 @@ impl Template {
 
     pub fn render<
         'a,
-        'b,
         W: Writer,
-        T: Encodable<Encoder<'b>, Error>
+        T: Encodable<Encoder<'a>, Error>
     >(&self, wr: &mut W, data: &T) -> Result<(), Error> {
         let data = try!(encoder::encode(data));
         Ok(self.render_data(wr, &data))
@@ -39,8 +38,7 @@ impl Template {
 
     pub fn render_str<
         'a,
-        'b,
-        T: Encodable<Encoder<'b>, Error>
+        T: Encodable<Encoder<'a>, Error>
     >(&self, data: &T) -> Result<~str, Error> {
         let mut wr = MemWriter::new();
 
@@ -50,7 +48,7 @@ impl Template {
         }
     }
 
-    pub fn render_data<'a, 'b, W: Writer>(&'a self, wr: &mut W, data: &Data<'b>) {
+    pub fn render_data<'a, W: Writer>(&self, wr: &mut W, data: &Data<'a>) {
         let mut render_ctx = RenderContext::new(self);
         let mut stack = vec!(data);
 

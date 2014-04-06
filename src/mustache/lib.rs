@@ -101,7 +101,7 @@ pub fn compile_path(path: Path) -> Result<Template, Error> {
 
 /// Compiles a template from a string.
 pub fn compile_str(template: &str) -> Template {
-    Context::new(Path::new(".")).compile(template.chars())
+    compile_iter(template.chars())
 }
 
 /// Renders a template from an `Iterator<char>`.
