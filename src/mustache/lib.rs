@@ -9,16 +9,14 @@ extern crate serialize;
 extern crate collections;
 
 use std::char;
-use std::io::File;
+use std::io::{File, MemWriter};
 use std::mem;
 use std::str;
 use collections::hashmap::HashMap;
 
-//pub use parser::{Token, Parser, CompileContext};
 pub use encoder::{Encoder, EncoderResult, Data, Map, Vec, Bool, Str, Fun};
 pub use encoder::{Error, InvalidStr, IoError};
 
-//pub mod parser;
 pub mod encoder;
 
 /// Represents the shared metadata needed to compile and render a mustache
@@ -27,12 +25,6 @@ pub mod encoder;
 pub struct Context {
     template_path: Path,
     template_extension: ~str,
-}
-
-pub struct Template {
-    ctx: Context,
-    pub tokens: Vec<Token>,
-    partials: HashMap<~str, Vec<Token>>
 }
 
 impl Context {
@@ -45,8 +37,6 @@ impl Context {
     }
 
     /// Compiles a template from a string
-    // not sure why this needs to be generic as of right now...
-    //fn compile(&self, reader: &Iterator<char>) -> Template {
     pub fn compile<IT: Iterator<char>>(&self, reader: IT) -> Template {
         let mut reader = reader;
         let mut ctx = CompileContext {
@@ -67,16 +57,13 @@ impl Context {
         }
     }
 
+    /// Compiles a template from a path.
     pub fn compile_path(&self, path: Path) -> Result<Template, Error> {
         // FIXME(#6164): This should use the file decoding tools when they are
         // written. For now we'll just read the file and treat it as UTF-8file.
         let mut path = self.template_path.join(path);
         path.set_extension(self.template_extension.clone());
 
-        //let s = match File::open(&path) {
-        //    Some(mut reader) => str::from_utf8_owned(reader.read_to_end()),
-        //    None => { return None; }
-        //};
         let s = match File::open(&path).read_to_end() {
             Ok(s) => s,
             Err(err) => { return Err(IoError(err)); }
@@ -94,10 +81,16 @@ impl Context {
     /// Renders a template from a string.
     pub fn render<
         'a,
-        T: serialize::Encodable<Encoder, Error>
+        T: serialize::Encodable<Encoder<'a>, Error>
     >(&self, reader: &str, data: &T) -> Result<~str, Error> {
         let template = self.compile(reader.chars());
-        template.render(data)
+
+        let mut wr = MemWriter::new();
+
+        match template.render(&mut wr, data) {
+            Ok(()) => Ok(str::from_utf8_owned(wr.unwrap()).unwrap()),
+            Err(err) => Err(err),
+        }
     }
 }
 
@@ -107,7 +100,7 @@ pub fn compile_iter<T: Iterator<char>>(iter: T) -> Template {
 }
 
 /// Compiles a template from a path.
-// returns None if the file cannot be read OR the file is not UTF-8 encoded
+/// returns None if the file cannot be read OR the file is not UTF-8 encoded
 pub fn compile_path(path: Path) -> Result<Template, Error> {
     Context::new(Path::new(".")).compile_path(path)
 }
@@ -121,25 +114,35 @@ pub fn compile_str(template: &str) -> Template {
 pub fn render_iter<
     'a,
     IT: Iterator<char>,
-    T: serialize::Encodable<Encoder, Error>
->(reader: IT, data: &T) -> Result<~str, Error> {
-    compile_iter(reader).render(data)
+    T: serialize::Encodable<Encoder<'a>, Error>,
+    W: Writer
+>(reader: IT, wr: &mut W, data: &T) -> Result<(), Error> {
+    let template = compile_iter(reader);
+    template.render(wr, data)
 }
 
 /// Renders a template from a file.
 pub fn render_path<
     'a,
-    T: serialize::Encodable<Encoder, Error>
+    T: serialize::Encodable<Encoder<'a>, Error>
 >(path: Path, data: &T) -> Result<~str, Error> {
-    compile_path(path).and_then(|template| template.render(data))
+    let template = try!(compile_path(path));
+    
+    let mut wr = MemWriter::new();
+    try!(template.render(&mut wr, data));
+    Ok(str::from_utf8_owned(wr.unwrap()).unwrap())
 }
 
 /// Renders a template from a string.
 pub fn render_str<
     'a,
-    T: serialize::Encodable<Encoder, Error>
+    T: serialize::Encodable<Encoder<'a>, Error>
 >(template: &str, data: &T) -> Result<~str, Error> {
-    compile_str(template).render(data)
+    let template = compile_str(template);
+
+    let mut wr = MemWriter::new();
+    try!(template.render(&mut wr, data));
+    Ok(str::from_utf8_owned(wr.unwrap()).unwrap())
 }
 
 #[deriving(Clone)]
@@ -628,28 +631,6 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
     }
 }
 
-
-impl Template {
-    pub fn render<
-        T: serialize::Encodable<Encoder, Error>
-    >(&self, data: &T) -> Result<~str, Error> {
-        let data = try!(encoder::encode(data));
-        Ok(self.render_data(data))
-    }
-
-    pub fn render_data(&self, data: Data) -> ~str {
-        render_helper(&RenderContext {
-            ctx: self.ctx.clone(),
-            // FIXME: #rust/9382
-            // This should be `tokens: self.tokens,` but that's broken
-            tokens: self.tokens.as_slice(),
-            partials: self.partials.clone(),
-            stack: vec!(data),
-            indent: ~""
-        })
-    }
-}
-
 struct CompileContext<'a, T> {
     reader: &'a mut T,
     partials: HashMap<~str, Vec<Token>>,
@@ -720,270 +701,356 @@ impl<'a, T: Iterator<char>> CompileContext<'a, T> {
     }
 }
 
-#[deriving(Clone)]
-struct RenderContext<'a> {
+pub struct Template {
     ctx: Context,
-    tokens: &'a [Token],
-    partials: HashMap<~str, Vec<Token>>,
-    stack: Vec<Data>,
+    tokens: Vec<Token>,
+    partials: HashMap<~str, Vec<Token>>
+}
+
+impl Template {
+    pub fn render<
+        'a,
+        'b,
+        W: Writer,
+        T: serialize::Encodable<Encoder<'b>, Error>
+    >(&self, wr: &mut W, data: &T) -> Result<(), Error> {
+        let data = try!(encoder::encode(data));
+        Ok(self.render_data(wr, &data))
+    }
+
+    pub fn render_str<
+        'a,
+        'b,
+        T: serialize::Encodable<Encoder<'b>, Error>
+    >(&self, data: &T) -> Result<~str, Error> {
+        let mut wr = MemWriter::new();
+
+        match self.render(&mut wr, data) {
+            Ok(()) => Ok(str::from_utf8_owned(wr.unwrap()).unwrap()),
+            Err(err) => Err(err),
+        }
+    }
+
+    pub fn render_data<'a, 'b, W: Writer>(&'a self, wr: &mut W, data: &Data<'b>) {
+        let mut render_ctx = RenderContext::new(self);
+        let mut stack = vec!(data);
+
+        render_ctx.render(
+            wr,
+            &mut stack,
+            self.tokens.as_slice());
+    }
+}
+
+struct RenderContext<'a> {
+    template: &'a Template,
     indent: ~str,
 }
 
-fn render_helper(ctx: &RenderContext) -> ~str {
-    fn find(stack: &[Data], path: &[~str]) -> Option<Data> {
+impl<'a> RenderContext<'a> {
+    fn new(template: &'a Template) -> RenderContext<'a> {
+        RenderContext {
+            template: template,
+            indent: ~"",
+        }
+    }
+
+    fn render<'b, W: Writer>(
+        &mut self,
+        wr: &mut W,
+        stack: &mut Vec<&Data<'b>>,
+        tokens: &[Token]
+    ) {
+        for token in tokens.iter() {
+            self.render_token(wr, stack, token);
+        }
+    }
+
+    fn render_token<'b, W: Writer>(
+        &mut self,
+        wr: &mut W,
+        stack: &mut Vec<&Data<'b>>,
+        token: &Token
+    ) {
+        match *token {
+            Text(ref value) => {
+                self.render_text(wr, *value);
+            },
+            ETag(ref path, _) => {
+                self.render_etag(wr, stack, path.as_slice());
+            }
+            UTag(ref path, _) => {
+                self.render_utag(wr, stack, path.as_slice());
+            }
+            Section(ref path, true, ref children, _, _, _, _, _) => {
+                self.render_inverted_section(wr, stack, path.as_slice(), children.as_slice());
+            }
+            Section(ref path, false, ref children, ref otag, _, ref src, _, ref ctag) => {
+                self.render_section(
+                    wr,
+                    stack,
+                    path.as_slice(),
+                    children.as_slice(),
+                    *src,
+                    *otag,
+                    *ctag)
+            }
+            Partial(ref name, ref indent, _) => {
+                self.render_partial(wr, stack, *name, *indent);
+            }
+            _ => { fail!() }
+        }
+    }
+
+    fn render_text<W: Writer>(
+        &mut self,
+        wr: &mut W,
+        value: &str
+    ) {
+        // Indent the lines.
+        if self.indent.equiv(& &"") {
+            wr.write_str(value).unwrap();
+        } else {
+            let mut pos = 0;
+            let len = value.len();
+
+            while pos < len {
+                let v = value.slice_from(pos);
+                let line = match v.find('\n') {
+                    None => {
+                        let line = v;
+                        pos = len;
+                        line
+                    }
+                    Some(i) => {
+                        let line = v.slice_to(i + 1);
+                        pos += i + 1;
+                        line
+                    }
+                };
+
+                if line.char_at(0) != '\n' {
+                    wr.write_str(self.indent).unwrap();
+                }
+
+                wr.write_str(line).unwrap();
+            }
+        }
+    }
+
+    fn render_etag<'b, W: Writer>(
+        &mut self,
+        wr: &mut W,
+        stack: &mut Vec<&Data<'b>>,
+        path: &[~str]
+    ) {
+        let mut mem_wr = MemWriter::new();
+
+        self.render_utag(&mut mem_wr, stack, path);
+
+        let bytes = mem_wr.unwrap();
+        let s = str::from_utf8_owned(bytes).unwrap();
+
+        for c in s.chars() {
+            match c {
+                '<'  => { wr.write_str("&lt;").unwrap(); }
+                '>'  => { wr.write_str("&gt;").unwrap(); }
+                '&'  => { wr.write_str("&amp;").unwrap(); }
+                '"'  => { wr.write_str("&quot;").unwrap(); }
+                '\'' => { wr.write_str("&#39;").unwrap(); }
+                _    => { wr.write_char(c).unwrap(); }
+            }
+        }
+    }
+
+    fn render_utag<'b, W: Writer>(
+        &mut self,
+        wr: &mut W,
+        stack: &mut Vec<&Data<'b>>,
+        path: &[~str]
+    ) {
+        match self.find(path, stack) {
+            None => { }
+            Some(value) => {
+                wr.write_str(self.indent).unwrap();
+
+                match *value {
+                    Str(ref value) => {
+                        wr.write_str(*value).unwrap();
+                    }
+
+                    // etags and utags use the default delimiter.
+                    Fun(ref f) => {
+                        let tokens = self.render_fun("", "{{", "}}", f);
+                        self.render(wr, stack, tokens.as_slice());
+                    }
+
+                    ref value => { fail!("unexpected value {:?}", value); }
+                }
+            }
+        };
+    }
+
+    fn render_inverted_section<'b, W: Writer>(
+        &mut self,
+        wr: &mut W,
+        stack: &mut Vec<&Data<'b>>,
+        path: &[~str],
+        children: &[Token]
+    ) {
+        match self.find(path, stack) {
+            None => { }
+            Some(&Bool(false)) => { }
+            Some(&Vec(ref xs)) if xs.is_empty() => { }
+            Some(_) => { return; }
+        }
+
+        self.render(wr, stack, children);
+    }
+
+    fn render_section<'b, W: Writer>(
+        &mut self,
+        wr: &mut W,
+        stack: &mut Vec<&Data<'b>>,
+        path: &[~str],
+        children: &[Token],
+        src: &str,
+        otag: &str,
+        ctag: &str
+    ) {
+        match self.find(path, stack) {
+            None => { }
+            Some(value) => {
+                match *value {
+                    Bool(true) => {
+                        self.render(wr, stack, children);
+                    }
+                    Bool(false) => { }
+                    Vec(ref vs) => {
+                        for v in vs.iter() {
+                            stack.push(v);
+                            self.render(wr, stack, children);
+                            stack.pop();
+                        }
+                    }
+                    Map(_) => {
+                        stack.push(value);
+                        self.render(wr, stack, children);
+                        stack.pop();
+                    }
+                    Fun(ref f) => {
+                        let tokens = self.render_fun(src, otag, ctag, f);
+                        self.render(wr, stack, tokens.as_slice())
+                    }
+                    _ => { fail!("unexpected value {:?}", value) }
+                }
+            }
+        }
+    }
+
+    fn render_partial<'b, W: Writer>(
+        &mut self,
+        wr: &mut W,
+        stack: &mut Vec<&Data<'b>>,
+        name: &str,
+        indent: &str
+    ) {
+        match self.template.partials.find_equiv(&name) {
+            None => { }
+            Some(ref tokens) => {
+                let mut indent = self.indent + indent;
+
+                mem::swap(&mut self.indent, &mut indent);
+                self.render(wr, stack, tokens.as_slice());
+                mem::swap(&mut self.indent, &mut indent);
+            }
+        }
+    }
+
+    fn render_fun<'b>(
+        &self,
+        src: &str,
+        otag: &str,
+        ctag: &str,
+        f: & 'b |~str| -> ~str
+    ) -> Vec<Token> {
+        let src = (*f)(src.to_owned());
+        let mut iter = src.chars();
+
+        let mut inner_ctx = CompileContext {
+            reader: &mut iter,
+            partials: self.template.partials.clone(),
+            otag: otag.to_owned(),
+            ctag: ctag.to_owned(),
+            template_path: self.template.ctx.template_path.clone(),
+            template_extension: self.template.ctx.template_extension.to_owned(),
+        };
+
+        inner_ctx.compile()
+    }
+
+    fn find<'b, 'c>(&self, path: &[~str], stack: &mut Vec<&'c Data<'b>>) -> Option<&'c Data<'b>> {
         // If we have an empty path, we just want the top value in our stack.
         if path.is_empty() {
-            return match stack.last() {
-                None => None,
-                Some(value) => Some(value.clone()),
-            };
+            match stack.last() {
+                None => { return None; }
+                Some(data) => { return Some(*data); }
+            }
         }
 
         // Otherwise, find the stack that has the first part of our path.
-        let mut value: Option<Data> = None;
+        let mut value = None;
 
-        let mut i = stack.len();
-        while i > 0 {
-            match stack[i - 1] {
-                Map(ref ctx) => {
-                    match ctx.find_equiv(&path[0]) {
-                        Some(v) => { value = Some(v.clone()); break; }
-                        None => {}
+        for data in stack.iter().rev() {
+            match **data {
+                Map(ref m) => {
+                    match m.find_equiv(&path[0]) {
+                        Some(v) => {
+                            value = Some(v);
+                            break;
+                        }
+                        None => { }
                     }
-                    i -= 1;
                 }
-                _ => {
-                    fail!("{:?} {:?}", stack, path)
-                }
+                _ => { fail!("expect map: {:?}", path) }
             }
         }
 
         // Walk the rest of the path to find our final value.
-        let mut value = value;
-
-        let mut i = 1;
-        let len = path.len();
-
-        while i < len {
-            value = match value {
-                Some(Map(v)) => {
-                    match v.find_equiv(&path[i]) {
-                        Some(value) => Some(value.clone()),
-                        None => None,
-                    }
-                }
-                _ => break,
-            };
-            i = i + 1;
-        }
-
-        value
-    }
-
-    let mut output = ~"";
-
-    for token in ctx.tokens.iter() {
-        match *token {
-            Text(ref value) => {
-                // Indent the lines.
-                if ctx.indent.equiv(& &"") {
-                    output = output + *value;
-                } else {
-                    let mut pos = 0;
-                    let len = value.len();
-
-                    while pos < len {
-                        let v = value.slice_from(pos);
-                        let line = match v.find('\n') {
-                            None => {
-                                let line = v;
-                                pos = len;
-                                line
-                            }
-                            Some(i) => {
-                                let line = v.slice_to(i + 1);
-                                pos += i + 1;
-                                line
-                            }
-                        };
-
-                        if line.char_at(0) != '\n' {
-                            output.push_str(ctx.indent);
-                        }
-
-                        output.push_str(line);
-                    }
-                }
-            },
-            ETag(ref path, _) => {
-                match find(ctx.stack.as_slice(), path.as_slice()) {
-                    None => { }
-                    Some(value) => {
-                        output = output + ctx.indent + render_etag(value, ctx);
-                    }
-                }
-            }
-            UTag(ref path, _) => {
-                match find(ctx.stack.as_slice(), path.as_slice()) {
-                    None => { }
-                    Some(value) => {
-                        output = output + ctx.indent + render_utag(value, ctx);
-                    }
-                }
-            }
-            Section(ref path, true, ref children, _, _, _, _, _) => {
-                let ctx = RenderContext {
-                    // FIXME: #rust/9382
-                    // This should be `tokens: *children,` but that's broken
-                    tokens: children.as_slice(),
-                    .. ctx.clone()
-                };
-
-                output = output + match find(ctx.stack.as_slice(), path.as_slice()) {
-                    None => { render_helper(&ctx) }
-                    Some(value) => { render_inverted_section(value, &ctx) }
-                };
-            }
-            Section(ref path, false, ref children, ref otag, _, ref src, _, ref ctag) => {
-                match find(ctx.stack.as_slice(), path.as_slice()) {
-                    None => { }
-                    Some(value) => {
-                        output = output + render_section(
-                            value,
-                            *src,
-                            *otag,
-                            *ctag,
-                            &RenderContext {
-                                // FIXME: #rust/9382
-                                // This should be `tokens: *children,` but that's broken
-                                tokens: children.as_slice(),
-                                .. ctx.clone()
-                            }
-                        );
-                    }
-                }
-            }
-            Partial(ref name, ref ind, _) => {
-                match ctx.partials.find(name) {
-                    None => { }
-                    Some(tokens) => {
-                        output = output + render_helper(&RenderContext {
-                            // FIXME: #rust/9382
-                            // This should be `tokens: *tokens,` but that's broken
-                            tokens: tokens.as_slice(),
-                            indent: ctx.indent + *ind,
-                            .. ctx.clone()
-                        });
-                    }
-                }
-            }
-            _ => { fail!() }
+        let mut value = match value {
+            Some(value) => value,
+            None => { return None; }
         };
-    };
 
-    output
-}
-
-fn render_etag(value: Data, ctx: &RenderContext) -> ~str {
-    let mut escaped = ~"";
-    let utag = render_utag(value, ctx);
-    for c in utag.chars() {
-        match c {
-            '<' => { escaped.push_str("&lt;"); }
-            '>' => { escaped.push_str("&gt;"); }
-            '&' => { escaped.push_str("&amp;"); }
-            '"' => { escaped.push_str("&quot;"); }
-            '\'' => { escaped.push_str("&#39;"); }
-            _ => { escaped.push_char(c); }
+        for part in path.slice_from(1).iter() {
+            match *value {
+                Map(ref m) => {
+                    match m.find_equiv(part) {
+                        Some(v) => { value = v; }
+                        None => { return None; }
+                    }
+                }
+                _ => { return None; }
+            }
         }
+
+        Some(value)
     }
-    escaped
-}
-
-fn render_utag(value: Data, ctx: &RenderContext) -> ~str {
-    match value {
-        Str(ref s) => s.clone(),
-
-        // etags and utags use the default delimiter.
-        Fun(f) => render_fun(ctx, "", "{{", "}}", f),
-
-        _ => fail!(),
-    }
-}
-
-fn render_inverted_section(value: Data, ctx: &RenderContext) -> ~str {
-    match value {
-        Bool(false) => render_helper(ctx),
-        Vec(ref xs) if xs.len() == 0 => render_helper(ctx),
-        _ => ~"",
-    }
-}
-
-fn render_section(value: Data,
-                  src: &str,
-                  otag: &str,
-                  ctag: &str,
-                  ctx: &RenderContext) -> ~str {
-    match value {
-        Bool(true) => render_helper(ctx),
-        Bool(false) => ~"",
-        Vec(vs) => {
-            vs.move_iter().map(|v| {
-                let mut stack = ctx.stack.clone();
-                stack.push(v.clone());
-
-                render_helper(&RenderContext { stack: stack, .. (*ctx).clone() })
-            }).collect::<Vec<~str>>().concat()
-        }
-        Map(_) => {
-            let mut stack = ctx.stack.clone();
-            stack.push(value);
-
-            render_helper(&RenderContext { stack: stack, .. (*ctx).clone() })
-        }
-        Fun(f) => render_fun(ctx, src, otag, ctag, f),
-        _ => fail!(),
-    }
-}
-
-fn render_fun(ctx: &RenderContext,
-              src: &str,
-              otag: &str,
-              ctag: &str,
-              f: fn(~str) -> ~str) -> ~str {
-    let src = f(src.to_owned());
-    let mut iter = src.chars();
-
-    let mut inner_ctx = CompileContext {
-        reader: &mut iter,
-        partials: ctx.partials.clone(),
-        otag: otag.to_owned(),
-        ctag: ctag.to_owned(),
-        template_path: ctx.ctx.template_path.clone(),
-        template_extension: ctx.ctx.template_extension.to_owned(),
-    };
-    let tokens = inner_ctx.compile();
-
-    render_helper(&RenderContext {
-        // FIXME: #rust/9382
-        // This should be `tokens: tokens,` but that's broken
-        tokens: tokens.as_slice(),
-        .. ctx.clone()
-    })
 }
 
 #[cfg(test)]
 mod tests {
     use std::str;
+    use std::io::{File, MemWriter, TempDir};
     use collections::hashmap::HashMap;
-    use std::io::{File, TempDir};
     use serialize::json;
     use serialize::Encodable;
 
-    use super::{compile_str, render_str};
-    use super::{Context};
+    use super::compile_str;
+    //use super::{compile_str, render_str};
+    use super::{Context, Template};
+    use super::encoder::{Encoder, Error, Data, Str, Vec, Map, Fun};
     use super::{Token, Text, ETag, UTag, Section, IncompleteSection, Partial};
-    use encoder::{Encoder, Data, Str, Vec, Map, Fun};
 
     fn token_to_str(token: &Token) -> ~str {
         match *token {
@@ -1228,71 +1295,99 @@ mod tests {
     #[deriving(Encodable)]
     struct Name { name: ~str }
 
+    fn render<'a, 'b, T: Encodable<Encoder<'b>, Error>>(
+        template: &str,
+        data: &T,
+    ) -> Result<~str, Error> {
+        let template = compile_str(template);
+        template.render_str(data)
+    }
+
     #[test]
     fn test_render_texts() {
-        let ctx = &Name { name: ~"world" };
+        let ctx = Name { name: ~"world" };
 
-        assert_eq!(render_str("hello world", ctx).unwrap(), ~"hello world");
-        assert_eq!(render_str("hello {world", ctx).unwrap(), ~"hello {world");
-        assert_eq!(render_str("hello world}", ctx).unwrap(), ~"hello world}");
-        assert_eq!(render_str("hello {world}", ctx).unwrap(), ~"hello {world}");
-        assert_eq!(render_str("hello world}}", ctx).unwrap(), ~"hello world}}");
+        assert_eq!(render("hello world", &ctx), Ok(~"hello world"));
+        assert_eq!(render("hello {world", &ctx), Ok(~"hello {world"));
+        assert_eq!(render("hello world}", &ctx), Ok(~"hello world}"));
+        assert_eq!(render("hello {world}", &ctx), Ok(~"hello {world}"));
+        assert_eq!(render("hello world}}", &ctx), Ok(~"hello world}}"));
     }
 
     #[test]
     fn test_render_etags() {
-        let ctx = &Name { name: ~"world" };
+        let ctx = Name { name: ~"world" };
 
-        assert_eq!(render_str("hello {{name}}", ctx).unwrap(), ~"hello world");
+        assert_eq!(render("hello {{name}}", &ctx), Ok(~"hello world"));
     }
 
     #[test]
     fn test_render_utags() {
-        let ctx = &Name { name: ~"world" };
+        let ctx = Name { name: ~"world" };
 
-        assert_eq!(render_str("hello {{{name}}}", ctx).unwrap(), ~"hello world");
+        assert_eq!(render("hello {{{name}}}", &ctx), Ok(~"hello world"));
+    }
+
+    fn render_data<'a>(template: &Template, data: &Data<'a>) -> ~str {
+        let mut wr = MemWriter::new();
+        template.render_data(&mut wr, data);
+        str::from_utf8_owned(wr.unwrap()).unwrap()
     }
 
     #[test]
     fn test_render_sections() {
-        let mut ctx0 = HashMap::new();
+        let ctx = HashMap::new();
         let template = compile_str("0{{#a}}1 {{n}} 3{{/a}}5");
 
-        assert_eq!(template.render_data(Map(ctx0.clone())), ~"05");
+        assert_eq!(render_data(&template, &Map(ctx)), ~"05");
 
-        ctx0.insert(~"a", Vec(Vec::new()));
-        assert_eq!(template.render_data(Map(ctx0.clone())), ~"05");
+        let mut ctx = HashMap::new();
+        ctx.insert(~"a", Vec(Vec::new()));
 
-        let ctx1: HashMap<~str, Data> = HashMap::new();
-        ctx0.insert(~"a", Vec(vec!(Map(ctx1.clone()))));
+        assert_eq!(render_data(&template, &Map(ctx)), ~"05");
 
-        assert_eq!(template.render_data(Map(ctx0.clone())), ~"01  35");
+        let mut ctx = HashMap::new();
+        ctx.insert(~"a", Vec(Vec::new()));
+        assert_eq!(render_data(&template, &Map(ctx)), ~"05");
 
+        let mut ctx0 = HashMap::new();
+        let ctx1 = HashMap::new();
+        ctx0.insert(~"a", Vec(vec!(Map(ctx1))));
+
+        assert_eq!(render_data(&template, &Map(ctx0)), ~"01  35");
+
+        let mut ctx0 = HashMap::new();
         let mut ctx1 = HashMap::new();
         ctx1.insert(~"n", Str(~"a"));
-        ctx0.insert(~"a", Vec(vec!(Map(ctx1.clone()))));
-        assert!(template.render_data(Map(ctx0.clone())) == ~"01 a 35");
+        ctx0.insert(~"a", Vec(vec!(Map(ctx1))));
+        assert_eq!(render_data(&template, &Map(ctx0)), ~"01 a 35");
 
-        //ctx0.insert(~"a", Fun(|_text| {~"foo"}));
-        //assert!(template.render_data(Map(ctx0)) == ~"0foo5");
+        let mut ctx = HashMap::new();
+        ctx.insert(~"a", Fun(|_text| ~"foo"));
+        assert_eq!(render_data(&template, &Map(ctx)), ~"0foo5");
     }
 
     #[test]
     fn test_render_inverted_sections() {
         let template = compile_str("0{{^a}}1 3{{/a}}5");
 
+        let ctx = HashMap::new();
+        assert_eq!(render_data(&template, &Map(ctx)), ~"01 35");
+
+        let mut ctx = HashMap::new();
+        ctx.insert(~"a", Vec(vec!()));
+        assert_eq!(render_data(&template, &Map(ctx)), ~"01 35");
+
         let mut ctx0 = HashMap::new();
-        assert!(template.render_data(Map(ctx0.clone())) == ~"01 35");
+        let ctx1 = HashMap::new();
+        ctx0.insert(~"a", Vec(vec!(Map(ctx1))));
+        assert_eq!(render_data(&template, &Map(ctx0)), ~"05");
 
-        ctx0.insert(~"a", Vec(vec!()));
-        assert!(template.render_data(Map(ctx0.clone())) == ~"01 35");
-
+        let mut ctx0 = HashMap::new();
         let mut ctx1 = HashMap::new();
-        ctx0.insert(~"a", Vec(vec!(Map(ctx1.clone()))));
-        assert!(template.render_data(Map(ctx0.clone())) == ~"05");
-
         ctx1.insert(~"n", Str(~"a"));
-        assert!(template.render_data(Map(ctx0.clone())) == ~"05");
+        ctx0.insert(~"a", Vec(vec!(Map(ctx1))));
+        assert_eq!(render_data(&template, &Map(ctx0)), ~"05");
     }
 
     #[test]
@@ -1301,29 +1396,36 @@ mod tests {
             .compile_path(Path::new("base"))
             .unwrap();
 
+        let ctx = HashMap::new();
+        assert_eq!(render_data(&template, &Map(ctx)), ~"<h2>Names</h2>\n");
+
+        let mut ctx = HashMap::new();
+        ctx.insert(~"names", Vec(vec!()));
+        assert_eq!(render_data(&template, &Map(ctx)), ~"<h2>Names</h2>\n");
+
         let mut ctx0 = HashMap::new();
-        assert_eq!(template.render_data(Map(ctx0.clone())), ~"<h2>Names</h2>\n");
-
-        ctx0.insert(~"names", Vec(vec!()));
-        assert_eq!(template.render_data(Map(ctx0.clone())), ~"<h2>Names</h2>\n");
-
-        let mut ctx1 = HashMap::new();
-        ctx0.insert(~"names", Vec(vec!(Map(ctx1.clone()))));
+        let ctx1 = HashMap::new();
+        ctx0.insert(~"names", Vec(vec!(Map(ctx1))));
         assert_eq!(
-            template.render_data(Map(ctx0.clone())),
+            render_data(&template, &Map(ctx0)),
             ~"<h2>Names</h2>\n  <strong></strong>\n\n");
 
+        let mut ctx0 = HashMap::new();
+        let mut ctx1 = HashMap::new();
         ctx1.insert(~"name", Str(~"a"));
-        ctx0.insert(~"names", Vec(vec!(Map(ctx1.clone()))));
+        ctx0.insert(~"names", Vec(vec!(Map(ctx1))));
         assert_eq!(
-            template.render_data(Map(ctx0.clone())),
+            render_data(&template, &Map(ctx0)),
             ~"<h2>Names</h2>\n  <strong>a</strong>\n\n");
 
+        let mut ctx0 = HashMap::new();
+        let mut ctx1 = HashMap::new();
+        ctx1.insert(~"name", Str(~"a"));
         let mut ctx2 = HashMap::new();
         ctx2.insert(~"name", Str(~"<b>"));
         ctx0.insert(~"names", Vec(vec!(Map(ctx1), Map(ctx2))));
         assert_eq!(
-            template.render_data(Map(ctx0)),
+            render_data(&template, &Map(ctx0)),
             ~"<h2>Names</h2>\n  <strong>a</strong>\n\n  <strong>&lt;b&gt;</strong>\n\n");
     }
 
@@ -1357,29 +1459,6 @@ mod tests {
         }
     }
 
-//    fn convert_json_map(map: json::Object) -> HashMap<~str, Data> {
-//        let mut d = HashMap::new();
-//        for (key, value) in map.move_iter() {
-//            d.insert(key.to_owned(), convert_json(value));
-//        }
-//        d
-//    }
-//
-//    fn convert_json(value: json::Json) -> Data {
-//        match value {
-//          json::Number(n) => {
-//            // We have to cheat and use {:?} because %f doesn't convert 3.3 to
-//            // 3.3.
-//            Str(fmt!("{:?}", n))
-//          }
-//          json::String(s) => { Str(s.to_owned()) }
-//          json::Boolean(b) => { Bool(b) }
-//          json::List(v) => { Vec(v.map(convert_json)) }
-//          json::Object(d) => { Map(convert_json_map(d)) }
-//          _ => { fail!("{:?}", value) }
-//        }
-//    }
-
     fn write_partials(tmpdir: &Path, value: &json::Json) {
         match value {
             &json::Object(ref d) => {
@@ -1389,10 +1468,6 @@ mod tests {
                             let mut path = tmpdir.clone();
                             path.push(*key + ".mustache");
                             File::create(&path).write(s.as_bytes()).unwrap();
-                            // match File::create(&path).write(s.as_bytes()) {
-                            //     Some(mut wr) => wr.write(s.as_bytes()),
-                            //     None => fail!(),
-                            // }
                         }
                         _ => fail!(),
                     }
@@ -1427,7 +1502,7 @@ mod tests {
 
         let ctx = Context::new(tmpdir.path().clone());
         let template = ctx.compile(template.chars());
-        let result = template.render_data(data);
+        let result = render_data(&template, &data);
 
         if result != expected {
             println!("desc:     {}", test.find(&~"desc").unwrap().to_str());
@@ -1491,91 +1566,83 @@ mod tests {
         run_tests("spec/specs/sections.json");
     }
 
-   #[test]
-   fn test_spec_lambdas() {
-       for json in parse_spec_tests("spec/specs/~lambdas.json").move_iter() {
-           let mut test = match json {
-               json::Object(m) => m,
-               value => { fail!("{:?}", value) }
-           };
+    #[test]
+    fn test_spec_lambdas() {
+        for json in parse_spec_tests("spec/specs/~lambdas.json").move_iter() {
+            let mut test = match json {
+                json::Object(m) => m,
+                value => { fail!("{:?}", value) }
+            };
 
-           // Replace the lambda with rust code.
-           let data = match test.pop(&~"data") {
-               Some(data) => data,
-               None => fail!(),
-           };
+            let s = match test.pop(&~"name") {
+                Some(json::String(s)) => s,
+                value => { fail!("{:?}", value) }
+            };
 
-           let mut encoder = Encoder::new();
-           data.encode(&mut encoder).unwrap();
+            // Replace the lambda with rust code.
+            let data = match test.pop(&~"data") {
+                Some(data) => data,
+                None => fail!(),
+            };
 
-           let mut ctx = match encoder.data.pop().unwrap() {
-               Map(ctx) => ctx,
-               _ => fail!(),
-           };
+            let mut encoder = Encoder::new();
+            data.encode(&mut encoder).unwrap();
 
-           let s = match test.pop(&~"name") {
-               Some(json::String(s)) => s,
-               value => { fail!("{:?}", value) }
-           };
+            let mut ctx = match encoder.data.pop().unwrap() {
+                Map(ctx) => ctx,
+                _ => fail!(),
+            };
 
-           let f = match s.as_slice() {
-               "Interpolation" => {
-                   fn f(_text: ~str) -> ~str {~"world" }
-                   f
-               }
-               "Interpolation - Expansion" => {
-                   fn f(_text: ~str) -> ~str {~"{{planet}}" }
-                   f
-               }
-               "Interpolation - Alternate Delimiters" => {
-                   fn f(_text: ~str) -> ~str {~"|planet| => {{planet}}" }
-                   f
-               }
-               "Interpolation - Multiple Calls" => {
-                   // We can't do closures yet because of a rust bug.
-                   continue;
-                   /*
-                   let calls = 0i;
-                   fn _f(_text: ~str) {*calls = *calls + 1; calls.to_str() }
-                   */
-               }
-               "Escaping" => {
-                   fn f(_text: ~str) -> ~str {~">" }
-                   f
-               }
-               "Section" => {
-                   fn f(text: ~str) -> ~str {
-                       if text == ~"{{x}}" { ~"yes" } else { ~"no" }
-                   }
-                   f
-               }
-               "Section - Expansion" => {
-                   fn f(text: ~str) -> ~str {
-                       text + "{{planet}}" + text
-                   }
-                   f
-               }
-               "Section - Alternate Delimiters" => {
-                   fn f(text: ~str) -> ~str {
-                       text + "{{planet}} => |planet|" + text
-                   }
-                   f
-               }
-               "Section - Multiple Calls" => {
-                   fn f(text: ~str) -> ~str {
-                       ~"__" + text + "__"
-                   }
-                   f
-               }
-               "Inverted Section" => {
-                   fn f(_text: ~str) -> ~str { ~"" }
-                   f
-               }
-               value => { fail!("{:?}", value) }
-           };
-           ctx.insert(~"lambda", Fun(f));
+            // needed for the closure test.
+            let mut calls = 0;
 
-           run_test(test, Map(ctx));
-       }
-   }
+            let f = match s.as_slice() {
+                "Interpolation" => {
+                    |_text| { ~"world" }
+                }
+                "Interpolation - Expansion" => {
+                    |_text| { ~"{{planet}}" }
+                }
+                "Interpolation - Alternate Delimiters" => {
+                    |_text| { ~"|planet| => {{planet}}" }
+                }
+                "Interpolation - Multiple Calls" => {
+                    |_text| {
+                        calls += 1;
+                        calls.to_str()
+                    }
+                }
+                "Escaping" => {
+                    |_text| { ~">" }
+                }
+                "Section" => {
+                    |text: ~str| {
+                        if text == ~"{{x}}" {
+                            ~"yes"
+                        } else {
+                            ~"no"
+                        }
+                    }
+                }
+                "Section - Expansion" => {
+                    |text: ~str| { text + "{{planet}}" + text }
+                }
+                "Section - Alternate Delimiters" => {
+                    |text: ~str| { text + "{{planet}} => |planet|" + text }
+                }
+                "Section - Multiple Calls" => {
+                    |text: ~str| { ~"__" + text + "__" }
+                }
+                "Inverted Section" => {
+                    |_text| { ~"" }
+                }
+
+                value => { fail!("{:?}", value) }
+            };
+
+            ctx.insert(~"lambda", Fun(f));
+
+            run_test(test, Map(ctx));
+        }
+    }
 }
