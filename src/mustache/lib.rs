@@ -45,7 +45,7 @@ impl<'a> Eq for Data<'a> {
             (&Bool(ref v0), &Bool(ref v1)) => v0 == v1,
             (&Vec(ref v0), &Vec(ref v1)) => v0 == v1,
             (&Map(ref v0), &Map(ref v1)) => v0 == v1,
-            (&Fun(_), &Fun(_)) => false, // we can't compare closures.
+            (&Fun(_), &Fun(_)) => fail!("cannot compare closures"),
             (_, _) => false,
         }
     }
