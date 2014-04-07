@@ -1,4 +1,4 @@
-#![crate_id = "github.com/erickt/rust-mustache#mustache:0.1.0"]
+#![crate_id = "github.com/erickt/rust-mustache#mustache:0.3.0"]
 
 #![license = "MIT/ASL2"]
 #![crate_type = "dylib"]
