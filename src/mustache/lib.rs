@@ -12,19 +12,57 @@ extern crate serialize;
 #[phase(syntax, link)]
 extern crate log;
 
+use std::fmt;
 use std::io::{File, MemWriter};
 use std::str;
+use collections::HashMap;
 
+pub use builder::{MapBuilder, VecBuilder};
 pub use compiler::Compiler;
-pub use encoder::{Encoder, EncoderResult, Data, Map, Vec, Bool, Str, Fun};
+pub use encoder::{Encoder, EncoderResult};
 pub use encoder::{Error, InvalidStr, IoError};
 pub use parser::Parser;
 pub use template::Template;
 
+pub mod builder;
 pub mod compiler;
 pub mod encoder;
 pub mod parser;
 pub mod template;
+
+pub enum Data<'a> {
+    Str(~str),
+    Bool(bool),
+    Vec(Vec<Data<'a>>),
+    Map(HashMap<~str, Data<'a>>),
+    Fun('a |~str| -> ~str),
+}
+
+impl<'a> Eq for Data<'a> {
+    #[inline]
+    fn eq(&self, other: &Data<'a>) -> bool {
+        match (self, other) {
+            (&Str(ref v0), &Str(ref v1)) => v0 == v1,
+            (&Bool(ref v0), &Bool(ref v1)) => v0 == v1,
+            (&Vec(ref v0), &Vec(ref v1)) => v0 == v1,
+            (&Map(ref v0), &Map(ref v1)) => v0 == v1,
+            (&Fun(_), &Fun(_)) => false, // we can't compare closures.
+            (_, _) => false,
+        }
+    }
+}
+
+impl<'a> fmt::Show for Data<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Str(ref v) => write!(f.buf, "Str({})", v),
+            Bool(v) => write!(f.buf, "Bool({})", v),
+            Vec(ref v) => write!(f.buf, "Vec({})", v),
+            Map(ref v) => write!(f.buf, "Map({})", v),
+            Fun(_) => write!(f.buf, "Fun(...)"),
+        }
+    }
+}
 
 /// Represents the shared metadata needed to compile and render a mustache
 /// template.
@@ -102,39 +140,4 @@ pub fn compile_path(path: Path) -> Result<Template, Error> {
 /// Compiles a template from a string.
 pub fn compile_str(template: &str) -> Template {
     compile_iter(template.chars())
-}
-
-/// Renders a template from an `Iterator<char>`.
-pub fn render_iter<
-    'a,
-    IT: Iterator<char>,
-    T: serialize::Encodable<Encoder<'a>, Error>,
-    W: Writer
->(reader: IT, wr: &mut W, data: &T) -> Result<(), Error> {
-    let template = compile_iter(reader);
-    template.render(wr, data)
-}
-
-/// Renders a template from a file.
-pub fn render_path<
-    'a,
-    T: serialize::Encodable<Encoder<'a>, Error>
->(path: Path, data: &T) -> Result<~str, Error> {
-    let template = try!(compile_path(path));
-    
-    let mut wr = MemWriter::new();
-    try!(template.render(&mut wr, data));
-    Ok(str::from_utf8_owned(wr.unwrap()).unwrap())
-}
-
-/// Renders a template from a string.
-pub fn render_str<
-    'a,
-    T: serialize::Encodable<Encoder<'a>, Error>
->(template: &str, data: &T) -> Result<~str, Error> {
-    let template = compile_str(template);
-
-    let mut wr = MemWriter::new();
-    try!(template.render(&mut wr, data));
-    Ok(str::from_utf8_owned(wr.unwrap()).unwrap())
 }

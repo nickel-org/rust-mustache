@@ -6,13 +6,7 @@ use std::fmt;
 use std::str;
 use collections::hashmap::HashMap;
 
-pub enum Data<'a> {
-    Str(~str),
-    Bool(bool),
-    Vec(Vec<Data<'a>>),
-    Map(HashMap<~str, Data<'a>>),
-    Fun('a |~str| -> ~str),
-}
+use super::{Data, Str, Bool, Vec, Map};
 
 pub struct Encoder<'a> {
     pub data: Vec<Data<'a>>,

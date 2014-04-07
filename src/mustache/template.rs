@@ -6,11 +6,10 @@ use collections::HashMap;
 
 use compiler::Compiler;
 use parser::{Token, Text, ETag, UTag, Section, Partial};
-
 use encoder;
-use encoder::{Encoder, Error, Data, Bool, Str, Vec, Map, Fun};
+use encoder::{Encoder, Error};
 
-use super::Context;
+use super::{Context, Data, Bool, Str, Vec, Map, Fun};
 
 pub struct Template {
     ctx: Context,
@@ -27,25 +26,13 @@ impl Template {
         }
     }
 
-    pub fn render<
-        'a,
-        W: Writer,
-        T: Encodable<Encoder<'a>, Error>
-    >(&self, wr: &mut W, data: &T) -> Result<(), Error> {
+    pub fn render<'a, W: Writer, T: Encodable<Encoder<'a>, Error>>(
+        &self,
+        wr: &mut W,
+        data: &T
+    ) -> Result<(), Error> {
         let data = try!(encoder::encode(data));
         Ok(self.render_data(wr, &data))
-    }
-
-    pub fn render_str<
-        'a,
-        T: Encodable<Encoder<'a>, Error>
-    >(&self, data: &T) -> Result<~str, Error> {
-        let mut wr = MemWriter::new();
-
-        match self.render(&mut wr, data) {
-            Ok(()) => Ok(str::from_utf8_owned(wr.unwrap()).unwrap()),
-            Err(err) => Err(err),
-        }
     }
 
     pub fn render_data<'a, W: Writer>(&self, wr: &mut W, data: &Data<'a>) {
@@ -361,9 +348,10 @@ mod tests {
     use serialize::json;
     use serialize::Encodable;
 
-    use encoder::{Encoder, Error, Data, Str, Vec, Map, Fun};
+    use encoder::{Encoder, Error};
 
     use super::super::compile_str;
+    use super::super::{Data, Str, Vec, Map, Fun};
     use super::super::{Context, Template};
 
     #[deriving(Encodable)]
@@ -374,7 +362,11 @@ mod tests {
         data: &T,
     ) -> Result<~str, Error> {
         let template = compile_str(template);
-        template.render_str(data)
+
+        let mut wr = MemWriter::new();
+        try!(template.render(&mut wr, data));
+
+        Ok(str::from_utf8_owned(wr.unwrap()).unwrap())
     }
 
     #[test]

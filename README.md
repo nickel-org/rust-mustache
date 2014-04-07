@@ -30,14 +30,53 @@ Use It
 ======
 
     extern crate mustache;
+    extern crate serialize;
+
+    use std::io;
+    use mustache::MapBuilder;
 
     #[deriving(Encodable)]
-    struct Name { name: ~str }
+    struct Planet {
+        name: ~str,
+    }
 
     fn main() {
-        let name = Name { name: ~"world" };
-        let s = mustache::render_str("hello {{name}}!", ctx);
-        println(s);
+        // First the string needs to be compiled.
+        let template = mustache::compile_str("hello {{name}}");
+
+        // You can either use an encodable type to print "hello Mercury".
+        let planet = Planet { name: ~"Mercury" };
+        template.render(&mut io::stdout(), &planet).unwrap();
+        println!("");
+
+        // ... or you can use a builder to print "hello Venus".
+        let data = MapBuilder::new()
+            .insert_str(~"name", ~"Venus")
+            .build();
+
+        template.render_data(&mut io::stdout(), &data);
+        println!("");
+
+        // ... you can even use closures.
+        let mut planets = vec!(~"Jupiter", ~"Mars", ~"Earth");
+
+        let data = MapBuilder::new()
+            .insert_fn(~"name", |_| {
+                planets.pop().unwrap()
+            })
+            .build();
+
+        // prints "hello Earth"
+        template.render_data(&mut io::stdout(), &data);
+        println!("");
+
+        // prints "hello Mars"
+        template.render_data(&mut io::stdout(), &data);
+        println!("");
+
+        // prints "hello Jupiter"
+        template.render_data(&mut io::stdout(), &data);
+        println!("");
     }
 
 [1]: http://code.google.com/p/google-ctemplate/
