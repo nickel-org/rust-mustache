@@ -1,6 +1,7 @@
 use std::char;
 use std::mem;
 
+/// `Token` is a section of a compiled mustache string.
 #[deriving(Clone)]
 pub enum Token {
     Text(~str),
@@ -18,6 +19,7 @@ enum TokenClass {
     NewLineWhiteSpace(~str, uint),
 }
 
+/// `Parser` parses a string into a series of `Token`s.
 pub struct Parser<'a, T> {
     reader: &'a mut T,
     ch: Option<char>,

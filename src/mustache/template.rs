@@ -11,21 +11,26 @@ use encoder::{Encoder, Error};
 
 use super::{Context, Data, Bool, Str, Vec, Map, Fun};
 
+/// `Template` represents a compiled mustache file.
 pub struct Template {
     ctx: Context,
     tokens: Vec<Token>,
     partials: HashMap<~str, Vec<Token>>
 }
 
-impl Template {
-    pub fn new(ctx: Context, tokens: Vec<Token>, partials: HashMap<~str, Vec<Token>>) -> Template {
-        Template {
-            ctx: ctx,
-            tokens: tokens,
-            partials: partials,
-        }
+/// Construct a `Template`. This is not part of the impl of Template so it is
+/// not exported outside of mustache.
+pub fn new(ctx: Context, tokens: Vec<Token>, partials: HashMap<~str,
+Vec<Token>>) -> Template {
+    Template {
+        ctx: ctx,
+        tokens: tokens,
+        partials: partials,
     }
+}
 
+impl Template {
+    /// Renders the template with the `Encodable` data.
     pub fn render<'a, W: Writer, T: Encodable<Encoder<'a>, Error>>(
         &self,
         wr: &mut W,
@@ -35,6 +40,7 @@ impl Template {
         Ok(self.render_data(wr, &data))
     }
 
+    /// Renders the template with the `Data`.
     pub fn render_data<'a, W: Writer>(&self, wr: &mut W, data: &Data<'a>) {
         let mut render_ctx = RenderContext::new(self);
         let mut stack = vec!(data);

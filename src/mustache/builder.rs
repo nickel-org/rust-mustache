@@ -5,7 +5,7 @@ use encoder;
 use encoder::{Encoder, Error};
 use super::{Data, Str, Bool, Vec, Map, Fun};
 
-///
+/// `MapBuilder` is a helper type that construct `Data` types.
 pub struct MapBuilder<'a> {
     data: HashMap<~str, Data<'a>>,
 }
@@ -269,12 +269,18 @@ mod tests {
     use super::{MapBuilder, VecBuilder};
 
     #[test]
-    fn test_builders() {
+    fn test_empty_builders() {
         assert_eq!(
-            MapBuilder::new()
-                .build(),
+            MapBuilder::new().build(),
             Map(HashMap::new()));
 
+        assert_eq!(
+            VecBuilder::new().build(),
+            Vec(Vec::new()));
+    }
+
+    #[test]
+    fn test_builders() {
         let mut pride_and_prejudice = HashMap::new();
         pride_and_prejudice.insert(~"title", Str(~"Pride and Prejudice"));
         pride_and_prejudice.insert(~"publish_date", Str(~"1813"));

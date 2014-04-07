@@ -5,6 +5,7 @@ use collections::HashMap;
 use parser::{Parser, Token};
 use super::Context;
 
+/// `Compiler` is a object that compiles a string into a `Vec<Token>`.
 pub struct Compiler<T> {
     ctx: Context,
     reader: T,

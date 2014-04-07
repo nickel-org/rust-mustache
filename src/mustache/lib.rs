@@ -13,22 +13,21 @@ extern crate serialize;
 extern crate log;
 
 use std::fmt;
-use std::io::{File, MemWriter};
+use std::io::File;
 use std::str;
 use collections::HashMap;
 
 pub use builder::{MapBuilder, VecBuilder};
-pub use compiler::Compiler;
 pub use encoder::{Encoder, EncoderResult};
 pub use encoder::{Error, InvalidStr, IoError};
-pub use parser::Parser;
 pub use template::Template;
 
 pub mod builder;
-pub mod compiler;
 pub mod encoder;
-pub mod parser;
-pub mod template;
+
+mod compiler;
+mod parser;
+mod template;
 
 pub enum Data<'a> {
     Str(~str),
@@ -83,10 +82,10 @@ impl Context {
 
     /// Compiles a template from a string
     pub fn compile<IT: Iterator<char>>(&self, reader: IT) -> Template {
-        let compiler = Compiler::new(self.clone(), reader);
+        let compiler = compiler::Compiler::new(self.clone(), reader);
         let (tokens, partials) = compiler.compile();
 
-        Template::new(self.clone(), tokens, partials)
+        template::new(self.clone(), tokens, partials)
     }
 
     /// Compiles a template from a path.
@@ -108,21 +107,6 @@ impl Context {
         };
 
         Ok(self.compile(template.chars()))
-    }
-
-    /// Renders a template from a string.
-    pub fn render<
-        'a,
-        T: serialize::Encodable<Encoder<'a>, Error>
-    >(&self, reader: &str, data: &T) -> Result<~str, Error> {
-        let template = self.compile(reader.chars());
-
-        let mut wr = MemWriter::new();
-
-        match template.render(&mut wr, data) {
-            Ok(()) => Ok(str::from_utf8_owned(wr.unwrap()).unwrap()),
-            Err(err) => Err(err),
-        }
     }
 }
 
