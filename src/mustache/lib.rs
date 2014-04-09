@@ -34,7 +34,7 @@ pub enum Data<'a> {
     Bool(bool),
     Vec(Vec<Data<'a>>),
     Map(HashMap<~str, Data<'a>>),
-    Fun('a |~str| -> ~str),
+    Fun(|~str|: 'a -> ~str),
 }
 
 impl<'a> Eq for Data<'a> {
