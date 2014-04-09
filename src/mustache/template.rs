@@ -159,7 +159,7 @@ impl<'a> RenderContext<'a> {
         self.render_utag(&mut mem_wr, stack, path);
 
         let bytes = mem_wr.unwrap();
-        let s = str::from_utf8_owned(bytes).unwrap();
+        let s = str::from_utf8(bytes.as_slice()).unwrap().to_owned();
 
         for c in s.chars() {
             match c {
@@ -372,7 +372,7 @@ mod tests {
         let mut wr = MemWriter::new();
         try!(template.render(&mut wr, data));
 
-        Ok(str::from_utf8_owned(wr.unwrap()).unwrap())
+        Ok(str::from_utf8(wr.unwrap().as_slice()).unwrap().to_owned())
     }
 
     #[test]
@@ -403,7 +403,7 @@ mod tests {
     fn render_data<'a>(template: &Template, data: &Data<'a>) -> ~str {
         let mut wr = MemWriter::new();
         template.render_data(&mut wr, data);
-        str::from_utf8_owned(wr.unwrap()).unwrap()
+        str::from_utf8(wr.unwrap().as_slice()).unwrap().to_owned()
     }
 
     #[test]
@@ -509,8 +509,8 @@ mod tests {
             Err(e) => fail!("Could not read file {}", e),
         };
 
-        let s = match str::from_utf8_owned(file_contents){
-            Some(str) => str,
+        let s = match str::from_utf8(file_contents.as_slice()){
+            Some(str) => str.to_owned(),
             None => {fail!("File was not UTF8 encoded");}
         };
 
