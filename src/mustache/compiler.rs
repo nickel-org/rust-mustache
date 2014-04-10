@@ -60,8 +60,8 @@ impl<T: Iterator<char>> Compiler<T> {
 
                 match File::open(&path).read_to_end() {
                     Ok(contents) => {
-                        let string = match str::from_utf8_owned(contents) {
-                            Some(string) => string,
+                        let string = match str::from_utf8(contents.as_slice()) {
+                            Some(string) => string.to_owned(),
                             None => { fail!("Failed to parse file as UTF-8"); }
                         };
 

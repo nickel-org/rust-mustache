@@ -34,7 +34,7 @@ pub enum Data<'a> {
     Bool(bool),
     Vec(Vec<Data<'a>>),
     Map(HashMap<~str, Data<'a>>),
-    Fun('a |~str| -> ~str),
+    Fun(|~str|: 'a -> ~str),
 }
 
 impl<'a> Eq for Data<'a> {
@@ -101,7 +101,7 @@ impl Context {
         };
 
         // TODO: maybe allow UTF-16 as well?
-        let template = match str::from_utf8(s) {
+        let template = match str::from_utf8(s.as_slice()) {
             Some(string) => string,
             None => { return Err(InvalidStr); }
         };

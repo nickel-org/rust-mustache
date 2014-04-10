@@ -120,7 +120,7 @@ impl<'a> MapBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_fn(self, key: ~str, f: 'a |~str| -> ~str) -> MapBuilder<'a> {
+    pub fn insert_fn(self, key: ~str, f: |~str|: 'a -> ~str) -> MapBuilder<'a> {
         let MapBuilder { mut data } = self;
         data.insert(key, Fun(f));
         MapBuilder { data: data }
@@ -249,7 +249,7 @@ impl<'a> VecBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn push_fn(self, f: 'a |~str| -> ~str) -> VecBuilder<'a> {
+    pub fn push_fn(self, f: |~str|: 'a -> ~str) -> VecBuilder<'a> {
         let VecBuilder { mut data } = self;
         data.push(Fun(f));
         VecBuilder { data: data }
