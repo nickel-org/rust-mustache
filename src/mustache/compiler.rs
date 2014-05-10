@@ -21,8 +21,8 @@ impl<T: Iterator<char>> Compiler<T> {
             ctx: ctx,
             reader: reader,
             partials: HashMap::new(),
-            otag: ~"{{",
-            ctag: ~"}}",
+            otag: "{{".into_owned(),
+            ctag: "}}".into_owned(),
         }
     }
 
@@ -69,8 +69,8 @@ impl<T: Iterator<char>> Compiler<T> {
                             ctx: self.ctx.clone(),
                             reader: string.chars(),
                             partials: self.partials.clone(),
-                            otag: ~"{{",
-                            ctag: ~"}}",
+                            otag: "{{".into_owned(),
+                            ctag: "}}".into_owned(),
                         };
 
                         let (tokens, _) = compiler.compile();
@@ -163,62 +163,62 @@ mod tests {
     #[test]
     fn test_compile_texts() {
         check_tokens(compile_str("hello world"), [
-            Text(~"hello world")
+            Text("hello world".to_owned())
         ]);
         check_tokens(compile_str("hello {world"), [
-            Text(~"hello {world")
+            Text("hello {world".to_owned())
         ]);
         check_tokens(compile_str("hello world}"), [
-            Text(~"hello world}")
+            Text("hello world}".to_owned())
         ]);
         check_tokens(compile_str("hello world}}"), [
-            Text(~"hello world}}")
+            Text("hello world}}".to_owned())
         ]);
     }
 
     #[test]
     fn test_compile_etags() {
         check_tokens(compile_str("{{ name }}"), [
-            ETag(vec!(~"name"), ~"{{ name }}")
+            ETag(vec!("name".to_owned()), "{{ name }}".to_owned())
         ]);
 
         check_tokens(compile_str("before {{name}} after"), [
-            Text(~"before "),
-            ETag(vec!(~"name"), ~"{{name}}"),
-            Text(~" after")
+            Text("before ".to_owned()),
+            ETag(vec!("name".to_owned()), "{{name}}".to_owned()),
+            Text(" after".to_owned())
         ]);
 
         check_tokens(compile_str("before {{name}}"), [
-            Text(~"before "),
-            ETag(vec!(~"name"), ~"{{name}}")
+            Text("before ".to_owned()),
+            ETag(vec!("name".to_owned()), "{{name}}".to_owned())
         ]);
 
         check_tokens(compile_str("{{name}} after"), [
-            ETag(vec!(~"name"), ~"{{name}}"),
-            Text(~" after")
+            ETag(vec!("name".to_owned()), "{{name}}".to_owned()),
+            Text(" after".to_owned())
         ]);
     }
 
     #[test]
     fn test_compile_utags() {
         check_tokens(compile_str("{{{name}}}"), [
-            UTag(vec!(~"name"), ~"{{{name}}}")
+            UTag(vec!("name".to_owned()), "{{{name}}}".to_owned())
         ]);
 
         check_tokens(compile_str("before {{{name}}} after"), [
-            Text(~"before "),
-            UTag(vec!(~"name"), ~"{{{name}}}"),
-            Text(~" after")
+            Text("before ".to_owned()),
+            UTag(vec!("name".to_owned()), "{{{name}}}".to_owned()),
+            Text(" after".to_owned())
         ]);
 
         check_tokens(compile_str("before {{{name}}}"), [
-            Text(~"before "),
-            UTag(vec!(~"name"), ~"{{{name}}}")
+            Text("before ".to_owned()),
+            UTag(vec!("name".to_owned()), "{{{name}}}".to_owned())
         ]);
 
         check_tokens(compile_str("{{{name}}} after"), [
-            UTag(vec!(~"name"), ~"{{{name}}}"),
-            Text(~" after")
+            UTag(vec!("name".to_owned()), "{{{name}}}".to_owned()),
+            Text(" after".to_owned())
         ]);
     }
 
@@ -226,119 +226,119 @@ mod tests {
     fn test_compile_sections() {
         check_tokens(compile_str("{{# name}}{{/name}}"), [
             Section(
-                vec!(~"name"),
+                vec!("name".to_owned()),
                 false,
                 Vec::new(),
-                ~"{{",
-                ~"{{# name}}",
-                ~"",
-                ~"{{/name}}",
-                ~"}}"
+                "{{".to_owned(),
+                "{{# name}}".to_owned(),
+                "".to_owned(),
+                "{{/name}}".to_owned(),
+                "}}".to_owned()
             )
         ]);
 
         check_tokens(compile_str("before {{^name}}{{/name}} after"), [
-            Text(~"before "),
+            Text("before ".to_owned()),
             Section(
-                vec!(~"name"),
+                vec!("name".to_owned()),
                 true,
                 Vec::new(),
-                ~"{{",
-                ~"{{^name}}",
-                ~"",
-                ~"{{/name}}",
-                ~"}}"
+                "{{".to_owned(),
+                "{{^name}}".to_owned(),
+                "".to_owned(),
+                "{{/name}}".to_owned(),
+                "}}".to_owned()
             ),
-            Text(~" after")
+            Text(" after".to_owned())
         ]);
 
         check_tokens(compile_str("before {{#name}}{{/name}}"), [
-            Text(~"before "),
+            Text("before ".to_owned()),
             Section(
-                vec!(~"name"),
+                vec!("name".to_owned()),
                 false,
                 Vec::new(),
-                ~"{{",
-                ~"{{#name}}",
-                ~"",
-                ~"{{/name}}",
-                ~"}}"
+                "{{".to_owned(),
+                "{{#name}}".to_owned(),
+                "".to_owned(),
+                "{{/name}}".to_owned(),
+                "}}".to_owned()
             )
         ]);
 
         check_tokens(compile_str("{{#name}}{{/name}} after"), [
             Section(
-                vec!(~"name"),
+                vec!("name".to_owned()),
                 false,
                 Vec::new(),
-                ~"{{",
-                ~"{{#name}}",
-                ~"",
-                ~"{{/name}}",
-                ~"}}"
+                "{{".to_owned(),
+                "{{#name}}".to_owned(),
+                "".to_owned(),
+                "{{/name}}".to_owned(),
+                "}}".to_owned()
             ),
-            Text(~" after")
+            Text(" after".to_owned())
         ]);
 
         check_tokens(compile_str(
                 "before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after"), [
-            Text(~"before "),
+            Text("before ".to_owned()),
             Section(
-                vec!(~"a"),
+                vec!("a".to_owned()),
                 false,
                 vec!(
-                    Text(~" 1 "),
+                    Text(" 1 ".to_owned()),
                     Section(
-                        vec!(~"b"),
+                        vec!("b".to_owned()),
                         true,
-                        vec!(Text(~" 2 ")),
-                        ~"{{",
-                        ~"{{^b}}",
-                        ~" 2 ",
-                        ~"{{/b}}",
-                        ~"}}"
+                        vec!(Text(" 2 ".to_owned())),
+                        "{{".to_owned(),
+                        "{{^b}}".to_owned(),
+                        " 2 ".to_owned(),
+                        "{{/b}}".to_owned(),
+                        "}}".to_owned()
                     ),
-                    Text(~" ")
+                    Text(" ".to_owned())
                 ),
-                ~"{{",
-                ~"{{#a}}",
-                ~" 1 {{^b}} 2 {{/b}} ",
-                ~"{{/a}}",
-                ~"}}"
+                "{{".to_owned(),
+                "{{#a}}".to_owned(),
+                " 1 {{^b}} 2 {{/b}} ".to_owned(),
+                "{{/a}}".to_owned(),
+                "}}".to_owned()
             ),
-            Text(~" after")
+            Text(" after".to_owned())
         ]);
     }
 
     #[test]
     fn test_compile_partials() {
         check_tokens(compile_str("{{> test}}"), [
-            Partial(~"test", ~"", ~"{{> test}}")
+            Partial("test".to_owned(), "".to_owned(), "{{> test}}".to_owned())
         ]);
 
         check_tokens(compile_str("before {{>test}} after"), [
-            Text(~"before "),
-            Partial(~"test", ~"", ~"{{>test}}"),
-            Text(~" after")
+            Text("before ".to_owned()),
+            Partial("test".to_owned(), "".to_owned(), "{{>test}}".to_owned()),
+            Text(" after".to_owned())
         ]);
 
         check_tokens(compile_str("before {{> test}}"), [
-            Text(~"before "),
-            Partial(~"test", ~"", ~"{{> test}}")
+            Text("before ".to_owned()),
+            Partial("test".to_owned(), "".to_owned(), "{{> test}}".to_owned())
         ]);
 
         check_tokens(compile_str("{{>test}} after"), [
-            Partial(~"test", ~"", ~"{{>test}}"),
-            Text(~" after")
+            Partial("test".to_owned(), "".to_owned(), "{{>test}}".to_owned()),
+            Text(" after".to_owned())
         ]);
     }
 
     #[test]
     fn test_compile_delimiters() {
         check_tokens(compile_str("before {{=<% %>=}}<%name%> after"), [
-            Text(~"before "),
-            ETag(vec!(~"name"), ~"<%name%>"),
-            Text(~" after")
+            Text("before ".to_owned()),
+            ETag(vec!("name".to_owned()), "<%name%>".to_owned()),
+            Text(" after".to_owned())
         ]);
     }
 }

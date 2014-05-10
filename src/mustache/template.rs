@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::io::MemWriter;
 use std::mem;
 use std::str;
@@ -61,7 +62,7 @@ impl<'a> RenderContext<'a> {
     fn new(template: &'a Template) -> RenderContext<'a> {
         RenderContext {
             template: template,
-            indent: ~"",
+            indent: "".into_owned(),
         }
     }
 
@@ -118,7 +119,7 @@ impl<'a> RenderContext<'a> {
         value: &str
     ) {
         // Indent the lines.
-        if self.indent.equiv(& &"") {
+        if self.indent.equiv(&("")) {
             wr.write_str(value).unwrap();
         } else {
             let mut pos = 0;
@@ -277,13 +278,14 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render_fun<'b>(
+    fn render_fun(
         &self,
         src: &str,
         otag: &str,
         ctag: &str,
-        f: & 'b |~str| -> ~str
+        f: &RefCell<|~str| -> ~str>
     ) -> Vec<Token> {
+        let f = &mut *f.borrow_mut();
         let src = (*f)(src.to_owned());
 
         let compiler = Compiler::new_with(
@@ -348,6 +350,7 @@ impl<'a> RenderContext<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
     use std::str;
     use std::io::{File, MemWriter, TempDir};
     use collections::HashMap;
@@ -377,27 +380,27 @@ mod tests {
 
     #[test]
     fn test_render_texts() {
-        let ctx = Name { name: ~"world" };
+        let ctx = Name { name: "world".into_owned() };
 
-        assert_eq!(render("hello world", &ctx), Ok(~"hello world"));
-        assert_eq!(render("hello {world", &ctx), Ok(~"hello {world"));
-        assert_eq!(render("hello world}", &ctx), Ok(~"hello world}"));
-        assert_eq!(render("hello {world}", &ctx), Ok(~"hello {world}"));
-        assert_eq!(render("hello world}}", &ctx), Ok(~"hello world}}"));
+        assert_eq!(render("hello world", &ctx), Ok("hello world".to_owned()));
+        assert_eq!(render("hello {world", &ctx), Ok("hello {world".to_owned()));
+        assert_eq!(render("hello world}", &ctx), Ok("hello world}".to_owned()));
+        assert_eq!(render("hello {world}", &ctx), Ok("hello {world}".to_owned()));
+        assert_eq!(render("hello world}}", &ctx), Ok("hello world}}".to_owned()));
     }
 
     #[test]
     fn test_render_etags() {
-        let ctx = Name { name: ~"world" };
+        let ctx = Name { name: "world".to_owned() };
 
-        assert_eq!(render("hello {{name}}", &ctx), Ok(~"hello world"));
+        assert_eq!(render("hello {{name}}", &ctx), Ok("hello world".to_owned()));
     }
 
     #[test]
     fn test_render_utags() {
-        let ctx = Name { name: ~"world" };
+        let ctx = Name { name: "world".to_owned() };
 
-        assert_eq!(render("hello {{{name}}}", &ctx), Ok(~"hello world"));
+        assert_eq!(render("hello {{{name}}}", &ctx), Ok("hello world".to_owned()));
     }
 
     fn render_data<'a>(template: &Template, data: &Data<'a>) -> ~str {
@@ -411,32 +414,32 @@ mod tests {
         let ctx = HashMap::new();
         let template = compile_str("0{{#a}}1 {{n}} 3{{/a}}5");
 
-        assert_eq!(render_data(&template, &Map(ctx)), ~"05");
+        assert_eq!(render_data(&template, &Map(ctx)), "05".to_owned());
 
         let mut ctx = HashMap::new();
-        ctx.insert(~"a", Vec(Vec::new()));
+        ctx.insert("a".to_owned(), Vec(Vec::new()));
 
-        assert_eq!(render_data(&template, &Map(ctx)), ~"05");
+        assert_eq!(render_data(&template, &Map(ctx)), "05".to_owned());
 
         let mut ctx = HashMap::new();
-        ctx.insert(~"a", Vec(Vec::new()));
-        assert_eq!(render_data(&template, &Map(ctx)), ~"05");
+        ctx.insert("a".to_owned(), Vec(Vec::new()));
+        assert_eq!(render_data(&template, &Map(ctx)), "05".to_owned());
 
         let mut ctx0 = HashMap::new();
         let ctx1 = HashMap::new();
-        ctx0.insert(~"a", Vec(vec!(Map(ctx1))));
+        ctx0.insert("a".to_owned(), Vec(vec!(Map(ctx1))));
 
-        assert_eq!(render_data(&template, &Map(ctx0)), ~"01  35");
+        assert_eq!(render_data(&template, &Map(ctx0)), "01  35".to_owned());
 
         let mut ctx0 = HashMap::new();
         let mut ctx1 = HashMap::new();
-        ctx1.insert(~"n", Str(~"a"));
-        ctx0.insert(~"a", Vec(vec!(Map(ctx1))));
-        assert_eq!(render_data(&template, &Map(ctx0)), ~"01 a 35");
+        ctx1.insert("n".to_owned(), Str("a".to_owned()));
+        ctx0.insert("a".to_owned(), Vec(vec!(Map(ctx1))));
+        assert_eq!(render_data(&template, &Map(ctx0)), "01 a 35".to_owned());
 
         let mut ctx = HashMap::new();
-        ctx.insert(~"a", Fun(|_text| ~"foo"));
-        assert_eq!(render_data(&template, &Map(ctx)), ~"0foo5");
+        ctx.insert("a".to_owned(), Fun(RefCell::new(|_text| "foo".to_owned())));
+        assert_eq!(render_data(&template, &Map(ctx)), "0foo5".to_owned());
     }
 
     #[test]
@@ -444,22 +447,22 @@ mod tests {
         let template = compile_str("0{{^a}}1 3{{/a}}5");
 
         let ctx = HashMap::new();
-        assert_eq!(render_data(&template, &Map(ctx)), ~"01 35");
+        assert_eq!(render_data(&template, &Map(ctx)), "01 35".to_owned());
 
         let mut ctx = HashMap::new();
-        ctx.insert(~"a", Vec(vec!()));
-        assert_eq!(render_data(&template, &Map(ctx)), ~"01 35");
+        ctx.insert("a".to_owned(), Vec(vec!()));
+        assert_eq!(render_data(&template, &Map(ctx)), "01 35".to_owned());
 
         let mut ctx0 = HashMap::new();
         let ctx1 = HashMap::new();
-        ctx0.insert(~"a", Vec(vec!(Map(ctx1))));
-        assert_eq!(render_data(&template, &Map(ctx0)), ~"05");
+        ctx0.insert("a".to_owned(), Vec(vec!(Map(ctx1))));
+        assert_eq!(render_data(&template, &Map(ctx0)), "05".to_owned());
 
         let mut ctx0 = HashMap::new();
         let mut ctx1 = HashMap::new();
-        ctx1.insert(~"n", Str(~"a"));
-        ctx0.insert(~"a", Vec(vec!(Map(ctx1))));
-        assert_eq!(render_data(&template, &Map(ctx0)), ~"05");
+        ctx1.insert("n".to_owned(), Str("a".to_owned()));
+        ctx0.insert("a".to_owned(), Vec(vec!(Map(ctx1))));
+        assert_eq!(render_data(&template, &Map(ctx0)), "05".to_owned());
     }
 
     #[test]
@@ -469,36 +472,36 @@ mod tests {
             .unwrap();
 
         let ctx = HashMap::new();
-        assert_eq!(render_data(&template, &Map(ctx)), ~"<h2>Names</h2>\n");
+        assert_eq!(render_data(&template, &Map(ctx)), "<h2>Names</h2>\n".to_owned());
 
         let mut ctx = HashMap::new();
-        ctx.insert(~"names", Vec(vec!()));
-        assert_eq!(render_data(&template, &Map(ctx)), ~"<h2>Names</h2>\n");
+        ctx.insert("names".to_owned(), Vec(vec!()));
+        assert_eq!(render_data(&template, &Map(ctx)), "<h2>Names</h2>\n".to_owned());
 
         let mut ctx0 = HashMap::new();
         let ctx1 = HashMap::new();
-        ctx0.insert(~"names", Vec(vec!(Map(ctx1))));
+        ctx0.insert("names".to_owned(), Vec(vec!(Map(ctx1))));
         assert_eq!(
             render_data(&template, &Map(ctx0)),
-            ~"<h2>Names</h2>\n  <strong></strong>\n\n");
+            "<h2>Names</h2>\n  <strong></strong>\n\n".to_owned());
 
         let mut ctx0 = HashMap::new();
         let mut ctx1 = HashMap::new();
-        ctx1.insert(~"name", Str(~"a"));
-        ctx0.insert(~"names", Vec(vec!(Map(ctx1))));
+        ctx1.insert("name".to_owned(), Str("a".to_owned()));
+        ctx0.insert("names".to_owned(), Vec(vec!(Map(ctx1))));
         assert_eq!(
             render_data(&template, &Map(ctx0)),
-            ~"<h2>Names</h2>\n  <strong>a</strong>\n\n");
+            "<h2>Names</h2>\n  <strong>a</strong>\n\n".to_owned());
 
         let mut ctx0 = HashMap::new();
         let mut ctx1 = HashMap::new();
-        ctx1.insert(~"name", Str(~"a"));
+        ctx1.insert("name".to_owned(), Str("a".to_owned()));
         let mut ctx2 = HashMap::new();
-        ctx2.insert(~"name", Str(~"<b>"));
-        ctx0.insert(~"names", Vec(vec!(Map(ctx1), Map(ctx2))));
+        ctx2.insert("name".to_owned(), Str("<b>".to_owned()));
+        ctx0.insert("names".to_owned(), Vec(vec!(Map(ctx1), Map(ctx2))));
         assert_eq!(
             render_data(&template, &Map(ctx0)),
-            ~"<h2>Names</h2>\n  <strong>a</strong>\n\n  <strong>&lt;b&gt;</strong>\n\n");
+            "<h2>Names</h2>\n  <strong>a</strong>\n\n  <strong>&lt;b&gt;</strong>\n\n".to_owned());
     }
 
     fn parse_spec_tests(src: &str) -> Vec<json::Json> {
@@ -520,7 +523,7 @@ mod tests {
                 match json {
                     json::Object(d) => {
                         let mut d = d;
-                        match d.pop(&~"tests") {
+                        match d.pop(&"tests".to_owned()) {
                             Some(json::List(tests)) => tests.move_iter().collect(),
                             _ => fail!("{}: tests key not a list", src),
                         }
@@ -549,13 +552,13 @@ mod tests {
         }
     }
 
-    fn run_test(test: ~json::Object, data: Data) {
-        let template = match test.find(&~"template") {
+    fn run_test(test: Box<json::Object>, data: Data) {
+        let template = match test.find(&"template".to_owned()) {
             Some(&json::String(ref s)) => s.clone(),
             _ => fail!(),
         };
 
-        let expected = match test.find(&~"expected") {
+        let expected = match test.find(&"expected".to_owned()) {
             Some(&json::String(ref s)) => s.clone(),
             _ => fail!(),
         };
@@ -567,7 +570,7 @@ mod tests {
             None => fail!(),
         };
 
-        match test.find(&~"partials") {
+        match test.find(&"partials".to_owned()) {
             Some(value) => write_partials(tmpdir.path(), value),
             None => {},
         }
@@ -577,8 +580,8 @@ mod tests {
         let result = render_data(&template, &data);
 
         if result != expected {
-            println!("desc:     {}", test.find(&~"desc").unwrap().to_str());
-            println!("context:  {}", test.find(&~"data").unwrap().to_str());
+            println!("desc:     {}", test.find(&"desc".to_owned()).unwrap().to_str());
+            println!("context:  {}", test.find(&"data".to_owned()).unwrap().to_str());
             println!("=>");
             println!("template: {:?}", template);
             println!("expected: {:?}", expected);
@@ -595,7 +598,7 @@ mod tests {
                 _ => fail!(),
             };
 
-            let data = match test.find(&~"data") {
+            let data = match test.find(&"data".to_owned()) {
                 Some(data) => data.clone(),
                 None => fail!(),
             };
@@ -646,13 +649,13 @@ mod tests {
                 value => { fail!("{:?}", value) }
             };
 
-            let s = match test.pop(&~"name") {
+            let s = match test.pop(&"name".to_owned()) {
                 Some(json::String(s)) => s,
                 value => { fail!("{:?}", value) }
             };
 
             // Replace the lambda with rust code.
-            let data = match test.pop(&~"data") {
+            let data = match test.pop(&"data".to_owned()) {
                 Some(data) => data,
                 None => fail!(),
             };
@@ -670,13 +673,13 @@ mod tests {
 
             let f = match s.as_slice() {
                 "Interpolation" => {
-                    |_text| { ~"world" }
+                    |_text| { "world".to_owned() }
                 }
                 "Interpolation - Expansion" => {
-                    |_text| { ~"{{planet}}" }
+                    |_text| { "{{planet}}".to_owned() }
                 }
                 "Interpolation - Alternate Delimiters" => {
-                    |_text| { ~"|planet| => {{planet}}" }
+                    |_text| { "|planet| => {{planet}}".to_owned() }
                 }
                 "Interpolation - Multiple Calls" => {
                     |_text| {
@@ -685,14 +688,14 @@ mod tests {
                     }
                 }
                 "Escaping" => {
-                    |_text| { ~">" }
+                    |_text| { ">".to_owned() }
                 }
                 "Section" => {
                     |text: ~str| {
-                        if text == ~"{{x}}" {
-                            ~"yes"
+                        if text.as_slice() == "{{x}}" {
+                            "yes".to_owned()
                         } else {
-                            ~"no"
+                            "no".to_owned()
                         }
                     }
                 }
@@ -703,16 +706,16 @@ mod tests {
                     |text: ~str| { text + "{{planet}} => |planet|" + text }
                 }
                 "Section - Multiple Calls" => {
-                    |text: ~str| { ~"__" + text + "__" }
+                    |text: ~str| { "__".to_owned() + text + "__" }
                 }
                 "Inverted Section" => {
-                    |_text| { ~"" }
+                    |_text| { "".to_owned() }
                 }
 
                 value => { fail!("{:?}", value) }
             };
 
-            ctx.insert(~"lambda", Fun(f));
+            ctx.insert("lambda".to_owned(), Fun(RefCell::new(f)));
 
             run_test(test, Map(ctx));
         }
