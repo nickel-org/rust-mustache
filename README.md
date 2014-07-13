@@ -1,4 +1,7 @@
-Mustache
+Mustache [![Ohloh statistics](http://www.ohloh.net/p/rust-mustache/widgets/project_thin_badge.gif)](https://www.ohloh.net/p/rust-mustache)
+========
+
+[![Build Status](http://travis-ci.org/erickt/rust-mustache.png?branch=master)](https://travis-ci.org/erickt/rust-mustache)
 ========
 
 Inspired by [ctemplate][1] and [et][2], [Mustache][3] is a framework-agnostic way
@@ -17,18 +20,24 @@ The different Mustache tags are documented at [mustache(5)][4].
 Install It
 ==========
 
+```ignore
     git clone https://github.com/erickt/rust-mustache.git
     cd rust-mustache
     make 
+```
 
-    (If you want to run the test cases you'll ned the spec as well)
+If you want to run the test cases, you'll need the spec as well.
+
+```ignore
     git submodule init
     git submodule update
     make test
+```
 
 Use It
 ======
 
+```rust
     extern crate mustache;
     extern crate serialize;
 
@@ -78,6 +87,7 @@ Use It
         template.render_data(&mut io::stdout(), &data);
         println!("");
     }
+```
 
 [1]: http://code.google.com/p/google-ctemplate/
 [2]: http://www.ivan.fomichev.name/2008/05/erlang-template-engine-prototype.html
