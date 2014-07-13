@@ -12,6 +12,7 @@ extern crate serialize;
 #[phase(syntax, link)]
 extern crate log;
 
+use std::cell::RefCell;
 use std::fmt;
 use std::io::File;
 use std::str;
@@ -34,7 +35,7 @@ pub enum Data<'a> {
     Bool(bool),
     Vec(Vec<Data<'a>>),
     Map(HashMap<~str, Data<'a>>),
-    Fun(|~str|: 'a -> ~str),
+    Fun(RefCell<|~str|: 'a -> ~str>),
 }
 
 impl<'a> Eq for Data<'a> {
@@ -76,7 +77,7 @@ impl Context {
     pub fn new(path: Path) -> Context {
         Context {
             template_path: path,
-            template_extension: ~"mustache",
+            template_extension: "mustache".to_owned(),
         }
     }
 
