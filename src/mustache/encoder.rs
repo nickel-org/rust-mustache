@@ -1,10 +1,8 @@
-extern crate serialize;
-extern crate collections;
-
-use std::io::IoError;
+use std::collections::HashMap;
 use std::fmt;
+use std::io::IoError;
 use std::str;
-use collections::hashmap::HashMap;
+use serialize;
 
 use super::{Data, Str, Bool, Vec, Map};
 
@@ -18,7 +16,7 @@ impl<'a> Encoder<'a> {
     }
 }
 
-#[deriving(Eq)]
+#[deriving(PartialEq, Eq)]
 pub enum Error {
     UnsupportedType,
     InvalidStr,
@@ -44,37 +42,25 @@ pub type EncoderResult = Result<(), Error>;
 impl<'a> serialize::Encoder<Error> for Encoder<'a> {
     fn emit_nil(&mut self) -> EncoderResult { Err(UnsupportedType) }
 
-    fn emit_uint(&mut self, v: uint) -> EncoderResult { self.emit_str(v.to_str()) }
-    fn emit_u64(&mut self, v: u64) -> EncoderResult   { self.emit_str(v.to_str()) }
-    fn emit_u32(&mut self, v: u32) -> EncoderResult   { self.emit_str(v.to_str()) }
-    fn emit_u16(&mut self, v: u16) -> EncoderResult   { self.emit_str(v.to_str()) }
-    fn emit_u8(&mut self, v: u8) -> EncoderResult     { self.emit_str(v.to_str()) }
+    fn emit_uint(&mut self, v: uint) -> EncoderResult { self.data.push(Str(v.to_string())); Ok(()) }
+    fn emit_u64(&mut self, v: u64) -> EncoderResult   { self.data.push(Str(v.to_string())); Ok(()) }
+    fn emit_u32(&mut self, v: u32) -> EncoderResult   { self.data.push(Str(v.to_string())); Ok(()) }
+    fn emit_u16(&mut self, v: u16) -> EncoderResult   { self.data.push(Str(v.to_string())); Ok(()) }
+    fn emit_u8(&mut self, v: u8) -> EncoderResult     { self.data.push(Str(v.to_string())); Ok(()) }
 
-    fn emit_int(&mut self, v: int) -> EncoderResult { self.emit_str(v.to_str()) }
-    fn emit_i64(&mut self, v: i64) -> EncoderResult { self.emit_str(v.to_str()) }
-    fn emit_i32(&mut self, v: i32) -> EncoderResult { self.emit_str(v.to_str()) }
-    fn emit_i16(&mut self, v: i16) -> EncoderResult { self.emit_str(v.to_str()) }
-    fn emit_i8(&mut self, v: i8) -> EncoderResult   { self.emit_str(v.to_str()) }
+    fn emit_int(&mut self, v: int) -> EncoderResult { self.data.push(Str(v.to_string())); Ok(()) }
+    fn emit_i64(&mut self, v: i64) -> EncoderResult { self.data.push(Str(v.to_string())); Ok(()) }
+    fn emit_i32(&mut self, v: i32) -> EncoderResult { self.data.push(Str(v.to_string())); Ok(()) }
+    fn emit_i16(&mut self, v: i16) -> EncoderResult { self.data.push(Str(v.to_string())); Ok(()) }
+    fn emit_i8(&mut self, v: i8) -> EncoderResult   { self.data.push(Str(v.to_string())); Ok(()) }
 
     fn emit_bool(&mut self, v: bool) -> EncoderResult { self.data.push(Bool(v)); Ok(()) }
 
-    fn emit_f64(&mut self, v: f64) -> EncoderResult {
-        self.emit_str(v.to_str())
-    }
+    fn emit_f64(&mut self, v: f64) -> EncoderResult { self.data.push(Str(v.to_string())); Ok(()) }
+    fn emit_f32(&mut self, v: f32) -> EncoderResult { self.data.push(Str(v.to_string())); Ok(()) }
 
-    fn emit_f32(&mut self, v: f32) -> EncoderResult {
-        self.emit_str(v.to_str())
-    }
-
-    fn emit_char(&mut self, v: char) -> EncoderResult {
-        self.emit_str(str::from_char(v))
-    }
-
-    fn emit_str(&mut self, v: &str) -> EncoderResult {
-        // copying emit_owned_str
-        self.data.push(Str(v.to_owned()));
-        Ok(())
-    }
+    fn emit_char(&mut self, v: char) -> EncoderResult { self.data.push(Str(str::from_char(v))); Ok(()) }
+    fn emit_str(&mut self, v: &str) -> EncoderResult { self.data.push(Str(v.to_string())); Ok(()) }
 
     fn emit_enum(&mut self, _name: &str, _f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
         Err(UnsupportedType)
@@ -130,7 +116,7 @@ impl<'a> serialize::Encoder<Error> for Encoder<'a> {
             Some(d) => d,
             _ => { return Err(UnsupportedType); }
         };
-        m.insert(name.to_owned(), data);
+        m.insert(name.to_string(), data);
         self.data.push(Map(m));
         Ok(())
     }

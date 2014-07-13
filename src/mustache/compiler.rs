@@ -1,6 +1,6 @@
+use std::collections::HashMap;
 use std::io::{File, FileNotFound};
 use std::str;
-use collections::HashMap;
 
 use parser::{Parser, Token};
 use super::Context;
@@ -9,9 +9,9 @@ use super::Context;
 pub struct Compiler<T> {
     ctx: Context,
     reader: T,
-    partials: HashMap<~str, Vec<Token>>,
-    otag: ~str,
-    ctag: ~str,
+    partials: HashMap<String, Vec<Token>>,
+    otag: String,
+    ctag: String,
 }
 
 impl<T: Iterator<char>> Compiler<T> {
@@ -21,8 +21,8 @@ impl<T: Iterator<char>> Compiler<T> {
             ctx: ctx,
             reader: reader,
             partials: HashMap::new(),
-            otag: "{{".into_owned(),
-            ctag: "}}".into_owned(),
+            otag: "{{".to_string(),
+            ctag: "}}".to_string(),
         }
     }
 
@@ -30,9 +30,9 @@ impl<T: Iterator<char>> Compiler<T> {
     pub fn new_with(
         ctx: Context,
         reader: T,
-        partials: HashMap<~str, Vec<Token>>,
-        otag: ~str,
-        ctag: ~str
+        partials: HashMap<String, Vec<Token>>,
+        otag: String,
+        ctag: String
     ) -> Compiler<T> {
         Compiler {
             ctx: ctx,
@@ -44,9 +44,9 @@ impl<T: Iterator<char>> Compiler<T> {
     }
 
     /// Compiles a template into a series of tokens.
-    pub fn compile(mut self) -> (Vec<Token>, HashMap<~str, Vec<Token>>) {
+    pub fn compile(mut self) -> (Vec<Token>, HashMap<String, Vec<Token>>) {
         let (tokens, partials) = {
-            let parser = Parser::new(&mut self.reader, self.otag, self.ctag);
+            let parser = Parser::new(&mut self.reader, self.otag.as_slice(), self.ctag.as_slice());
             parser.parse()
         };
 
@@ -56,21 +56,21 @@ impl<T: Iterator<char>> Compiler<T> {
 
             if !self.partials.contains_key(&name) {
                 // Insert a placeholder so we don't recurse off to infinity.
-                self.partials.insert(name.to_owned(), Vec::new());
+                self.partials.insert(name.to_string(), Vec::new());
 
                 match File::open(&path).read_to_end() {
                     Ok(contents) => {
                         let string = match str::from_utf8(contents.as_slice()) {
-                            Some(string) => string.to_owned(),
+                            Some(string) => string.to_string(),
                             None => { fail!("Failed to parse file as UTF-8"); }
                         };
 
                         let compiler = Compiler {
                             ctx: self.ctx.clone(),
-                            reader: string.chars(),
+                            reader: string.as_slice().chars(),
                             partials: self.partials.clone(),
-                            otag: "{{".into_owned(),
-                            ctag: "}}".into_owned(),
+                            otag: "{{".to_string(),
+                            ctag: "}}".to_string(),
                         };
 
                         let (tokens, _) = compiler.compile();
@@ -107,7 +107,7 @@ mod tests {
         tokens
     }
 
-    fn token_to_str(token: &Token) -> ~str {
+    fn token_to_str(token: &Token) -> String {
         match *token {
             // recursive enums crash %?
             Section(ref name,
@@ -118,9 +118,9 @@ mod tests {
                     ref src,
                     ref tag,
                     ref ctag) => {
-                let name = name.iter().map(|e| format!("{:?}", *e)).collect::<Vec<~str>>();
-                let children = children.iter().map(|x| token_to_str(x)).collect::<Vec<~str>>();
-                format!("Section(vec!({}), {:?}, vec!({}), {:?}, {:?}, {:?}, {:?}, {:?})",
+                let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
+                let children = children.iter().map(|x| token_to_str(x)).collect::<Vec<String>>();
+                format!("Section(vec!({}), {}, vec!({}), {}, {}, {}, {}, {})",
                         name.connect(", "),
                         inverted,
                         children.connect(", "),
@@ -131,30 +131,30 @@ mod tests {
                         ctag)
             }
             ETag(ref name, ref tag) => {
-                let name = name.iter().map(|e| format!("{:?}", *e)).collect::<Vec<~str>>();
-                format!("ETag(vec!({:?}), {:?})", name.connect(", "), *tag)
+                let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
+                format!("ETag(vec!({}), {})", name.connect(", "), *tag)
             }
             UTag(ref name, ref tag) => {
-                let name = name.iter().map(|e| format!("{:?}", *e)).collect::<Vec<~str>>();
-                format!("UTag(vec!({:?}), {:?})", name.connect(", "), *tag)
+                let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
+                format!("UTag(vec!({}), {})", name.connect(", "), *tag)
             }
             IncompleteSection(ref name, ref inverted, ref osection, ref newlined) => {
-                let name = name.iter().map(|e| format!("{:?}", *e)).collect::<Vec<~str>>();
-                format!("IncompleteSection(vec!({:?}), {:?}, {:?}, {:?})",
+                let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
+                format!("IncompleteSection(vec!({}), {}, {}, {})",
                         name.connect(", "),
                         *inverted,
                         *osection,
                         *newlined)
             }
             _ => {
-                format!("{:?}", token)
+                format!("{}", token)
             }
         }
     }
 
     fn check_tokens(actual: Vec<Token>, expected: &[Token]) {
         // TODO: equality is currently broken for enums
-        let actual: Vec<~str> = actual.iter().map(token_to_str).collect();
+        let actual: Vec<String> = actual.iter().map(token_to_str).collect();
         let expected = expected.iter().map(token_to_str).collect();
 
         assert_eq!(actual, expected);
@@ -163,62 +163,62 @@ mod tests {
     #[test]
     fn test_compile_texts() {
         check_tokens(compile_str("hello world"), [
-            Text("hello world".to_owned())
+            Text("hello world".to_string())
         ]);
         check_tokens(compile_str("hello {world"), [
-            Text("hello {world".to_owned())
+            Text("hello {world".to_string())
         ]);
         check_tokens(compile_str("hello world}"), [
-            Text("hello world}".to_owned())
+            Text("hello world}".to_string())
         ]);
         check_tokens(compile_str("hello world}}"), [
-            Text("hello world}}".to_owned())
+            Text("hello world}}".to_string())
         ]);
     }
 
     #[test]
     fn test_compile_etags() {
         check_tokens(compile_str("{{ name }}"), [
-            ETag(vec!("name".to_owned()), "{{ name }}".to_owned())
+            ETag(vec!("name".to_string()), "{{ name }}".to_string())
         ]);
 
         check_tokens(compile_str("before {{name}} after"), [
-            Text("before ".to_owned()),
-            ETag(vec!("name".to_owned()), "{{name}}".to_owned()),
-            Text(" after".to_owned())
+            Text("before ".to_string()),
+            ETag(vec!("name".to_string()), "{{name}}".to_string()),
+            Text(" after".to_string())
         ]);
 
         check_tokens(compile_str("before {{name}}"), [
-            Text("before ".to_owned()),
-            ETag(vec!("name".to_owned()), "{{name}}".to_owned())
+            Text("before ".to_string()),
+            ETag(vec!("name".to_string()), "{{name}}".to_string())
         ]);
 
         check_tokens(compile_str("{{name}} after"), [
-            ETag(vec!("name".to_owned()), "{{name}}".to_owned()),
-            Text(" after".to_owned())
+            ETag(vec!("name".to_string()), "{{name}}".to_string()),
+            Text(" after".to_string())
         ]);
     }
 
     #[test]
     fn test_compile_utags() {
         check_tokens(compile_str("{{{name}}}"), [
-            UTag(vec!("name".to_owned()), "{{{name}}}".to_owned())
+            UTag(vec!("name".to_string()), "{{{name}}}".to_string())
         ]);
 
         check_tokens(compile_str("before {{{name}}} after"), [
-            Text("before ".to_owned()),
-            UTag(vec!("name".to_owned()), "{{{name}}}".to_owned()),
-            Text(" after".to_owned())
+            Text("before ".to_string()),
+            UTag(vec!("name".to_string()), "{{{name}}}".to_string()),
+            Text(" after".to_string())
         ]);
 
         check_tokens(compile_str("before {{{name}}}"), [
-            Text("before ".to_owned()),
-            UTag(vec!("name".to_owned()), "{{{name}}}".to_owned())
+            Text("before ".to_string()),
+            UTag(vec!("name".to_string()), "{{{name}}}".to_string())
         ]);
 
         check_tokens(compile_str("{{{name}}} after"), [
-            UTag(vec!("name".to_owned()), "{{{name}}}".to_owned()),
-            Text(" after".to_owned())
+            UTag(vec!("name".to_string()), "{{{name}}}".to_string()),
+            Text(" after".to_string())
         ]);
     }
 
@@ -226,119 +226,119 @@ mod tests {
     fn test_compile_sections() {
         check_tokens(compile_str("{{# name}}{{/name}}"), [
             Section(
-                vec!("name".to_owned()),
+                vec!("name".to_string()),
                 false,
                 Vec::new(),
-                "{{".to_owned(),
-                "{{# name}}".to_owned(),
-                "".to_owned(),
-                "{{/name}}".to_owned(),
-                "}}".to_owned()
+                "{{".to_string(),
+                "{{# name}}".to_string(),
+                "".to_string(),
+                "{{/name}}".to_string(),
+                "}}".to_string()
             )
         ]);
 
         check_tokens(compile_str("before {{^name}}{{/name}} after"), [
-            Text("before ".to_owned()),
+            Text("before ".to_string()),
             Section(
-                vec!("name".to_owned()),
+                vec!("name".to_string()),
                 true,
                 Vec::new(),
-                "{{".to_owned(),
-                "{{^name}}".to_owned(),
-                "".to_owned(),
-                "{{/name}}".to_owned(),
-                "}}".to_owned()
+                "{{".to_string(),
+                "{{^name}}".to_string(),
+                "".to_string(),
+                "{{/name}}".to_string(),
+                "}}".to_string()
             ),
-            Text(" after".to_owned())
+            Text(" after".to_string())
         ]);
 
         check_tokens(compile_str("before {{#name}}{{/name}}"), [
-            Text("before ".to_owned()),
+            Text("before ".to_string()),
             Section(
-                vec!("name".to_owned()),
+                vec!("name".to_string()),
                 false,
                 Vec::new(),
-                "{{".to_owned(),
-                "{{#name}}".to_owned(),
-                "".to_owned(),
-                "{{/name}}".to_owned(),
-                "}}".to_owned()
+                "{{".to_string(),
+                "{{#name}}".to_string(),
+                "".to_string(),
+                "{{/name}}".to_string(),
+                "}}".to_string()
             )
         ]);
 
         check_tokens(compile_str("{{#name}}{{/name}} after"), [
             Section(
-                vec!("name".to_owned()),
+                vec!("name".to_string()),
                 false,
                 Vec::new(),
-                "{{".to_owned(),
-                "{{#name}}".to_owned(),
-                "".to_owned(),
-                "{{/name}}".to_owned(),
-                "}}".to_owned()
+                "{{".to_string(),
+                "{{#name}}".to_string(),
+                "".to_string(),
+                "{{/name}}".to_string(),
+                "}}".to_string()
             ),
-            Text(" after".to_owned())
+            Text(" after".to_string())
         ]);
 
         check_tokens(compile_str(
                 "before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after"), [
-            Text("before ".to_owned()),
+            Text("before ".to_string()),
             Section(
-                vec!("a".to_owned()),
+                vec!("a".to_string()),
                 false,
                 vec!(
-                    Text(" 1 ".to_owned()),
+                    Text(" 1 ".to_string()),
                     Section(
-                        vec!("b".to_owned()),
+                        vec!("b".to_string()),
                         true,
-                        vec!(Text(" 2 ".to_owned())),
-                        "{{".to_owned(),
-                        "{{^b}}".to_owned(),
-                        " 2 ".to_owned(),
-                        "{{/b}}".to_owned(),
-                        "}}".to_owned()
+                        vec!(Text(" 2 ".to_string())),
+                        "{{".to_string(),
+                        "{{^b}}".to_string(),
+                        " 2 ".to_string(),
+                        "{{/b}}".to_string(),
+                        "}}".to_string()
                     ),
-                    Text(" ".to_owned())
+                    Text(" ".to_string())
                 ),
-                "{{".to_owned(),
-                "{{#a}}".to_owned(),
-                " 1 {{^b}} 2 {{/b}} ".to_owned(),
-                "{{/a}}".to_owned(),
-                "}}".to_owned()
+                "{{".to_string(),
+                "{{#a}}".to_string(),
+                " 1 {{^b}} 2 {{/b}} ".to_string(),
+                "{{/a}}".to_string(),
+                "}}".to_string()
             ),
-            Text(" after".to_owned())
+            Text(" after".to_string())
         ]);
     }
 
     #[test]
     fn test_compile_partials() {
         check_tokens(compile_str("{{> test}}"), [
-            Partial("test".to_owned(), "".to_owned(), "{{> test}}".to_owned())
+            Partial("test".to_string(), "".to_string(), "{{> test}}".to_string())
         ]);
 
         check_tokens(compile_str("before {{>test}} after"), [
-            Text("before ".to_owned()),
-            Partial("test".to_owned(), "".to_owned(), "{{>test}}".to_owned()),
-            Text(" after".to_owned())
+            Text("before ".to_string()),
+            Partial("test".to_string(), "".to_string(), "{{>test}}".to_string()),
+            Text(" after".to_string())
         ]);
 
         check_tokens(compile_str("before {{> test}}"), [
-            Text("before ".to_owned()),
-            Partial("test".to_owned(), "".to_owned(), "{{> test}}".to_owned())
+            Text("before ".to_string()),
+            Partial("test".to_string(), "".to_string(), "{{> test}}".to_string())
         ]);
 
         check_tokens(compile_str("{{>test}} after"), [
-            Partial("test".to_owned(), "".to_owned(), "{{>test}}".to_owned()),
-            Text(" after".to_owned())
+            Partial("test".to_string(), "".to_string(), "{{>test}}".to_string()),
+            Text(" after".to_string())
         ]);
     }
 
     #[test]
     fn test_compile_delimiters() {
         check_tokens(compile_str("before {{=<% %>=}}<%name%> after"), [
-            Text("before ".to_owned()),
-            ETag(vec!("name".to_owned()), "<%name%>".to_owned()),
-            Text(" after".to_owned())
+            Text("before ".to_string()),
+            ETag(vec!("name".to_string()), "<%name%>".to_string()),
+            Text(" after".to_string())
         ]);
     }
 }

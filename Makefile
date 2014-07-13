@@ -5,7 +5,7 @@ LIB = build/mustache.libstamp
 
 .PHONY: install clean test
 
-all: lib
+all: $(LIB)
 
 $(LIB): src/mustache/lib.rs
 	test -d build || mkdir build

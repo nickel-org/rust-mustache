@@ -1,4 +1,4 @@
-#![crate_id = "github.com/erickt/rust-mustache#mustache:0.3.0"]
+#![crate_name = "mustache"]
 
 #![license = "MIT/ASL2"]
 #![crate_type = "dylib"]
@@ -6,17 +6,16 @@
 
 #![feature(phase)]
 
-extern crate collections;
 extern crate serialize;
 
-#[phase(syntax, link)]
+#[phase(plugin, link)]
 extern crate log;
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::io::File;
 use std::str;
-use collections::HashMap;
 
 pub use builder::{MapBuilder, VecBuilder};
 pub use encoder::{Encoder, EncoderResult};
@@ -31,14 +30,14 @@ mod parser;
 mod template;
 
 pub enum Data<'a> {
-    Str(~str),
+    Str(String),
     Bool(bool),
     Vec(Vec<Data<'a>>),
-    Map(HashMap<~str, Data<'a>>),
-    Fun(RefCell<|~str|: 'a -> ~str>),
+    Map(HashMap<String, Data<'a>>),
+    Fun(RefCell<|String|: 'a -> String>),
 }
 
-impl<'a> Eq for Data<'a> {
+impl<'a> PartialEq for Data<'a> {
     #[inline]
     fn eq(&self, other: &Data<'a>) -> bool {
         match (self, other) {
@@ -55,11 +54,11 @@ impl<'a> Eq for Data<'a> {
 impl<'a> fmt::Show for Data<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Str(ref v) => write!(f.buf, "Str({})", v),
-            Bool(v) => write!(f.buf, "Bool({})", v),
-            Vec(ref v) => write!(f.buf, "Vec({})", v),
-            Map(ref v) => write!(f.buf, "Map({})", v),
-            Fun(_) => write!(f.buf, "Fun(...)"),
+            Str(ref v) => write!(f, "Str({})", v),
+            Bool(v) => write!(f, "Bool({})", v),
+            Vec(ref v) => write!(f, "Vec({})", v),
+            Map(ref v) => write!(f, "Map({})", v),
+            Fun(_) => write!(f, "Fun(...)"),
         }
     }
 }
@@ -69,7 +68,15 @@ impl<'a> fmt::Show for Data<'a> {
 #[deriving(Clone)]
 pub struct Context {
     pub template_path: Path,
-    pub template_extension: ~str,
+    pub template_extension: String,
+}
+
+impl fmt::Show for Context {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Context {{ template_path: {}, template_extension: {} }}",
+               self.template_path.display(),
+               self.template_extension)
+    }
 }
 
 impl Context {
@@ -77,7 +84,7 @@ impl Context {
     pub fn new(path: Path) -> Context {
         Context {
             template_path: path,
-            template_extension: "mustache".to_owned(),
+            template_extension: "mustache".to_string(),
         }
     }
 

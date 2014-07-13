@@ -2,21 +2,21 @@ use std::char;
 use std::mem;
 
 /// `Token` is a section of a compiled mustache string.
-#[deriving(Clone)]
+#[deriving(Clone, Show)]
 pub enum Token {
-    Text(~str),
-    ETag(Vec<~str>, ~str),
-    UTag(Vec<~str>, ~str),
-    Section(Vec<~str>, bool, Vec<Token>, ~str, ~str, ~str, ~str, ~str),
-    IncompleteSection(Vec<~str>, bool, ~str, bool),
-    Partial(~str, ~str, ~str),
+    Text(String),
+    ETag(Vec<String>, String),
+    UTag(Vec<String>, String),
+    Section(Vec<String>, bool, Vec<Token>, String, String, String, String, String),
+    IncompleteSection(Vec<String>, bool, String, bool),
+    Partial(String, String, String),
 }
 
 enum TokenClass {
     Normal,
     StandAlone,
-    WhiteSpace(~str, uint),
-    NewLineWhiteSpace(~str, uint),
+    WhiteSpace(String, uint),
+    NewLineWhiteSpace(String, uint),
 }
 
 /// `Parser` parses a string into a series of `Token`s.
@@ -26,15 +26,15 @@ pub struct Parser<'a, T> {
     lookahead: Option<char>,
     line: uint,
     col: uint,
-    content: StrBuf,
+    content: String,
     state: ParserState,
-    otag: ~str,
-    ctag: ~str,
+    otag: String,
+    ctag: String,
     otag_chars: Vec<char>,
     ctag_chars: Vec<char>,
     tag_position: uint,
     tokens: Vec<Token>,
-    partials: Vec<~str>,
+    partials: Vec<String>,
 }
 
 enum ParserState { TEXT, OTAG, TAG, CTAG }
@@ -47,10 +47,10 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
             lookahead: None,
             line: 1,
             col: 1,
-            content: StrBuf::new(),
+            content: String::new(),
             state: TEXT,
-            otag: otag.to_owned(),
-            ctag: ctag.to_owned(),
+            otag: otag.to_string(),
+            ctag: ctag.to_string(),
             otag_chars: otag.chars().collect(),
             ctag_chars: ctag.chars().collect(),
             tag_position: 0,
@@ -99,7 +99,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
     }
 
     /// Parse the template into tokens and a list of partial files.
-    pub fn parse(mut self) -> (Vec<Token>, Vec<~str>) {
+    pub fn parse(mut self) -> (Vec<Token>, Vec<String>) {
         let mut curly_brace_tag = false;
 
         loop {
@@ -208,10 +208,10 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
 
     fn add_text(&mut self) {
         if !self.content.is_empty() {
-            let mut content = StrBuf::new();
+            let mut content = String::new();
             mem::swap(&mut content, &mut self.content);
 
-            self.tokens.push(Text(content.into_owned()));
+            self.tokens.push(Text(content.into_string()));
         }
     }
 
@@ -241,21 +241,21 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
             Some(&Text(ref s)) if !s.is_empty() => {
                 // Look for the last newline character that may have whitespace
                 // following it.
-                match s.rfind(|c:char| c == '\n' || !char::is_whitespace(c)) {
+                match s.as_slice().rfind(|c:char| c == '\n' || !char::is_whitespace(c)) {
                     // It's all whitespace.
                     None => {
                         if self.tokens.len() == 1 {
-                            WhiteSpace(s.to_owned(), 0)
+                            WhiteSpace(s.to_string(), 0)
                         } else {
                             Normal
                         }
                     }
                     Some(pos) => {
-                        if s.char_at(pos) == '\n' {
+                        if s.as_slice().char_at(pos) == '\n' {
                             if pos == s.len() - 1 {
                                 StandAlone
                             } else {
-                                WhiteSpace(s.to_owned(), pos + 1)
+                                WhiteSpace(s.to_string(), pos + 1)
                             }
                         } else { Normal }
                     }
@@ -282,7 +282,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
 
                 // Trim the whitespace from the last token.
                 self.tokens.pop();
-                self.tokens.push(Text(s.slice(0, pos).to_str()));
+                self.tokens.push(Text(s.as_slice().slice(0, pos).to_string()));
 
                 true
             }
@@ -295,7 +295,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
         let tag = self.otag + self.content.as_slice() + self.ctag;
 
         // Move the content to avoid a copy.
-        let mut content = StrBuf::new();
+        let mut content = String::new();
         mem::swap(&mut content, &mut self.content);
         let len = content.len();
         let content = content.as_slice();
@@ -308,8 +308,8 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
             '&' => {
                 let name = content.slice(1, len);
                 let name = self.check_content(name);
-                let name = name.split_terminator('.')
-                    .map(|x| x.to_owned())
+                let name = name.as_slice().split_terminator('.')
+                    .map(|x| x.to_string())
                     .collect();
                 self.tokens.push(UTag(name, tag));
             }
@@ -317,8 +317,8 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                 if content.ends_with("}") {
                     let name = content.slice(1, len - 1);
                     let name = self.check_content(name);
-                    let name = name.split_terminator('.')
-                        .map(|x| x.to_owned())
+                    let name = name.as_slice().split_terminator('.')
+                        .map(|x| x.to_string())
                         .collect();
                     self.tokens.push(UTag(name, tag));
                 } else { fail!("unbalanced \"{\" in tag"); }
@@ -327,8 +327,8 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                 let newlined = self.eat_whitespace();
 
                 let name = self.check_content(content.slice(1, len));
-                let name = name.split_terminator('.')
-                    .map(|x| x.to_owned())
+                let name = name.as_slice().split_terminator('.')
+                    .map(|x| x.to_string())
                     .collect();
                 self.tokens.push(IncompleteSection(name, false, tag, newlined));
             }
@@ -336,8 +336,8 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                 let newlined = self.eat_whitespace();
 
                 let name = self.check_content(content.slice(1, len));
-                let name = name.split_terminator('.')
-                    .map(|x| x.to_owned())
+                let name = name.as_slice().split_terminator('.')
+                    .map(|x| x.to_string())
                     .collect();
                 self.tokens.push(IncompleteSection(name, true, tag, newlined));
             }
@@ -345,8 +345,8 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                 self.eat_whitespace();
 
                 let name = self.check_content(content.slice(1, len));
-                let name = name.split_terminator('.')
-                    .map(|x| x.to_owned())
+                let name = name.as_slice().split_terminator('.')
+                    .map(|x| x.to_string())
                     .collect();
                 let mut children: Vec<Token> = Vec::new();
 
@@ -385,19 +385,19 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                                 // section. It's unfortunate, but we need to do this in
                                 // case the user uses a function to instantiate the
                                 // tag.
-                                let mut src = StrBuf::new();
-                                for s in srcs.iter() { src.push_str(*s); }
+                                let mut src = String::new();
+                                for s in srcs.iter() { src.push_str(s.as_slice()); }
 
                                 self.tokens.push(
                                     Section(
                                         name,
                                         inverted,
                                         children,
-                                        self.otag.to_owned(),
+                                        self.otag.to_string(),
                                         osection,
-                                        src.into_owned(),
+                                        src.into_string(),
                                         tag,
-                                        self.ctag.to_owned()));
+                                        self.ctag.to_string()));
                                 break;
                             } else {
                                 fail!("Unclosed section");
@@ -418,24 +418,24 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                 if len > 2u && content.ends_with("=") {
                     let s = self.check_content(content.slice(1, len - 1));
 
-                    let pos = s.find(char::is_whitespace);
+                    let pos = s.as_slice().find(char::is_whitespace);
                     let pos = match pos {
                       None => { fail!("invalid change delimiter tag content"); }
                       Some(pos) => { pos }
                     };
 
-                    self.otag = s.slice(0, pos).to_str();
-                    self.otag_chars = self.otag.chars().collect();
+                    self.otag = s.as_slice().slice(0, pos).to_string();
+                    self.otag_chars = self.otag.as_slice().chars().collect();
 
-                    let s2 = s.slice_from(pos);
+                    let s2 = s.as_slice().slice_from(pos);
                     let pos = s2.find(|c| !char::is_whitespace(c));
                     let pos = match pos {
                       None => { fail!("invalid change delimiter tag content"); }
                       Some(pos) => { pos }
                     };
 
-                    self.ctag = s2.slice_from(pos).to_str();
-                    self.ctag_chars = self.ctag.chars().collect();
+                    self.ctag = s2.slice_from(pos).to_string();
+                    self.ctag_chars = self.ctag.as_slice().chars().collect();
                 } else {
                     fail!("invalid change delimiter tag content");
                 }
@@ -447,8 +447,8 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                 let name = if name.as_slice() == "." {
                     Vec::new()
                 } else {
-                    name.split_terminator('.')
-                        .map(|x| x.to_owned())
+                    name.as_slice().split_terminator('.')
+                        .map(|x| x.to_string())
                         .collect()
                 };
 
@@ -457,25 +457,25 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
         }
     }
 
-    fn add_partial(&mut self, content: &str, tag: ~str) {
+    fn add_partial(&mut self, content: &str, tag: String) {
         let indent = match self.classify_token() {
-            Normal => "".to_owned(),
+            Normal => "".to_string(),
             StandAlone => {
                 if self.ch_is('\r') { self.bump(); }
                 self.bump();
-                "".to_owned()
+                "".to_string()
             }
             WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
                 if self.ch_is('\r') { self.bump(); }
                 self.bump();
 
-                let ws = s.slice(pos, s.len());
+                let ws = s.as_slice().slice(pos, s.len());
 
                 // Trim the whitespace from the last token.
                 self.tokens.pop();
-                self.tokens.push(Text(s.slice(0, pos).to_str()));
+                self.tokens.push(Text(s.as_slice().slice(0, pos).to_string()));
 
-                ws.to_owned()
+                ws.to_string()
             }
         };
 
@@ -485,7 +485,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
         let name = content.slice(1, content.len());
         let name = self.check_content(name);
 
-        self.tokens.push(Partial(name.to_owned(), indent, tag));
+        self.tokens.push(Partial(name.to_string(), indent, tag));
         self.partials.push(name);
     }
 
@@ -507,11 +507,11 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
         }
     }
 
-    fn check_content(&self, content: &str) -> ~str {
+    fn check_content(&self, content: &str) -> String {
         let trimmed = content.trim();
         if trimmed.len() == 0 {
             fail!("empty tag");
         }
-        trimmed.to_owned()
+        trimmed.to_string()
     }
 }
