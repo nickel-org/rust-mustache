@@ -16,7 +16,7 @@ impl<'a> Encoder<'a> {
     }
 }
 
-#[deriving(PartialEq, Eq)]
+#[deriving(PartialEq)]
 pub enum Error {
     UnsupportedType,
     InvalidStr,
