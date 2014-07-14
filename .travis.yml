@@ -9,5 +9,5 @@ install:
   - sudo apt-get update
   - sudo apt-get install cargo
 script:
-  - cargo build
-  - cargo test
+  - cargo build --verbose
+  - cargo test --verbose
