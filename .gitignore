@@ -2,6 +2,6 @@
 *.dylib
 *.dSYM
 bin/
-build/
+target/
 lib/
 .rust/

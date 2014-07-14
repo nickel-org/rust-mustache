@@ -1,0 +1,8 @@
+[package]
+name = "rust-mustache"
+version = "0.3.0"
+authors = ["erick.tryzelaar@gmail.com"]
+
+[[lib]]
+name = "mustache"
+path = "src/mustache/lib.rs"
