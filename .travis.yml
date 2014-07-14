@@ -4,11 +4,11 @@
 language: c
 
 before_install:
-  - yes | sudo add-apt-repository ppa:cmrx64/cargo
   - sudo apt-get update
 install:
   - curl -s http://www.rust-lang.org/rustup.sh | sudo sh
-  - sudo apt-get install cargo
+  - curl -O http://static.rust-lang.org/cargo-dist/cargo-nightly-linux.tar.gz
+  - tar xf cargo-nightly-linux.tar.gz
 script:
-  - cargo build --verbose
-  - cargo test --verbose
+  - ./cargo-nightly/bin/cargo build --verbose
+  - ./cargo-nightly/bin/cargo test --verbose
