@@ -5,4 +5,3 @@ authors = ["erick.tryzelaar@gmail.com"]
 
 [[lib]]
 name = "mustache"
-path = "src/mustache/lib.rs"

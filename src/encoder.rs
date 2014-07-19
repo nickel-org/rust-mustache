@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::io::IoError;
-use std::str;
 use serialize;
 
 use super::{Data, Str, Bool, Vec, Map};
@@ -59,7 +58,10 @@ impl<'a> serialize::Encoder<Error> for Encoder<'a> {
     fn emit_f64(&mut self, v: f64) -> EncoderResult { self.data.push(Str(v.to_string())); Ok(()) }
     fn emit_f32(&mut self, v: f32) -> EncoderResult { self.data.push(Str(v.to_string())); Ok(()) }
 
-    fn emit_char(&mut self, v: char) -> EncoderResult { self.data.push(Str(str::from_char(v))); Ok(()) }
+    fn emit_char(&mut self, v: char) -> EncoderResult {
+        self.data.push(Str(String::from_char(1, v)));
+        Ok(())
+    }
     fn emit_str(&mut self, v: &str) -> EncoderResult { self.data.push(Str(v.to_string())); Ok(()) }
 
     fn emit_enum(&mut self, _name: &str, _f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {

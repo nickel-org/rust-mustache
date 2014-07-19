@@ -110,7 +110,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
 
             match self.state {
                 TEXT => {
-                    if ch == *self.otag_chars.get(0) {
+                    if ch == self.otag_chars[0] {
                         if self.otag_chars.len() > 1 {
                             self.tag_position = 1;
                             self.state = OTAG;
@@ -124,7 +124,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                     self.bump();
                 }
                 OTAG => {
-                    if ch == *self.otag_chars.get(self.tag_position) {
+                    if ch == self.otag_chars[self.tag_position] {
                         if self.tag_position == self.otag_chars.len() - 1 {
                             self.add_text();
                             curly_brace_tag = false;
@@ -150,7 +150,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                         curly_brace_tag = false;
                         self.content.push_char(ch);
                         self.bump();
-                    } else if ch == *self.ctag_chars.get(0) {
+                    } else if ch == self.ctag_chars[0] {
                         if self.ctag_chars.len() > 1 {
                             self.tag_position = 1;
                             self.state = CTAG;
@@ -165,7 +165,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                     }
                 }
                 CTAG => {
-                    if ch == *self.ctag_chars.get(self.tag_position) {
+                    if ch == self.ctag_chars[self.tag_position] {
                         if self.tag_position == self.ctag_chars.len() - 1 {
                             self.add_tag();
                             self.state = TEXT;
@@ -178,7 +178,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                     } else {
                         fail!("character {} is not part of CTAG: {}",
                               ch,
-                              *self.ctag_chars.get(self.tag_position));
+                              self.ctag_chars[self.tag_position]);
                     }
                 }
             }
