@@ -23,9 +23,10 @@ impl<'a> MapBuilder<'a> {
     /// Add an `Encodable` to the `MapBuilder`.
     ///
     /// ```rust
+    /// use mustache::MapBuilder;
     /// let data = MapBuilder::new()
     ///     .insert("name", &("Jane Austen")).unwrap()
-    ///     .insert("age", &41).unwrap()
+    ///     .insert("age", &41u).unwrap()
     ///     .build();
     /// ```
     #[inline]
@@ -41,6 +42,7 @@ impl<'a> MapBuilder<'a> {
     /// Add a `String` to the `MapBuilder`.
     ///
     /// ```rust
+    /// use mustache::MapBuilder;
     /// let data = MapBuilder::new()
     ///     .insert_str("name", "Jane Austen")
     ///     .build();
@@ -57,6 +59,7 @@ impl<'a> MapBuilder<'a> {
     /// Add a `bool` to the `MapBuilder`.
     ///
     /// ```rust
+    /// use mustache::MapBuilder;
     /// let data = MapBuilder::new()
     ///     .insert_bool("show", true)
     ///     .build();
@@ -71,6 +74,7 @@ impl<'a> MapBuilder<'a> {
     /// Add a `Vec` to the `MapBuilder`.
     ///
     /// ```rust
+    /// use mustache::MapBuilder;
     /// let data = MapBuilder::new()
     ///     .insert_vec("authors", |builder| {
     ///         builder
@@ -90,6 +94,7 @@ impl<'a> MapBuilder<'a> {
     /// Add a `Map` to the `MapBuilder`.
     ///
     /// ```rust
+    /// use mustache::MapBuilder;
     /// let data = MapBuilder::new()
     ///     .insert_map("person1", |builder| {
     ///         builder
@@ -114,10 +119,11 @@ impl<'a> MapBuilder<'a> {
     /// Add a function to the `MapBuilder`.
     ///
     /// ```rust
+    /// use mustache::MapBuilder;
     /// let mut count = 0;
     /// let data = MapBuilder::new()
     ///     .insert_fn("increment", |_| {
-    ///         count += 1;
+    ///         count += 1u;
     ///         count.to_string()
     ///     })
     ///     .build();
@@ -152,9 +158,10 @@ impl<'a> VecBuilder<'a> {
     /// Add an `Encodable` to the `VecBuilder`.
     ///
     /// ```rust
-    /// let data = VecBuilder::new()
+    /// use mustache::{VecBuilder, Data};
+    /// let data: Data = VecBuilder::new()
     ///     .push(& &"Jane Austen").unwrap()
-    ///     .push(&41).unwrap()
+    ///     .push(&41u).unwrap()
     ///     .build();
     /// ```
     #[inline]
@@ -170,6 +177,7 @@ impl<'a> VecBuilder<'a> {
     /// Add a `String` to the `VecBuilder`.
     ///
     /// ```rust
+    /// use mustache::VecBuilder;
     /// let data = VecBuilder::new()
     ///     .push_str("Jane Austen")
     ///     .push_str("Lewis Carroll")
@@ -185,9 +193,10 @@ impl<'a> VecBuilder<'a> {
     /// Add a `bool` to the `VecBuilder`.
     ///
     /// ```rust
+    /// use mustache::VecBuilder;
     /// let data = VecBuilder::new()
-    ///     .insert_bool(false)
-    ///     .insert_bool(true)
+    ///     .push_bool(false)
+    ///     .push_bool(true)
     ///     .build();
     /// ```
     #[inline]
@@ -200,11 +209,12 @@ impl<'a> VecBuilder<'a> {
     /// Add a `Vec` to the `MapBuilder`.
     ///
     /// ```rust
+    /// use mustache::VecBuilder;
     /// let data = VecBuilder::new()
-    ///     .insert_vec(|builder| {
+    ///     .push_vec(|builder| {
     ///         builder
-    ///             .push_str(~"Jane Austen")
-    ///             .push_str(~"Lewis Carroll")
+    ///             .push_str("Jane Austen".to_string())
+    ///             .push_str("Lewis Carroll".to_string())
     ///     })
     ///     .build();
     /// ```
@@ -219,16 +229,17 @@ impl<'a> VecBuilder<'a> {
     /// Add a `Map` to the `VecBuilder`.
     ///
     /// ```rust
-    /// let data = MapBuilder::new()
-    ///     .insert_map(|builder| {
+    /// use mustache::VecBuilder;
+    /// let data = VecBuilder::new()
+    ///     .push_map(|builder| {
     ///         builder
-    ///             .insert_str(~"first_name", ~"Jane")
-    ///             .insert_str(~"last_name", ~"Austen")
+    ///             .insert_str("first_name".to_string(), "Jane".to_string())
+    ///             .insert_str("last_name".to_string(), "Austen".to_string())
     ///     })
-    ///     .insert_map(|builder| {
+    ///     .push_map(|builder| {
     ///         builder
-    ///             .insert_str(~"first_name", ~"Lewis")
-    ///             .insert_str(~"last_name", ~"Carroll")
+    ///             .insert_str("first_name".to_string(), "Lewis".to_string())
+    ///             .insert_str("last_name".to_string(), "Carroll".to_string())
     ///     })
     ///     .build();
     /// ```
@@ -243,10 +254,11 @@ impl<'a> VecBuilder<'a> {
     /// Add a function to the `VecBuilder`.
     ///
     /// ```rust
+    /// use mustache::VecBuilder;
     /// let mut count = 0;
     /// let data = VecBuilder::new()
     ///     .push_fn(|s| {
-    ///         count += 1;
+    ///         count += 1u;
     ///         s + count.to_string()
     ///     })
     ///     .build();
@@ -324,7 +336,7 @@ mod tests {
         let mut count = 0u;
         let data = MapBuilder::new()
             .insert_fn("count", |s| {
-                count += 1;
+                count += 1u;
                 s + count.to_string()
             })
             .build();
@@ -353,7 +365,7 @@ mod tests {
         let mut count = 0u;
         let data = VecBuilder::new()
             .push_fn(|s| {
-                count += 1;
+                count += 1u;
                 s + count.to_string()
             })
             .build();
