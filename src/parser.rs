@@ -20,7 +20,7 @@ enum TokenClass {
 }
 
 /// `Parser` parses a string into a series of `Token`s.
-pub struct Parser<'a, T> {
+pub struct Parser<'a, T: 'a> {
     reader: &'a mut T,
     ch: Option<char>,
     lookahead: Option<char>,
