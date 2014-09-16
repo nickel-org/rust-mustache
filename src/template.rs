@@ -567,8 +567,8 @@ mod tests {
         // Make a temporary dir where we'll store our partials. This is to
         // avoid a race on filenames.
         let tmpdir = match TempDir::new("") {
-            Some(tmpdir) => tmpdir,
-            None => fail!(),
+            Ok(tmpdir) => tmpdir,
+            Err(_) => fail!(),
         };
 
         match test.find(&"partials".to_string()) {
