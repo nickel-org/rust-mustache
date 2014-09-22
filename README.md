@@ -50,23 +50,23 @@ fn main() {
     let template = mustache::compile_str("hello {{name}}");
 
     // You can either use an encodable type to print "hello Mercury".
-    let planet = Planet { name: ~"Mercury" };
+    let planet = Planet { name: "Mercury" };
     template.render(&mut io::stdout(), &planet).unwrap();
     println!("");
 
     // ... or you can use a builder to print "hello Venus".
     let data = MapBuilder::new()
-        .insert_str(~"name", ~"Venus")
+        .insert_str("name", "Venus")
         .build();
 
     template.render_data(&mut io::stdout(), &data);
     println!("");
 
     // ... you can even use closures.
-    let mut planets = vec!(~"Jupiter", ~"Mars", ~"Earth");
+    let mut planets = vec!("Jupiter", "Mars", "Earth");
 
     let data = MapBuilder::new()
-        .insert_fn(~"name", |_| {
+        .insert_fn("name", |_| {
             planets.pop().unwrap()
         })
         .build();
