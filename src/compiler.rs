@@ -51,7 +51,7 @@ impl<T: Iterator<char>> Compiler<T> {
         };
 
         // Compile the partials if we haven't done so already.
-        for name in partials.move_iter() {
+        for name in partials.into_iter() {
             let path = self.ctx.template_path.join(name + "." + self.ctx.template_extension);
 
             if !self.partials.contains_key(&name) {
