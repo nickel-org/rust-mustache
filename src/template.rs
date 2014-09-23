@@ -13,7 +13,7 @@ use encoder::{Encoder, Error};
 use super::{Context, Data, Bool, Str, Vec, Map, Fun};
 
 /// `Template` represents a compiled mustache file.
-#[deriving(Show)]
+#[deriving(Show, Clone)]
 pub struct Template {
     ctx: Context,
     tokens: Vec<Token>,
