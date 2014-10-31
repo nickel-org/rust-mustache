@@ -30,9 +30,9 @@ mod parser;
 mod template;
 
 pub enum Data<'a> {
-    Str(String),
+    StrVal(String),
     Bool(bool),
-    Vec(Vec<Data<'a>>),
+    VecVal(Vec<Data<'a>>),
     Map(HashMap<String, Data<'a>>),
     Fun(RefCell<|String|: 'a -> String>),
 }
@@ -41,9 +41,9 @@ impl<'a> PartialEq for Data<'a> {
     #[inline]
     fn eq(&self, other: &Data<'a>) -> bool {
         match (self, other) {
-            (&Str(ref v0), &Str(ref v1)) => v0 == v1,
+            (&StrVal(ref v0), &StrVal(ref v1)) => v0 == v1,
             (&Bool(ref v0), &Bool(ref v1)) => v0 == v1,
-            (&Vec(ref v0), &Vec(ref v1)) => v0 == v1,
+            (&VecVal(ref v0), &VecVal(ref v1)) => v0 == v1,
             (&Map(ref v0), &Map(ref v1)) => v0 == v1,
             (&Fun(_), &Fun(_)) => panic!("cannot compare closures"),
             (_, _) => false,
@@ -54,9 +54,9 @@ impl<'a> PartialEq for Data<'a> {
 impl<'a> fmt::Show for Data<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Str(ref v) => write!(f, "Str({})", v),
+            StrVal(ref v) => write!(f, "StrVal({})", v),
             Bool(v) => write!(f, "Bool({})", v),
-            Vec(ref v) => write!(f, "Vec({})", v),
+            VecVal(ref v) => write!(f, "VecVal({})", v),
             Map(ref v) => write!(f, "Map({})", v),
             Fun(_) => write!(f, "Fun(...)"),
         }

@@ -10,7 +10,7 @@ use parser::{Token, Text, ETag, UTag, Section, Partial};
 use encoder;
 use encoder::{Encoder, Error};
 
-use super::{Context, Data, Bool, Str, Vec, Map, Fun};
+use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun};
 
 /// `Template` represents a compiled mustache file.
 #[deriving(Show, Clone)]
@@ -187,7 +187,7 @@ impl<'a> RenderContext<'a> {
                 wr.write_str(self.indent.as_slice()).unwrap();
 
                 match *value {
-                    Str(ref value) => {
+                    StrVal(ref value) => {
                         wr.write_str(value.as_slice()).unwrap();
                     }
 
@@ -213,7 +213,7 @@ impl<'a> RenderContext<'a> {
         match self.find(path, stack) {
             None => { }
             Some(&Bool(false)) => { }
-            Some(&Vec(ref xs)) if xs.is_empty() => { }
+            Some(&VecVal(ref xs)) if xs.is_empty() => { }
             Some(_) => { return; }
         }
 
@@ -238,7 +238,7 @@ impl<'a> RenderContext<'a> {
                         self.render(wr, stack, children);
                     }
                     Bool(false) => { }
-                    Vec(ref vs) => {
+                    VecVal(ref vs) => {
                         for v in vs.iter() {
                             stack.push(v);
                             self.render(wr, stack, children);
@@ -361,7 +361,7 @@ mod tests {
     use encoder::{Encoder, Error};
 
     use super::super::compile_str;
-    use super::super::{Data, Str, Vec, Map, Fun};
+    use super::super::{Data, StrVal, VecVal, Map, Fun};
     use super::super::{Context, Template};
 
     #[deriving(Encodable)]
@@ -418,24 +418,24 @@ mod tests {
         assert_eq!(render_data(&template, &Map(ctx)), "05".to_string());
 
         let mut ctx = HashMap::new();
-        ctx.insert("a".to_string(), Vec(Vec::new()));
+        ctx.insert("a".to_string(), VecVal(Vec::new()));
 
         assert_eq!(render_data(&template, &Map(ctx)), "05".to_string());
 
         let mut ctx = HashMap::new();
-        ctx.insert("a".to_string(), Vec(Vec::new()));
+        ctx.insert("a".to_string(), VecVal(Vec::new()));
         assert_eq!(render_data(&template, &Map(ctx)), "05".to_string());
 
         let mut ctx0 = HashMap::new();
         let ctx1 = HashMap::new();
-        ctx0.insert("a".to_string(), Vec(vec!(Map(ctx1))));
+        ctx0.insert("a".to_string(), VecVal(vec!(Map(ctx1))));
 
         assert_eq!(render_data(&template, &Map(ctx0)), "01  35".to_string());
 
         let mut ctx0 = HashMap::new();
         let mut ctx1 = HashMap::new();
-        ctx1.insert("n".to_string(), Str("a".to_string()));
-        ctx0.insert("a".to_string(), Vec(vec!(Map(ctx1))));
+        ctx1.insert("n".to_string(), StrVal("a".to_string()));
+        ctx0.insert("a".to_string(), VecVal(vec!(Map(ctx1))));
         assert_eq!(render_data(&template, &Map(ctx0)), "01 a 35".to_string());
 
         let mut ctx = HashMap::new();
@@ -451,18 +451,18 @@ mod tests {
         assert_eq!(render_data(&template, &Map(ctx)), "01 35".to_string());
 
         let mut ctx = HashMap::new();
-        ctx.insert("a".to_string(), Vec(vec!()));
+        ctx.insert("a".to_string(), VecVal(vec!()));
         assert_eq!(render_data(&template, &Map(ctx)), "01 35".to_string());
 
         let mut ctx0 = HashMap::new();
         let ctx1 = HashMap::new();
-        ctx0.insert("a".to_string(), Vec(vec!(Map(ctx1))));
+        ctx0.insert("a".to_string(), VecVal(vec!(Map(ctx1))));
         assert_eq!(render_data(&template, &Map(ctx0)), "05".to_string());
 
         let mut ctx0 = HashMap::new();
         let mut ctx1 = HashMap::new();
-        ctx1.insert("n".to_string(), Str("a".to_string()));
-        ctx0.insert("a".to_string(), Vec(vec!(Map(ctx1))));
+        ctx1.insert("n".to_string(), StrVal("a".to_string()));
+        ctx0.insert("a".to_string(), VecVal(vec!(Map(ctx1))));
         assert_eq!(render_data(&template, &Map(ctx0)), "05".to_string());
     }
 
@@ -476,30 +476,30 @@ mod tests {
         assert_eq!(render_data(&template, &Map(ctx)), "<h2>Names</h2>\n".to_string());
 
         let mut ctx = HashMap::new();
-        ctx.insert("names".to_string(), Vec(vec!()));
+        ctx.insert("names".to_string(), VecVal(vec!()));
         assert_eq!(render_data(&template, &Map(ctx)), "<h2>Names</h2>\n".to_string());
 
         let mut ctx0 = HashMap::new();
         let ctx1 = HashMap::new();
-        ctx0.insert("names".to_string(), Vec(vec!(Map(ctx1))));
+        ctx0.insert("names".to_string(), VecVal(vec!(Map(ctx1))));
         assert_eq!(
             render_data(&template, &Map(ctx0)),
             "<h2>Names</h2>\n  <strong></strong>\n\n".to_string());
 
         let mut ctx0 = HashMap::new();
         let mut ctx1 = HashMap::new();
-        ctx1.insert("name".to_string(), Str("a".to_string()));
-        ctx0.insert("names".to_string(), Vec(vec!(Map(ctx1))));
+        ctx1.insert("name".to_string(), StrVal("a".to_string()));
+        ctx0.insert("names".to_string(), VecVal(vec!(Map(ctx1))));
         assert_eq!(
             render_data(&template, &Map(ctx0)),
             "<h2>Names</h2>\n  <strong>a</strong>\n\n".to_string());
 
         let mut ctx0 = HashMap::new();
         let mut ctx1 = HashMap::new();
-        ctx1.insert("name".to_string(), Str("a".to_string()));
+        ctx1.insert("name".to_string(), StrVal("a".to_string()));
         let mut ctx2 = HashMap::new();
-        ctx2.insert("name".to_string(), Str("<b>".to_string()));
-        ctx0.insert("names".to_string(), Vec(vec!(Map(ctx1), Map(ctx2))));
+        ctx2.insert("name".to_string(), StrVal("<b>".to_string()));
+        ctx0.insert("names".to_string(), VecVal(vec!(Map(ctx1), Map(ctx2))));
         assert_eq!(
             render_data(&template, &Map(ctx0)),
             "<h2>Names</h2>\n  <strong>a</strong>\n\n  <strong>&lt;b&gt;</strong>\n\n".to_string());
@@ -553,7 +553,7 @@ mod tests {
         }
     }
 
-    fn run_test(test: json::Object, data: Data) {
+    fn run_test(test: json::JsonObject, data: Data) {
         let template = match test.find(&"template".to_string()) {
             Some(&json::String(ref s)) => s.clone(),
             _ => panic!(),

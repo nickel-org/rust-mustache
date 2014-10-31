@@ -4,7 +4,7 @@ use serialize::Encodable;
 
 use encoder;
 use encoder::{Encoder, Error};
-use super::{Data, Str, Bool, Vec, Map, Fun};
+use super::{Data, StrVal, Bool, VecVal, Map, Fun};
 
 /// `MapBuilder` is a helper type that construct `Data` types.
 pub struct MapBuilder<'a> {
@@ -52,7 +52,7 @@ impl<'a> MapBuilder<'a> {
         K: StrAllocating, V: StrAllocating
     >(self, key: K, value: V) -> MapBuilder<'a> {
         let MapBuilder { mut data } = self;
-        data.insert(key.into_string(), Str(value.into_string()));
+        data.insert(key.into_string(), StrVal(value.into_string()));
         MapBuilder { data: data }
     }
 
@@ -186,7 +186,7 @@ impl<'a> VecBuilder<'a> {
     #[inline]
     pub fn push_str<T: StrAllocating>(self, value: T) -> VecBuilder<'a> {
         let VecBuilder { mut data } = self;
-        data.push(Str(value.into_string()));
+        data.push(StrVal(value.into_string()));
         VecBuilder { data: data }
     }
 
@@ -272,7 +272,7 @@ impl<'a> VecBuilder<'a> {
 
     #[inline]
     pub fn build(self) -> Data<'a> {
-        Vec(self.data)
+        VecVal(self.data)
     }
 }
 
@@ -280,7 +280,7 @@ impl<'a> VecBuilder<'a> {
 mod tests {
     use std::collections::HashMap;
 
-    use super::super::{Str, Bool, Vec, Map, Fun};
+    use super::super::{StrVal, Bool, VecVal, Map, Fun};
     use super::{MapBuilder, VecBuilder};
 
     #[test]
@@ -291,22 +291,22 @@ mod tests {
 
         assert_eq!(
             VecBuilder::new().build(),
-            Vec(Vec::new()));
+            VecVal(Vec::new()));
     }
 
     #[test]
     fn test_builders() {
         let mut pride_and_prejudice = HashMap::new();
-        pride_and_prejudice.insert("title".to_string(), Str("Pride and Prejudice".to_string()));
-        pride_and_prejudice.insert("publish_date".to_string(), Str("1813".to_string()));
+        pride_and_prejudice.insert("title".to_string(), StrVal("Pride and Prejudice".to_string()));
+        pride_and_prejudice.insert("publish_date".to_string(), StrVal("1813".to_string()));
 
         let mut m = HashMap::new();
-        m.insert("first_name".to_string(), Str("Jane".to_string()));
-        m.insert("last_name".to_string(), Str("Austen".to_string()));
-        m.insert("age".to_string(), Str("41".to_string()));
+        m.insert("first_name".to_string(), StrVal("Jane".to_string()));
+        m.insert("last_name".to_string(), StrVal("Austen".to_string()));
+        m.insert("age".to_string(), StrVal("41".to_string()));
         m.insert("died".to_string(), Bool(true));
-        m.insert("works".to_string(), Vec(vec!(
-            Str("Sense and Sensibility".to_string()),
+        m.insert("works".to_string(), VecVal(vec!(
+            StrVal("Sense and Sensibility".to_string()),
             Map(pride_and_prejudice))));
 
         assert_eq!(
@@ -371,7 +371,7 @@ mod tests {
             .build();
 
         match data {
-            Vec(vs) => {
+            VecVal(vs) => {
                 match vs.as_slice() {
                     [Fun(ref f)] => {
                         let f = &mut *f.borrow_mut();
