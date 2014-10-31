@@ -201,12 +201,12 @@ impl<'a> serialize::Encoder<Error> for Encoder<'a> {
         };
         let mut m = match self.data.pop() {
             Some(Map(m)) => m,
-            _ => fail!("Expected a map"),
+            _ => panic!("Expected a map"),
         };
         try!(f(self));
         let popped = match self.data.pop() {
             Some(p) => p,
-            None => fail!("Error: Nothing to pop!"),
+            None => panic!("Error: Nothing to pop!"),
         };
         m.insert(k, popped);
         self.data.push(Map(m));
@@ -220,6 +220,6 @@ pub fn encode<'a, T: serialize::Encodable<Encoder<'a>, Error>>(data: &T) -> Resu
     assert_eq!(encoder.data.len(), 1);
     match encoder.data.pop() {
         Some(data) => Ok(data),
-        None => fail!("Error: Nothing to pop!"),
+        None => panic!("Error: Nothing to pop!"),
     }
 }

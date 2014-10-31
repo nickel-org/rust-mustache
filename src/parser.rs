@@ -176,7 +176,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                             self.bump();
                         }
                     } else {
-                        fail!("character {} is not part of CTAG: {}",
+                        panic!("character {} is not part of CTAG: {}",
                               ch,
                               self.ctag_chars[self.tag_position]);
                     }
@@ -187,7 +187,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
         match self.state {
             TEXT => { self.add_text(); }
             OTAG => { self.not_otag(); self.add_text(); }
-            TAG => { fail!("unclosed tag"); }
+            TAG => { panic!("unclosed tag"); }
             CTAG => { self.not_ctag(); self.add_text(); }
         }
 
@@ -195,7 +195,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
         for token in self.tokens.iter() {
             match *token {
                 IncompleteSection(ref path, _, _, _) => {
-                    fail!("Unclosed mustache section {}", path.connect("."));
+                    panic!("Unclosed mustache section {}", path.connect("."));
               }
               _ => {}
             }
@@ -321,7 +321,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                         .map(|x| x.to_string())
                         .collect();
                     self.tokens.push(UTag(name, tag));
-                } else { fail!("unbalanced \"{\" in tag"); }
+                } else { panic!("unbalanced \"{\" in tag"); }
             }
             '#' => {
                 let newlined = self.eat_whitespace();
@@ -352,7 +352,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
 
                 loop {
                     if self.tokens.len() == 0 {
-                        fail!("closing unopened section");
+                        panic!("closing unopened section");
                     }
 
                     let last = self.tokens.pop();
@@ -376,7 +376,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                                         srcs.push(src.clone());
                                         srcs.push(csection.clone());
                                     }
-                                    _ => fail!(),
+                                    _ => panic!(),
                                 }
                             }
 
@@ -400,7 +400,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                                         self.ctag.to_string()));
                                 break;
                             } else {
-                                fail!("Unclosed section");
+                                panic!("Unclosed section");
                             }
                         }
                         _ => { match last {
@@ -420,7 +420,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
 
                     let pos = s.as_slice().find(char::is_whitespace);
                     let pos = match pos {
-                      None => { fail!("invalid change delimiter tag content"); }
+                      None => { panic!("invalid change delimiter tag content"); }
                       Some(pos) => { pos }
                     };
 
@@ -430,14 +430,14 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                     let s2 = s.as_slice().slice_from(pos);
                     let pos = s2.find(|c| !char::is_whitespace(c));
                     let pos = match pos {
-                      None => { fail!("invalid change delimiter tag content"); }
+                      None => { panic!("invalid change delimiter tag content"); }
                       Some(pos) => { pos }
                     };
 
                     self.ctag = s2.slice_from(pos).to_string();
                     self.ctag_chars = self.ctag.as_slice().chars().collect();
                 } else {
-                    fail!("invalid change delimiter tag content");
+                    panic!("invalid change delimiter tag content");
                 }
             }
             _ => {
@@ -510,7 +510,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
     fn check_content(&self, content: &str) -> String {
         let trimmed = content.trim();
         if trimmed.len() == 0 {
-            fail!("empty tag");
+            panic!("empty tag");
         }
         trimmed.to_string()
     }

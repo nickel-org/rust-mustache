@@ -62,7 +62,7 @@ impl<T: Iterator<char>> Compiler<T> {
                     Ok(contents) => {
                         let string = match str::from_utf8(contents.as_slice()) {
                             Some(string) => string.to_string(),
-                            None => { fail!("Failed to parse file as UTF-8"); }
+                            None => { panic!("Failed to parse file as UTF-8"); }
                         };
 
                         let compiler = Compiler {
@@ -82,7 +82,7 @@ impl<T: Iterator<char>> Compiler<T> {
                         if e.kind == FileNotFound {
                             debug!("failed to read file {}", path.display());
                         } else {
-                            fail!("error reading file: {}", e);
+                            panic!("error reading file: {}", e);
                         }
                     }
                 }

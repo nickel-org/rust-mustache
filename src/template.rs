@@ -110,7 +110,7 @@ impl<'a> RenderContext<'a> {
             Partial(ref name, ref indent, _) => {
                 self.render_partial(wr, stack, name.as_slice(), indent.as_slice());
             }
-            _ => { fail!() }
+            _ => { panic!() }
         }
     }
 
@@ -197,7 +197,7 @@ impl<'a> RenderContext<'a> {
                         self.render(wr, stack, tokens.as_slice());
                     }
 
-                    ref value => { fail!("unexpected value {}", value); }
+                    ref value => { panic!("unexpected value {}", value); }
                 }
             }
         };
@@ -254,7 +254,7 @@ impl<'a> RenderContext<'a> {
                         let tokens = self.render_fun(src, otag, ctag, f);
                         self.render(wr, stack, tokens.as_slice())
                     }
-                    _ => { fail!("unexpected value {}", value) }
+                    _ => { panic!("unexpected value {}", value) }
                 }
             }
         }
@@ -323,7 +323,7 @@ impl<'a> RenderContext<'a> {
                         None => { }
                     }
                 }
-                _ => { fail!("expect map: {}", path) }
+                _ => { panic!("expect map: {}", path) }
             }
         }
 
@@ -510,26 +510,26 @@ mod tests {
 
         let file_contents = match File::open(&path).read_to_end() {
             Ok(reader) => reader,
-            Err(e) => fail!("Could not read file {}", e),
+            Err(e) => panic!("Could not read file {}", e),
         };
 
         let s = match str::from_utf8(file_contents.as_slice()){
             Some(str) => str.to_string(),
-            None => {fail!("File was not UTF8 encoded");}
+            None => {panic!("File was not UTF8 encoded");}
         };
 
         match json::from_str(s.as_slice()) {
-            Err(e) => fail!(e.to_string()),
+            Err(e) => panic!(e.to_string()),
             Ok(json) => {
                 match json {
                     json::Object(d) => {
                         let mut d = d;
                         match d.pop(&"tests".to_string()) {
                             Some(json::List(tests)) => tests.move_iter().collect(),
-                            _ => fail!("{}: tests key not a list", src),
+                            _ => panic!("{}: tests key not a list", src),
                         }
                     }
-                    _ => fail!("{}: JSON value not a map", src),
+                    _ => panic!("{}: JSON value not a map", src),
                 }
             }
         }
@@ -545,30 +545,30 @@ mod tests {
                             path.push(*key + ".mustache");
                             File::create(&path).write(s.as_bytes()).unwrap();
                         }
-                        _ => fail!(),
+                        _ => panic!(),
                     }
                 }
             },
-            _ => fail!(),
+            _ => panic!(),
         }
     }
 
     fn run_test(test: json::Object, data: Data) {
         let template = match test.find(&"template".to_string()) {
             Some(&json::String(ref s)) => s.clone(),
-            _ => fail!(),
+            _ => panic!(),
         };
 
         let expected = match test.find(&"expected".to_string()) {
             Some(&json::String(ref s)) => s.clone(),
-            _ => fail!(),
+            _ => panic!(),
         };
 
         // Make a temporary dir where we'll store our partials. This is to
         // avoid a race on filenames.
         let tmpdir = match TempDir::new("") {
             Ok(tmpdir) => tmpdir,
-            Err(_) => fail!(),
+            Err(_) => panic!(),
         };
 
         match test.find(&"partials".to_string()) {
@@ -596,12 +596,12 @@ mod tests {
         for json in parse_spec_tests(spec).move_iter() {
             let test = match json {
                 json::Object(m) => m,
-                _ => fail!(),
+                _ => panic!(),
             };
 
             let data = match test.find(&"data".to_string()) {
                 Some(data) => data.clone(),
-                None => fail!(),
+                None => panic!(),
             };
 
             let mut encoder = Encoder::new();
@@ -647,18 +647,18 @@ mod tests {
         for json in parse_spec_tests("spec/specs/~lambdas.json").move_iter() {
             let mut test = match json {
                 json::Object(m) => m,
-                value => { fail!("{}", value) }
+                value => { panic!("{}", value) }
             };
 
             let s = match test.pop(&"name".to_string()) {
                 Some(json::String(s)) => s,
-                value => { fail!("{}", value) }
+                value => { panic!("{}", value) }
             };
 
             // Replace the lambda with rust code.
             let data = match test.pop(&"data".to_string()) {
                 Some(data) => data,
-                None => fail!(),
+                None => panic!(),
             };
 
             let mut encoder = Encoder::new();
@@ -666,7 +666,7 @@ mod tests {
 
             let mut ctx = match encoder.data.pop().unwrap() {
                 Map(ctx) => ctx,
-                _ => fail!(),
+                _ => panic!(),
             };
 
             // needed for the closure test.
@@ -713,7 +713,7 @@ mod tests {
                     |_text| { "".to_string() }
                 }
 
-                value => { fail!("{}", value) }
+                value => { panic!("{}", value) }
             };
 
             ctx.insert("lambda".to_string(), Fun(RefCell::new(f)));

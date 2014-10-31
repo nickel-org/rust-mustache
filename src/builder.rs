@@ -350,10 +350,10 @@ mod tests {
                         assert_eq!((*f)("count: ".to_string()), "count: 2".to_string());
                         assert_eq!((*f)("count: ".to_string()), "count: 3".to_string());
                     }
-                    _ => fail!(),
+                    _ => panic!(),
                 }
             }
-            _ => fail!(),
+            _ => panic!(),
         }
     }
 
@@ -379,10 +379,10 @@ mod tests {
                         assert_eq!((*f)("count: ".to_string()), "count: 2".to_string());
                         assert_eq!((*f)("count: ".to_string()), "count: 3".to_string());
                     }
-                    _ => fail!(),
+                    _ => panic!(),
                 }
             }
-            _ => fail!(),
+            _ => panic!(),
         }
     }
 }
