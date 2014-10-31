@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
-use std::io::IoError;
+use std::io::IoError as StdIoError;
 use serialize;
 
 use super::{Data, Str, Bool, Vec, Map};
@@ -21,7 +21,7 @@ pub enum Error {
     InvalidStr,
     MissingElements,
     KeyIsNotString,
-    IoError(IoError),
+    IoError(StdIoError),
 }
 
 impl fmt::Show for Error {
