@@ -267,7 +267,7 @@ impl<'a> RenderContext<'a> {
         name: &str,
         indent: &str
     ) {
-        match self.template.partials.find_equiv(&name) {
+        match self.template.partials.find_equiv(name) {
             None => { }
             Some(ref tokens) => {
                 let mut indent = self.indent + indent;
