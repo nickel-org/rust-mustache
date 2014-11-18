@@ -4,7 +4,7 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
-#![feature(phase)]
+#![feature(phase, globs)]
 
 extern crate serialize;
 
@@ -17,10 +17,11 @@ use std::fmt;
 use std::io::File;
 use std::str;
 
+pub use self::Data::*;
 pub use builder::{MapBuilder, VecBuilder};
-pub use encoder::{Encoder, EncoderResult};
-pub use encoder::{Error, InvalidStr, IoError};
+pub use encoder::{Error, IoError, InvalidStr, Encoder, EncoderResult};
 pub use template::Template;
+
 
 pub mod builder;
 pub mod encoder;

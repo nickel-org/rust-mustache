@@ -5,9 +5,10 @@ use std::mem;
 use std::str;
 use serialize::Encodable;
 
-use compiler::Compiler;
-use parser::{Token, Text, ETag, UTag, Section, Partial};
 use encoder;
+use compiler::Compiler;
+use parser::Token;
+use parser::Token::*;
 use encoder::{Encoder, Error};
 
 use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun};
