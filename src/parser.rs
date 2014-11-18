@@ -1,6 +1,10 @@
 use std::char;
 use std::mem;
 
+pub use self::Token::*;
+pub use self::ParserState::*;
+pub use self::TokenClass::*;
+
 /// `Token` is a section of a compiled mustache string.
 #[deriving(Clone, Show)]
 pub enum Token {

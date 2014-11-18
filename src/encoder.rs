@@ -4,6 +4,7 @@ use std::io::IoError as StdIoError;
 use serialize;
 
 use super::{Data, StrVal, Bool, VecVal, Map};
+pub use self::Error::*;
 
 pub struct Encoder<'a> {
     pub data: Vec<Data<'a>>,
