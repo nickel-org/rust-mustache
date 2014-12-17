@@ -335,7 +335,7 @@ mod tests {
 
         let mut count = 0u;
         let data = MapBuilder::new()
-            .insert_fn("count", |s| {
+            .insert_fn("count".to_string(), |s| {
                 count += 1u;
                 s + count.to_string()
             })
@@ -343,7 +343,7 @@ mod tests {
 
         match data {
             Map(m) => {
-                match *m.find_equiv(&("count")).unwrap() {
+                match *m.find_equiv(&"count".to_string()).unwrap() {
                     Fun(ref f) => {
                         let f = &mut *f.borrow_mut();
                         assert_eq!((*f)("count: ".to_string()), "count: 1".to_string());

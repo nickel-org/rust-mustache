@@ -65,51 +65,58 @@ impl<'a> serialize::Encoder<Error> for Encoder<'a> {
     }
     fn emit_str(&mut self, v: &str) -> EncoderResult { self.data.push(StrVal(v.to_string())); Ok(()) }
 
-    fn emit_enum(&mut self, _name: &str, _f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+    fn emit_enum< F >(&mut self, _name: &str, _f: F ) -> EncoderResult
+    where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         Err(UnsupportedType)
     }
 
-    fn emit_enum_variant(&mut self,
+    fn emit_enum_variant< F >(&mut self,
                          _name: &str,
                          _id: uint,
                          _len: uint,
-                         _f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+                         _f: F) -> EncoderResult
+                         where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         Err(UnsupportedType)
     }
 
-    fn emit_enum_variant_arg(&mut self,
+    fn emit_enum_variant_arg< F >(&mut self,
                              _a_idx: uint,
-                             _f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+                             _f: F) -> EncoderResult
+                             where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         Err(UnsupportedType)
     }
 
-    fn emit_enum_struct_variant(&mut self,
+    fn emit_enum_struct_variant< F >(&mut self,
                                 _v_name: &str,
                                 _v_id: uint,
                                 _len: uint,
-                                _f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+                                _f: F) -> EncoderResult
+                                where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         Err(UnsupportedType)
     }
 
-    fn emit_enum_struct_variant_field(&mut self,
+    fn emit_enum_struct_variant_field< F >(&mut self,
                                       _f_name: &str,
                                       _f_idx: uint,
-                                      _f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+                                      _f: F) -> EncoderResult
+                                      where F : FnOnce(&mut Encoder<'a>) -> EncoderResult  {
         Err(UnsupportedType)
     }
 
-    fn emit_struct(&mut self,
+    fn emit_struct< F >(&mut self,
                    _name: &str,
                    _len: uint,
-                   f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+                   f: F) -> EncoderResult
+                   where F : FnOnce(&mut Encoder<'a>) -> EncoderResult  {
         self.data.push(Map(HashMap::new()));
         f(self)
     }
 
-    fn emit_struct_field(&mut self,
+    fn emit_struct_field< F >(&mut self,
                          name: &str,
                          _idx: uint,
-                         f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+                         f: F) -> EncoderResult
+                         where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         let mut m = match self.data.pop() {
             Some(Map(m)) => m,
             _ => { return Err(UnsupportedType); }
@@ -124,29 +131,34 @@ impl<'a> serialize::Encoder<Error> for Encoder<'a> {
         Ok(())
     }
 
-    fn emit_tuple(&mut self,
+    fn emit_tuple< F >(&mut self,
                   len: uint,
-                  f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+                  f: F) -> EncoderResult
+                  where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         self.emit_seq(len, f)
     }
 
-    fn emit_tuple_arg(&mut self, idx: uint, f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+    fn emit_tuple_arg< F >(&mut self, idx: uint, f: F) -> EncoderResult
+    where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         self.emit_seq_elt(idx, f)
     }
 
-    fn emit_tuple_struct(&mut self,
+    fn emit_tuple_struct< F >(&mut self,
                          _name: &str,
                          len: uint,
-                         f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+                         f: F) -> EncoderResult
+                         where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         self.emit_seq(len, f)
     }
 
-    fn emit_tuple_struct_arg(&mut self, idx: uint, f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+    fn emit_tuple_struct_arg< F >(&mut self, idx: uint, f: F) -> EncoderResult
+    where F : FnOnce(&mut Encoder<'a>) -> EncoderResult  {
         self.emit_seq_elt(idx, f)
     }
 
     // Specialized types:
-    fn emit_option(&mut self, _f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+    fn emit_option< F >(&mut self, _f: F) -> EncoderResult
+    where F : FnOnce(&mut Encoder<'a>) -> EncoderResult  {
         Err(UnsupportedType)
     }
 
@@ -154,16 +166,19 @@ impl<'a> serialize::Encoder<Error> for Encoder<'a> {
         Err(UnsupportedType)
     }
 
-    fn emit_option_some(&mut self, _f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+    fn emit_option_some< F >(&mut self, _f: F) -> EncoderResult
+  where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         Err(UnsupportedType)
     }
 
-    fn emit_seq(&mut self, _len: uint, f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+    fn emit_seq< F >(&mut self, _len: uint, f: F) -> EncoderResult
+  where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         self.data.push(VecVal(Vec::new()));
         f(self)
     }
 
-    fn emit_seq_elt(&mut self, _idx: uint, f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+    fn emit_seq_elt< F >(&mut self, _idx: uint, f: F) -> EncoderResult
+  where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         let mut v = match self.data.pop() {
             Some(VecVal(v)) => v,
             _ => { return Err(UnsupportedType); }
@@ -178,12 +193,14 @@ impl<'a> serialize::Encoder<Error> for Encoder<'a> {
         Ok(())
     }
 
-    fn emit_map(&mut self, _len: uint, f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+    fn emit_map< F >(&mut self, _len: uint, f: F) -> EncoderResult
+  where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         self.data.push(Map(HashMap::new()));
         f(self)
     }
 
-    fn emit_map_elt_key(&mut self, _idx: uint, f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+    fn emit_map_elt_key< F >(&mut self, _idx: uint, mut f: F) -> EncoderResult
+  where F : FnMut(&mut Encoder<'a>) -> EncoderResult {
         try!(f(self));
         let last = match self.data.last() {
             Some(d) => d,
@@ -195,7 +212,8 @@ impl<'a> serialize::Encoder<Error> for Encoder<'a> {
         }
     }
 
-    fn emit_map_elt_val(&mut self, _idx: uint, f: |&mut Encoder<'a>| -> EncoderResult) -> EncoderResult {
+    fn emit_map_elt_val< F >(&mut self, _idx: uint, f: F) -> EncoderResult
+  where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         let k = match self.data.pop() {
             Some(StrVal(s)) => s,
             _ => { return Err(KeyIsNotString); }

@@ -161,7 +161,7 @@ impl<'a> RenderContext<'a> {
 
         self.render_utag(&mut mem_wr, stack, path);
 
-        let bytes = mem_wr.unwrap();
+        let bytes = mem_wr.into_inner();
         let s = str::from_utf8(bytes.as_slice()).unwrap().to_string();
 
         for c in s.as_slice().chars() {
@@ -357,6 +357,7 @@ mod tests {
     use std::io::{File, MemWriter, TempDir};
     use std::collections::HashMap;
     use serialize::json;
+    use serialize::json::Json;
     use serialize::Encodable;
 
     use encoder::{Encoder, Error};
@@ -523,10 +524,10 @@ mod tests {
             Err(e) => panic!(e.to_string()),
             Ok(json) => {
                 match json {
-                    json::Object(d) => {
+                    Json::Object(d) => {
                         let mut d = d;
                         match d.pop(&"tests".to_string()) {
-                            Some(json::List(tests)) => tests.move_iter().collect(),
+                            Some(Json::Array(tests)) => tests.into_iter().collect(),
                             _ => panic!("{}: tests key not a list", src),
                         }
                     }
@@ -538,10 +539,10 @@ mod tests {
 
     fn write_partials(tmpdir: &Path, value: &json::Json) {
         match value {
-            &json::Object(ref d) => {
+            &Json::Object(ref d) => {
                 for (key, value) in d.iter() {
                     match value {
-                        &json::String(ref s) => {
+                        &Json::String(ref s) => {
                             let mut path = tmpdir.clone();
                             path.push(*key + ".mustache");
                             File::create(&path).write(s.as_bytes()).unwrap();
@@ -554,14 +555,14 @@ mod tests {
         }
     }
 
-    fn run_test(test: json::JsonObject, data: Data) {
+    fn run_test(test: json::Object, data: Data) {
         let template = match test.find(&"template".to_string()) {
-            Some(&json::String(ref s)) => s.clone(),
+            Some(&Json::String(ref s)) => s.clone(),
             _ => panic!(),
         };
 
         let expected = match test.find(&"expected".to_string()) {
-            Some(&json::String(ref s)) => s.clone(),
+            Some(&Json::String(ref s)) => s.clone(),
             _ => panic!(),
         };
 
@@ -594,9 +595,9 @@ mod tests {
     }
 
     fn run_tests(spec: &str) {
-        for json in parse_spec_tests(spec).move_iter() {
+        for json in parse_spec_tests(spec).into_iter() {
             let test = match json {
-                json::Object(m) => m,
+                Json::Object(m) => m,
                 _ => panic!(),
             };
 
@@ -645,14 +646,14 @@ mod tests {
 
     #[test]
     fn test_spec_lambdas() {
-        for json in parse_spec_tests("spec/specs/~lambdas.json").move_iter() {
+        for json in parse_spec_tests("spec/specs/~lambdas.json").into_iter() {
             let mut test = match json {
-                json::Object(m) => m,
+                Json::Object(m) => m,
                 value => { panic!("{}", value) }
             };
 
             let s = match test.pop(&"name".to_string()) {
-                Some(json::String(s)) => s,
+                Some(Json::String(s)) => s,
                 value => { panic!("{}", value) }
             };
 
