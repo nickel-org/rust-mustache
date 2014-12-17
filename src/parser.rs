@@ -1,4 +1,4 @@
-use std::char;
+use std::char::UnicodeChar;
 use std::mem;
 
 pub use self::Token::*;
@@ -245,7 +245,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
             Some(&Text(ref s)) if !s.is_empty() => {
                 // Look for the last newline character that may have whitespace
                 // following it.
-                match s.as_slice().rfind(|c:char| c == '\n' || !char::is_whitespace(c)) {
+                match s.as_slice().rfind(|&: c:char| c == '\n' || !c.is_whitespace()) {
                     // It's all whitespace.
                     None => {
                         if self.tokens.len() == 1 {
@@ -422,7 +422,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                 if len > 2u && content.ends_with("=") {
                     let s = self.check_content(content.slice(1, len - 1));
 
-                    let pos = s.as_slice().find(char::is_whitespace);
+                    let pos = s.as_slice().find(UnicodeChar::is_whitespace);
                     let pos = match pos {
                       None => { panic!("invalid change delimiter tag content"); }
                       Some(pos) => { pos }
@@ -432,7 +432,7 @@ impl<'a, T: Iterator<char>> Parser<'a, T> {
                     self.otag_chars = self.otag.as_slice().chars().collect();
 
                     let s2 = s.as_slice().slice_from(pos);
-                    let pos = s2.find(|c| !char::is_whitespace(c));
+                    let pos = s2.find(|&: c : char| !c.is_whitespace());
                     let pos = match pos {
                       None => { panic!("invalid change delimiter tag content"); }
                       Some(pos) => { pos }
