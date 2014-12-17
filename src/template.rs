@@ -544,7 +544,7 @@ mod tests {
                     match value {
                         &Json::String(ref s) => {
                             let mut path = tmpdir.clone();
-                            path.push(*key + ".mustache");
+                            path.push(key.clone() + ".mustache");
                             File::create(&path).write(s.as_bytes()).unwrap();
                         }
                         _ => panic!(),
@@ -703,13 +703,13 @@ mod tests {
                     }
                 }
                 "Section - Expansion" => {
-                    |text: String| { text + "{{planet}}" + text }
+                    |text: String| { text.clone() + "{{planet}}" + text.clone().as_slice() }
                 }
                 "Section - Alternate Delimiters" => {
-                    |text: String| { text + "{{planet}} => |planet|" + text }
+                    |text: String| { text.clone() + "{{planet}} => |planet|" + text.clone().as_slice() }
                 }
                 "Section - Multiple Calls" => {
-                    |text: String| { "__".to_string() + text + "__" }
+                    |text: String| { "__".to_string() + text.as_slice() + "__" }
                 }
                 "Inverted Section" => {
                     |_text| { "".to_string() }
