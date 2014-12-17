@@ -271,7 +271,7 @@ impl<'a> RenderContext<'a> {
         match self.template.partials.find_equiv(name) {
             None => { }
             Some(ref tokens) => {
-                let mut indent = self.indent + indent;
+                let mut indent = self.indent.clone() + indent;
 
                 mem::swap(&mut self.indent, &mut indent);
                 self.render(wr, stack, tokens.as_slice());

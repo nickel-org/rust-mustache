@@ -52,7 +52,7 @@ impl<T: Iterator<char>> Compiler<T> {
 
         // Compile the partials if we haven't done so already.
         for name in partials.into_iter() {
-            let path = self.ctx.template_path.join(name + "." + self.ctx.template_extension);
+            let path = self.ctx.template_path.join(name.clone() + "." + self.ctx.template_extension.as_slice());
 
             if !self.partials.contains_key(&name) {
                 // Insert a placeholder so we don't recurse off to infinity.
