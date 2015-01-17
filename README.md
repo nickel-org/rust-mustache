@@ -40,7 +40,7 @@ extern crate serialize;
 use std::io;
 use mustache::MapBuilder;
 
-#[deriving(Encodable)]
+#[derive(Encodable)]
 struct Planet {
     name: ~str,
 }

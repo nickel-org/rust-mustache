@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::MemWriter;
 use std::mem;
@@ -9,12 +8,12 @@ use encoder;
 use compiler::Compiler;
 use parser::Token;
 use parser::Token::*;
-use encoder::{Encoder, Error};
+use encoder::Error;
 
 use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun};
 
 /// `Template` represents a compiled mustache file.
-#[deriving(Show, Clone)]
+#[derive(Show, Clone)]
 pub struct Template {
     ctx: Context,
     tokens: Vec<Token>,
@@ -34,7 +33,7 @@ Vec<Token>>) -> Template {
 
 impl Template {
     /// Renders the template with the `Encodable` data.
-    pub fn render<'a, W: Writer, T: Encodable<Encoder<'a>, Error>>(
+    pub fn render<'a, W: Writer, T: Encodable>(
         &self,
         wr: &mut W,
         data: &T
@@ -121,7 +120,7 @@ impl<'a> RenderContext<'a> {
         value: &str
     ) {
         // Indent the lines.
-        if self.indent.equiv(&("")) {
+        if self.indent.is_empty() {
             wr.write_str(value).unwrap();
         } else {
             let mut pos = 0;
@@ -193,12 +192,13 @@ impl<'a> RenderContext<'a> {
                     }
 
                     // etags and utags use the default delimiter.
-                    Fun(ref f) => {
+                    Fun(ref fcell) => {
+                        let f = &mut *fcell.borrow_mut();
                         let tokens = self.render_fun("", "{{", "}}", f);
                         self.render(wr, stack, tokens.as_slice());
                     }
 
-                    ref value => { panic!("unexpected value {}", value); }
+                    ref value => { panic!("unexpected value {:?}", value); }
                 }
             }
         };
@@ -251,11 +251,12 @@ impl<'a> RenderContext<'a> {
                         self.render(wr, stack, children);
                         stack.pop();
                     }
-                    Fun(ref f) => {
+                    Fun(ref fcell) => {
+                        let f = &mut *fcell.borrow_mut();
                         let tokens = self.render_fun(src, otag, ctag, f);
                         self.render(wr, stack, tokens.as_slice())
                     }
-                    _ => { panic!("unexpected value {}", value) }
+                    _ => { panic!("unexpected value {:?}", value) }
                 }
             }
         }
@@ -268,7 +269,7 @@ impl<'a> RenderContext<'a> {
         name: &str,
         indent: &str
     ) {
-        match self.template.partials.find_equiv(name) {
+        match self.template.partials.get(name) {
             None => { }
             Some(ref tokens) => {
                 let mut indent = self.indent.clone() + indent;
@@ -280,15 +281,8 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render_fun(
-        &self,
-        src: &str,
-        otag: &str,
-        ctag: &str,
-        f: &RefCell<|String| -> String>
-    ) -> Vec<Token> {
-        let f = &mut *f.borrow_mut();
-        let src = (*f)(src.to_string());
+    fn render_fun(&self, src: &str, otag: &str, ctag: &str, f: &mut Box<FnMut(String) -> String + Send>) -> Vec<Token> {
+        let src = f(src.to_string());
 
         let compiler = Compiler::new_with(
             self.template.ctx.clone(),
@@ -316,7 +310,7 @@ impl<'a> RenderContext<'a> {
         for data in stack.iter().rev() {
             match **data {
                 Map(ref m) => {
-                    match m.find_equiv(&path[0]) {
+                    match m.get(&path[0]) {
                         Some(v) => {
                             value = Some(v);
                             break;
@@ -324,7 +318,7 @@ impl<'a> RenderContext<'a> {
                         None => { }
                     }
                 }
-                _ => { panic!("expect map: {}", path) }
+                _ => { panic!("expect map: {:?}", path) }
             }
         }
 
@@ -337,7 +331,7 @@ impl<'a> RenderContext<'a> {
         for part in path.slice_from(1).iter() {
             match *value {
                 Map(ref m) => {
-                    match m.find_equiv(part) {
+                    match m.get(part) {
                         Some(v) => { value = v; }
                         None => { return None; }
                     }
@@ -353,7 +347,6 @@ impl<'a> RenderContext<'a> {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
-    use std::str;
     use std::io::{File, MemWriter, TempDir};
     use std::collections::HashMap;
     use serialize::json;
@@ -366,10 +359,10 @@ mod tests {
     use super::super::{Data, StrVal, VecVal, Map, Fun};
     use super::super::{Context, Template};
 
-    #[deriving(Encodable)]
+    #[derive(Encodable)]
     struct Name { name: String }
 
-    fn render<'a, 'b, T: Encodable<Encoder<'b>, Error>>(
+    fn render<'a, 'b, T: Encodable>(
         template: &str,
         data: &T,
     ) -> Result<String, Error> {
@@ -378,7 +371,7 @@ mod tests {
         let mut wr = MemWriter::new();
         try!(template.render(&mut wr, data));
 
-        Ok(str::from_utf8(wr.unwrap().as_slice()).unwrap().to_string())
+        Ok(String::from_utf8(wr.into_inner()).ok().expect("fail"))
     }
 
     #[test]
@@ -409,7 +402,7 @@ mod tests {
     fn render_data<'a>(template: &Template, data: &Data<'a>) -> String {
         let mut wr = MemWriter::new();
         template.render_data(&mut wr, data);
-        str::from_utf8(wr.unwrap().as_slice()).unwrap().to_string()
+        String::from_utf8(wr.into_inner()).ok().expect("fail")
     }
 
     #[test]
@@ -441,7 +434,7 @@ mod tests {
         assert_eq!(render_data(&template, &Map(ctx0)), "01 a 35".to_string());
 
         let mut ctx = HashMap::new();
-        ctx.insert("a".to_string(), Fun(RefCell::new(|_text| "foo".to_string())));
+        ctx.insert("a".to_string(), Fun(RefCell::new(Box::new(|_text| { "foo".to_string() }))));
         assert_eq!(render_data(&template, &Map(ctx)), "0foo5".to_string());
     }
 
@@ -515,18 +508,16 @@ mod tests {
             Err(e) => panic!("Could not read file {}", e),
         };
 
-        let s = match str::from_utf8(file_contents.as_slice()){
-            Some(str) => str.to_string(),
-            None => {panic!("File was not UTF8 encoded");}
-        };
+        let s = String::from_utf8(file_contents.as_slice().to_vec())
+                     .ok().expect("File was not UTF8 encoded");
 
         match json::from_str(s.as_slice()) {
-            Err(e) => panic!(e.to_string()),
+            Err(e) =>  panic!("{:?}", e),
             Ok(json) => {
                 match json {
                     Json::Object(d) => {
                         let mut d = d;
-                        match d.pop(&"tests".to_string()) {
+                        match d.remove(&"tests".to_string()) {
                             Some(Json::Array(tests)) => tests.into_iter().collect(),
                             _ => panic!("{}: tests key not a list", src),
                         }
@@ -556,12 +547,12 @@ mod tests {
     }
 
     fn run_test(test: json::Object, data: Data) {
-        let template = match test.find(&"template".to_string()) {
+        let template = match test.get(&"template".to_string()) {
             Some(&Json::String(ref s)) => s.clone(),
             _ => panic!(),
         };
 
-        let expected = match test.find(&"expected".to_string()) {
+        let expected = match test.get(&"expected".to_string()) {
             Some(&Json::String(ref s)) => s.clone(),
             _ => panic!(),
         };
@@ -573,7 +564,7 @@ mod tests {
             Err(_) => panic!(),
         };
 
-        match test.find(&"partials".to_string()) {
+        match test.get(&"partials".to_string()) {
             Some(value) => write_partials(tmpdir.path(), value),
             None => {},
         }
@@ -583,10 +574,10 @@ mod tests {
         let result = render_data(&template, &data);
 
         if result != expected {
-            println!("desc:     {}", test.find(&"desc".to_string()).unwrap().to_string());
-            println!("context:  {}", test.find(&"data".to_string()).unwrap().to_string());
+            println!("desc:     {}", test.get(&"desc".to_string()).unwrap().to_string());
+            println!("context:  {}", test.get(&"data".to_string()).unwrap().to_string());
             println!("=>");
-            println!("template: {}", template);
+            println!("template: {:?}", template);
             println!("expected: {}", expected);
             println!("actual:   {}", result);
             println!("");
@@ -601,7 +592,7 @@ mod tests {
                 _ => panic!(),
             };
 
-            let data = match test.find(&"data".to_string()) {
+            let data = match test.get(&"data".to_string()) {
                 Some(data) => data.clone(),
                 None => panic!(),
             };
@@ -652,13 +643,13 @@ mod tests {
                 value => { panic!("{}", value) }
             };
 
-            let s = match test.pop(&"name".to_string()) {
+            let s = match test.remove(&"name".to_string()) {
                 Some(Json::String(s)) => s,
-                value => { panic!("{}", value) }
+                value => { panic!("{:?}", value) }
             };
 
             // Replace the lambda with rust code.
-            let data = match test.pop(&"data".to_string()) {
+            let data = match test.remove(&"data".to_string()) {
                 Some(data) => data,
                 None => panic!(),
             };
@@ -672,53 +663,60 @@ mod tests {
             };
 
             // needed for the closure test.
-            let mut calls = 0u;
+            let mut calls = 0us;
 
-            let f = match s.as_slice() {
+            match s.as_slice() {
                 "Interpolation" => {
-                    |_text| { "world".to_string() }
-                }
+                    let f = |&:_text| { "world".to_string() };
+                    ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                },
                 "Interpolation - Expansion" => {
-                    |_text| { "{{planet}}".to_string() }
-                }
+                    let f = |&:_text| { "{{planet}}".to_string() };
+                    ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                },
                 "Interpolation - Alternate Delimiters" => {
-                    |_text| { "|planet| => {{planet}}".to_string() }
-                }
+                    let f = |&:_text| { "|planet| => {{planet}}".to_string() };
+                    ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                },
                 "Interpolation - Multiple Calls" => {
-                    |_text| {
+                    let f = move |&mut: _text| {
                         calls += 1;
                         calls.to_string()
-                    }
-                }
+                    };
+                    ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                },
                 "Escaping" => {
-                    |_text| { ">".to_string() }
-                }
+                    let f = |&:_text| { ">".to_string() };
+                    ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                },
                 "Section" => {
-                    |text: String| {
+                    let f = |&: text: String| {
                         if text.as_slice() == "{{x}}" {
                             "yes".to_string()
                         } else {
                             "no".to_string()
                         }
-                    }
-                }
+                    };
+                    ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                },
                 "Section - Expansion" => {
-                    |text: String| { text.clone() + "{{planet}}" + text.clone().as_slice() }
-                }
+                    let f = |&: text: String| { text.clone() + "{{planet}}" + text.clone().as_slice() };
+                    ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                },
                 "Section - Alternate Delimiters" => {
-                    |text: String| { text.clone() + "{{planet}} => |planet|" + text.clone().as_slice() }
-                }
+                    let f = |&: text: String| { text.clone() + "{{planet}} => |planet|" + text.clone().as_slice() };
+                    ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                },
                 "Section - Multiple Calls" => {
-                    |text: String| { "__".to_string() + text.as_slice() + "__" }
-                }
+                    let f = |&: text: String| { "__".to_string() + text.as_slice() + "__" };
+                    ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                },
                 "Inverted Section" => {
-                    |_text| { "".to_string() }
-                }
-
+                    let f= |&:_text| { "".to_string() };
+                    ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                },
                 value => { panic!("{}", value) }
             };
-
-            ctx.insert("lambda".to_string(), Fun(RefCell::new(f)));
 
             run_test(test, Map(ctx));
         }

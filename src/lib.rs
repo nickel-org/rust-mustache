@@ -4,11 +4,11 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
-#![feature(phase, globs)]
+#![allow(unstable)]
+#![allow(unused_attributes)]
 
 extern crate serialize;
 
-#[phase(plugin, link)]
 extern crate log;
 
 use std::cell::RefCell;
@@ -35,7 +35,7 @@ pub enum Data<'a> {
     Bool(bool),
     VecVal(Vec<Data<'a>>),
     Map(HashMap<String, Data<'a>>),
-    Fun(RefCell<|String|: 'a -> String>),
+    Fun(RefCell<Box<FnMut(String) -> String + Send>>),
 }
 
 impl<'a> PartialEq for Data<'a> {
@@ -56,9 +56,9 @@ impl<'a> fmt::Show for Data<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             StrVal(ref v) => write!(f, "StrVal({})", v),
-            Bool(v) => write!(f, "Bool({})", v),
-            VecVal(ref v) => write!(f, "VecVal({})", v),
-            Map(ref v) => write!(f, "Map({})", v),
+            Bool(v) => write!(f, "Bool({:?})", v),
+            VecVal(ref v) => write!(f, "VecVal({:?})", v),
+            Map(ref v) => write!(f, "Map({:?})", v),
             Fun(_) => write!(f, "Fun(...)"),
         }
     }
@@ -66,7 +66,7 @@ impl<'a> fmt::Show for Data<'a> {
 
 /// Represents the shared metadata needed to compile and render a mustache
 /// template.
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct Context {
     pub template_path: Path,
     pub template_extension: String,
@@ -90,7 +90,7 @@ impl Context {
     }
 
     /// Compiles a template from a string
-    pub fn compile<IT: Iterator<char>>(&self, reader: IT) -> Template {
+    pub fn compile<IT: Iterator<Item=char>>(&self, reader: IT) -> Template {
         let compiler = compiler::Compiler::new(self.clone(), reader);
         let (tokens, partials) = compiler.compile();
 
@@ -111,8 +111,8 @@ impl Context {
 
         // TODO: maybe allow UTF-16 as well?
         let template = match str::from_utf8(s.as_slice()) {
-            Some(string) => string,
-            None => { return Err(InvalidStr); }
+            Ok(string) => string,
+            _ => { return Result::Err(Error::InvalidStr); }
         };
 
         Ok(self.compile(template.chars()))
@@ -120,7 +120,7 @@ impl Context {
 }
 
 /// Compiles a template from an `Iterator<char>`.
-pub fn compile_iter<T: Iterator<char>>(iter: T) -> Template {
+pub fn compile_iter<T: Iterator<Item=char>>(iter: T) -> Template {
     Context::new(Path::new(".")).compile(iter)
 }
 
