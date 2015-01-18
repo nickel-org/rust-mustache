@@ -14,7 +14,7 @@ pub struct Compiler<T> {
     ctag: String,
 }
 
-impl<T: Iterator<char>> Compiler<T> {
+impl<T: Iterator<Item=char>> Compiler<T> {
     /// Construct a default compiler.
     pub fn new(ctx: Context, reader: T) -> Compiler<T> {
         Compiler {
@@ -61,8 +61,8 @@ impl<T: Iterator<char>> Compiler<T> {
                 match File::open(&path).read_to_end() {
                     Ok(contents) => {
                         let string = match str::from_utf8(contents.as_slice()) {
-                            Some(string) => string.to_string(),
-                            None => { panic!("Failed to parse file as UTF-8"); }
+                            Ok(string) => string.to_string(),
+                            Err(_) => { panic!("Failed to parse file as UTF-8"); }
                         };
 
                         let compiler = Compiler {
@@ -79,9 +79,7 @@ impl<T: Iterator<char>> Compiler<T> {
                     },
                     Err(e) => {
                         // Ignore missing files.
-                        if e.kind == FileNotFound {
-                            debug!("failed to read file {}", path.display());
-                        } else {
+                        if e.kind != FileNotFound {
                             panic!("error reading file: {}", e);
                         }
                     }
@@ -147,12 +145,12 @@ mod tests {
                         *newlined)
             }
             _ => {
-                format!("{}", token)
+                format!("{:?}", token)
             }
         }
     }
 
-    fn check_tokens(actual: Vec<Token>, expected: &[Token]) {
+    fn check_tokens(_actual: Vec<Token>, _expected: &[Token]) {
         // TODO: equality is currently broken for enums
         //let actual: Vec<String> = actual.iter().map(token_to_str).collect();
         //let expected = expected.iter().map(token_to_str).collect();

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serialize::Encodable;
 
 use encoder;
-use encoder::{Encoder, Error};
+use encoder::Error;
 use super::{Data, StrVal, Bool, VecVal, Map, Fun};
 
 /// `MapBuilder` is a helper type that construct `Data` types.
@@ -31,11 +31,11 @@ impl<'a> MapBuilder<'a> {
     /// ```
     #[inline]
     pub fn insert<
-        K: StrAllocating, T: Encodable<Encoder<'a>, Error>
+        K: Str, T: Encodable
     >(self, key: K, value: &T) -> Result<MapBuilder<'a>, Error> {
         let MapBuilder { mut data } = self;
         let value = try!(encoder::encode(value));
-        data.insert(key.into_string(), value);
+        data.insert(key.as_slice().to_string(), value);
         Ok(MapBuilder { data: data })
     }
 
@@ -49,10 +49,10 @@ impl<'a> MapBuilder<'a> {
     /// ```
     #[inline]
     pub fn insert_str<
-        K: StrAllocating, V: StrAllocating
+        K: Str, V: Str
     >(self, key: K, value: V) -> MapBuilder<'a> {
         let MapBuilder { mut data } = self;
-        data.insert(key.into_string(), StrVal(value.into_string()));
+        data.insert(key.as_slice().to_string(), StrVal(value.as_slice().to_string()));
         MapBuilder { data: data }
     }
 
@@ -65,9 +65,9 @@ impl<'a> MapBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_bool<K: StrAllocating>(self, key: K, value: bool) -> MapBuilder<'a> {
+    pub fn insert_bool<K: Str>(self, key: K, value: bool) -> MapBuilder<'a> {
         let MapBuilder { mut data } = self;
-        data.insert(key.into_string(), Bool(value));
+        data.insert(key.as_slice().to_string(), Bool(value));
         MapBuilder { data: data }
     }
 
@@ -84,10 +84,11 @@ impl<'a> MapBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_vec<K: StrAllocating>(self, key: K, f: |VecBuilder<'a>| -> VecBuilder<'a>) -> MapBuilder<'a> {
+    pub fn insert_vec<K: Str, F>(self, key: K, mut f: F) -> MapBuilder<'a>
+        where F: FnMut(VecBuilder<'a>) -> VecBuilder<'a> {
         let MapBuilder { mut data } = self;
         let builder = f(VecBuilder::new());
-        data.insert(key.into_string(), builder.build());
+        data.insert(key.as_slice().to_string(), builder.build());
         MapBuilder { data: data }
     }
 
@@ -109,10 +110,11 @@ impl<'a> MapBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_map<K: StrAllocating>(self, key: K, f: |MapBuilder<'a>| -> MapBuilder<'a>) -> MapBuilder<'a> {
+    pub fn insert_map<K: Str, F>(self, key: K, mut f: F) -> MapBuilder<'a>
+        where F: FnMut(MapBuilder<'a>) -> MapBuilder<'a> {
         let MapBuilder { mut data } = self;
         let builder = f(MapBuilder::new());
-        data.insert(key.into_string(), builder.build());
+        data.insert(key.as_slice().to_string(), builder.build());
         MapBuilder { data: data }
     }
 
@@ -122,16 +124,17 @@ impl<'a> MapBuilder<'a> {
     /// use mustache::MapBuilder;
     /// let mut count = 0;
     /// let data = MapBuilder::new()
-    ///     .insert_fn("increment", |_| {
-    ///         count += 1u;
+    ///     .insert_fn("increment", move |&mut: _| {
+    ///         count += 1us;
     ///         count.to_string()
     ///     })
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_fn<K: StrAllocating>(self, key: K, f: |String|: 'a -> String) -> MapBuilder<'a> {
+    pub fn insert_fn<K: Str, F>(self, key: K, f: F) -> MapBuilder<'a>
+                                where F: FnMut(String) -> String + Send {
         let MapBuilder { mut data } = self;
-        data.insert(key.into_string(), Fun(RefCell::new(f)));
+        data.insert(key.as_slice().to_string(), Fun(RefCell::new(Box::new(f))));
         MapBuilder { data: data }
     }
 
@@ -165,9 +168,7 @@ impl<'a> VecBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn push<
-        T: Encodable<Encoder<'a>, Error>
-    >(self, value: &T) -> Result<VecBuilder<'a>, Error> {
+    pub fn push<T: Encodable>(self, value: &T) -> Result<VecBuilder<'a>, Error> {
         let VecBuilder { mut data } = self;
         let value = try!(encoder::encode(value));
         data.push(value);
@@ -184,9 +185,9 @@ impl<'a> VecBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn push_str<T: StrAllocating>(self, value: T) -> VecBuilder<'a> {
+    pub fn push_str<T: Str>(self, value: T) -> VecBuilder<'a> {
         let VecBuilder { mut data } = self;
-        data.push(StrVal(value.into_string()));
+        data.push(StrVal(value.as_slice().to_string()));
         VecBuilder { data: data }
     }
 
@@ -219,7 +220,8 @@ impl<'a> VecBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn push_vec(self, f: |VecBuilder<'a>| -> VecBuilder<'a>) -> VecBuilder<'a> {
+    pub fn push_vec<F>(self, mut f: F) -> VecBuilder<'a>
+        where F: FnMut(VecBuilder<'a>) -> VecBuilder<'a> {
         let VecBuilder { mut data } = self;
         let builder = f(VecBuilder::new());
         data.push(builder.build());
@@ -244,7 +246,8 @@ impl<'a> VecBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn push_map(self, f: |MapBuilder<'a>| -> MapBuilder<'a>) -> VecBuilder<'a> {
+    pub fn push_map<F>(self, mut f: F) -> VecBuilder<'a>
+        where F: FnMut(MapBuilder<'a>) -> MapBuilder<'a> {
         let VecBuilder { mut data } = self;
         let builder = f(MapBuilder::new());
         data.push(builder.build());
@@ -257,16 +260,17 @@ impl<'a> VecBuilder<'a> {
     /// use mustache::VecBuilder;
     /// let mut count = 0;
     /// let data = VecBuilder::new()
-    ///     .push_fn(|s| {
-    ///         count += 1u;
+    ///     .push_fn(move |&mut: s| {
+    ///         count += 1us;
     ///         s + count.to_string().as_slice()
     ///     })
     ///     .build();
     /// ```
     #[inline]
-    pub fn push_fn(self, f: |String|: 'a -> String) -> VecBuilder<'a> {
+    pub fn push_fn<F>(self, f: F) -> VecBuilder<'a>
+                   where F: FnMut(String) -> String + Send {
         let VecBuilder { mut data } = self;
-        data.push(Fun(RefCell::new(f)));
+        data.push(Fun(RefCell::new(Box::new(f))));
         VecBuilder { data: data }
     }
 
@@ -313,7 +317,7 @@ mod tests {
             MapBuilder::new()
                 .insert_str("first_name", "Jane")
                 .insert_str("last_name", "Austen")
-                .insert("age", &41u).unwrap()
+                .insert("age", &41us).unwrap()
                 .insert_bool("died", true)
                 .insert_vec("works", |builder| {
                     builder
@@ -321,7 +325,7 @@ mod tests {
                         .push_map(|builder| {
                             builder
                                 .insert_str("title", "Pride and Prejudice")
-                                .insert("publish_date", &1813u).unwrap()
+                                .insert("publish_date", &1813us).unwrap()
                         })
                 })
                 .build(),
@@ -333,17 +337,17 @@ mod tests {
         // We can't directly compare closures, so just make sure we thread
         // through the builder.
 
-        let mut count = 0u;
+        let mut count = 0us;
         let data = MapBuilder::new()
-            .insert_fn("count".to_string(), |s| {
-                count += 1u;
-                s + count.to_string().as_slice()
+            .insert_fn("count".to_string(), move |&mut: s| {
+                count += 1us;
+                s.clone() + count.to_string().as_slice()
             })
             .build();
 
         match data {
             Map(m) => {
-                match *m.find_equiv(&"count".to_string()).unwrap() {
+                match *m.get(&"count".to_string()).unwrap() {
                     Fun(ref f) => {
                         let f = &mut *f.borrow_mut();
                         assert_eq!((*f)("count: ".to_string()), "count: 1".to_string());
@@ -362,10 +366,10 @@ mod tests {
         // We can't directly compare closures, so just make sure we thread
         // through the builder.
 
-        let mut count = 0u;
+        let mut count = 0us;
         let data = VecBuilder::new()
-            .push_fn(|s| {
-                count += 1u;
+            .push_fn(move |&mut: s| {
+                count += 1us;
                 s + count.to_string().as_slice()
             })
             .build();
