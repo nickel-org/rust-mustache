@@ -202,8 +202,8 @@ impl<'a> serialize::Encoder for Encoder<'a> {
         f(self)
     }
 
-    fn emit_map_elt_key< F >(&mut self, _idx: usize, mut f: F) -> EncoderResult
-  where F : FnMut(&mut Encoder<'a>) -> EncoderResult {
+    fn emit_map_elt_key< F >(&mut self, _idx: usize, f: F) -> EncoderResult
+  where F : FnOnce(&mut Encoder<'a>) -> EncoderResult {
         try!(f(self));
         let last = match self.data.last() {
             Some(d) => d,
