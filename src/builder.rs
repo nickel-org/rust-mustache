@@ -25,8 +25,8 @@ impl<'a> MapBuilder<'a> {
     /// ```rust
     /// use mustache::MapBuilder;
     /// let data = MapBuilder::new()
-    ///     .insert("name", &("Jane Austen")).unwrap()
-    ///     .insert("age", &41u).unwrap()
+    ///     .insert("name", &("Jane Austen")).ok().unwrap()
+    ///     .insert("age", &41u).ok().unwrap()
     ///     .build();
     /// ```
     #[inline]
@@ -163,8 +163,8 @@ impl<'a> VecBuilder<'a> {
     /// ```rust
     /// use mustache::{VecBuilder, Data};
     /// let data: Data = VecBuilder::new()
-    ///     .push(& &"Jane Austen").unwrap()
-    ///     .push(&41u).unwrap()
+    ///     .push(& &"Jane Austen").ok().unwrap()
+    ///     .push(&41u).ok().unwrap()
     ///     .build();
     /// ```
     #[inline]
@@ -317,7 +317,7 @@ mod tests {
             MapBuilder::new()
                 .insert_str("first_name", "Jane")
                 .insert_str("last_name", "Austen")
-                .insert("age", &41us).unwrap()
+                .insert("age", &41us).ok().unwrap()
                 .insert_bool("died", true)
                 .insert_vec("works", |builder| {
                     builder
@@ -325,7 +325,7 @@ mod tests {
                         .push_map(|builder| {
                             builder
                                 .insert_str("title", "Pride and Prejudice")
-                                .insert("publish_date", &1813us).unwrap()
+                                .insert("publish_date", &1813us).ok().unwrap()
                         })
                 })
                 .build(),

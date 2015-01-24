@@ -285,7 +285,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
 
                 // Trim the whitespace from the last token.
                 self.tokens.pop();
-                self.tokens.push(Text(s.as_slice().slice(0, pos).to_string()));
+                self.tokens.push(Text(s.as_slice()[0..pos].to_string()));
 
                 true
             }
@@ -309,7 +309,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                 self.eat_whitespace();
             }
             '&' => {
-                let name = content.slice(1, len);
+                let name = &content[1..len];
                 let name = self.check_content(name);
                 let name = name.as_slice().split_terminator('.')
                     .map(|x| x.to_string())
@@ -318,7 +318,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
             }
             '{' => {
                 if content.ends_with("}") {
-                    let name = content.slice(1, len - 1);
+                    let name = &content[1..len - 1];
                     let name = self.check_content(name);
                     let name = name.as_slice().split_terminator('.')
                         .map(|x| x.to_string())
@@ -329,7 +329,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
             '#' => {
                 let newlined = self.eat_whitespace();
 
-                let name = self.check_content(content.slice(1, len));
+                let name = self.check_content(&content[1..len]);
                 let name = name.as_slice().split_terminator('.')
                     .map(|x| x.to_string())
                     .collect();
@@ -338,7 +338,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
             '^' => {
                 let newlined = self.eat_whitespace();
 
-                let name = self.check_content(content.slice(1, len));
+                let name = self.check_content(&content[1..len]);
                 let name = name.as_slice().split_terminator('.')
                     .map(|x| x.to_string())
                     .collect();
@@ -347,7 +347,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
             '/' => {
                 self.eat_whitespace();
 
-                let name = self.check_content(content.slice(1, len));
+                let name = self.check_content(&content[1..len]);
                 let name = name.as_slice().split_terminator('.')
                     .map(|x| x.to_string())
                     .collect();
@@ -419,7 +419,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                 self.eat_whitespace();
 
                 if len > 2us && content.ends_with("=") {
-                    let s = self.check_content(content.slice(1, len - 1));
+                    let s = self.check_content(&content[1..len - 1]);
 
                     fn is_whitespace(c: char) -> bool { c.is_whitespace() }
                     let pos = s.as_slice().find(is_whitespace);
@@ -428,17 +428,17 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                       Some(pos) => { pos }
                     };
 
-                    self.otag = s.as_slice().slice(0, pos).to_string();
+                    self.otag = s.as_slice()[0..pos].to_string();
                     self.otag_chars = self.otag.as_slice().chars().collect();
 
-                    let s2 = s.as_slice().slice_from(pos);
+                    let s2 = &s.as_slice()[pos..];
                     let pos = s2.find(|&: c : char| !c.is_whitespace());
                     let pos = match pos {
                       None => { panic!("invalid change delimiter tag content"); }
                       Some(pos) => { pos }
                     };
 
-                    self.ctag = s2.slice_from(pos).to_string();
+                    self.ctag = s2[pos..].to_string();
                     self.ctag_chars = self.ctag.as_slice().chars().collect();
                 } else {
                     panic!("invalid change delimiter tag content");
@@ -473,11 +473,11 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                 if self.ch_is('\r') { self.bump(); }
                 self.bump();
 
-                let ws = s.as_slice().slice(pos, s.len());
+                let ws = &s.as_slice()[pos..];
 
                 // Trim the whitespace from the last token.
                 self.tokens.pop();
-                self.tokens.push(Text(s.as_slice().slice(0, pos).to_string()));
+                self.tokens.push(Text(s.as_slice()[0..pos].to_string()));
 
                 ws.to_string()
             }
@@ -486,7 +486,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
         // We can't inline the tokens directly as we may have a recursive
         // partial. So instead, we'll cache the partials we used and look them
         // up later.
-        let name = content.slice(1, content.len());
+        let name = &content[1..content.len()];
         let name = self.check_content(name);
 
         self.tokens.push(Partial(name.to_string(), indent, tag));

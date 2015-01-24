@@ -52,7 +52,7 @@ impl<'a> PartialEq for Data<'a> {
     }
 }
 
-impl<'a> fmt::Show for Data<'a> {
+impl<'a> fmt::Debug for Data<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             StrVal(ref v) => write!(f, "StrVal({})", v),
@@ -72,7 +72,7 @@ pub struct Context {
     pub template_extension: String,
 }
 
-impl fmt::Show for Context {
+impl fmt::Debug for Context {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Context {{ template_path: {}, template_extension: {} }}",
                self.template_path.display(),

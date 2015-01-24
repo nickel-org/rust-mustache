@@ -127,7 +127,7 @@ impl<'a> RenderContext<'a> {
             let len = value.len();
 
             while pos < len {
-                let v = value.slice_from(pos);
+                let v = &value[pos..];
                 let line = match v.find('\n') {
                     None => {
                         let line = v;
@@ -135,7 +135,7 @@ impl<'a> RenderContext<'a> {
                         line
                     }
                     Some(i) => {
-                        let line = v.slice_to(i + 1);
+                        let line = &v[..i + 1];
                         pos += i + 1;
                         line
                     }
@@ -328,7 +328,7 @@ impl<'a> RenderContext<'a> {
             None => { return None; }
         };
 
-        for part in path.slice_from(1).iter() {
+        for part in path[1..].iter() {
             match *value {
                 Map(ref m) => {
                     match m.get(part) {
@@ -465,6 +465,7 @@ mod tests {
     fn test_render_partial() {
         let template = Context::new(Path::new("src/test-data"))
             .compile_path(Path::new("base"))
+            .ok()
             .unwrap();
 
         let ctx = HashMap::new();
@@ -598,7 +599,7 @@ mod tests {
             };
 
             let mut encoder = Encoder::new();
-            data.encode(&mut encoder).unwrap();
+            data.encode(&mut encoder).ok().unwrap();
             assert_eq!(encoder.data.len(), 1);
 
             run_test(test, encoder.data.pop().unwrap());
@@ -655,7 +656,7 @@ mod tests {
             };
 
             let mut encoder = Encoder::new();
-            data.encode(&mut encoder).unwrap();
+            data.encode(&mut encoder).ok().unwrap();
 
             let mut ctx = match encoder.data.pop().unwrap() {
                 Map(ctx) => ctx,
