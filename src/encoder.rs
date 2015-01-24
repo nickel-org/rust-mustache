@@ -26,7 +26,7 @@ pub enum Error {
     IoError(StdIoError),
 }
 
-impl fmt::Show for Error {
+impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             UnsupportedType => "unsupported type".fmt(f),
