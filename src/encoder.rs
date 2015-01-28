@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
-use std::io::IoError as StdIoError;
+use std::old_io::IoError as StdIoError;
 use std::iter::repeat;
 use serialize;
 

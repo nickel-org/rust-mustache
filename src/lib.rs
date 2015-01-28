@@ -14,7 +14,7 @@ extern crate log;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
-use std::io::File;
+use std::old_io::File;
 use std::str;
 
 pub use self::Data::*;

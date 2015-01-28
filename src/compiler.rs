@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::{File, FileNotFound};
+use std::old_io::{File, FileNotFound};
 use std::str;
 
 use parser::{Parser, Token};
