@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::old_io::MemWriter;
 use std::mem;
 use std::str;
-use serialize::Encodable;
+use rustc_serialize::Encodable;
 
 use encoder;
 use compiler::Compiler;
@@ -349,9 +349,8 @@ mod tests {
     use std::cell::RefCell;
     use std::io::{File, MemWriter, TempDir};
     use std::collections::HashMap;
-    use serialize::json;
-    use serialize::json::Json;
-    use serialize::Encodable;
+    use rustc_serialize::{json, Encodable};
+    use rustc_serialize::json::Json;
 
     use encoder::{Encoder, Error};
 

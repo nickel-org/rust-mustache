@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::old_io::IoError as StdIoError;
 use std::iter::repeat;
-use serialize;
+use rustc_serialize;
 
 use super::{Data, StrVal, Bool, VecVal, Map};
 pub use self::Error::*;
@@ -40,13 +40,13 @@ impl fmt::Debug for Error {
 
 pub type EncoderResult = Result<(), Error>;
 
-impl<'a> serialize::Encoder for Encoder<'a> {
+impl<'a> rustc_serialize::Encoder for Encoder<'a> {
     type Error = Error;
 
     fn emit_nil(&mut self) -> EncoderResult { Err(UnsupportedType) }
 
-    fn emit_int(&mut self, v: isize) -> EncoderResult { self.data.push(StrVal(v.to_string())); Ok(()) }
-    fn emit_uint(&mut self, v: usize) -> EncoderResult { self.data.push(StrVal(v.to_string())); Ok(()) }
+    fn emit_isize(&mut self, v: isize) -> EncoderResult { self.data.push(StrVal(v.to_string())); Ok(()) }
+    fn emit_usize(&mut self, v: usize) -> EncoderResult { self.data.push(StrVal(v.to_string())); Ok(()) }
     fn emit_u64(&mut self, v: u64) -> EncoderResult   { self.data.push(StrVal(v.to_string())); Ok(()) }
     fn emit_u32(&mut self, v: u32) -> EncoderResult   { self.data.push(StrVal(v.to_string())); Ok(()) }
     fn emit_u16(&mut self, v: u16) -> EncoderResult   { self.data.push(StrVal(v.to_string())); Ok(()) }
@@ -236,7 +236,7 @@ impl<'a> serialize::Encoder for Encoder<'a> {
     }
 }
 
-pub fn encode<'a, T: serialize::Encodable>(data: &T) -> Result<Data<'a>, Error> {
+pub fn encode<'a, T: rustc_serialize::Encodable>(data: &T) -> Result<Data<'a>, Error> {
     let mut encoder = Encoder::new();
     try!(data.encode(&mut encoder));
     assert_eq!(encoder.data.len(), 1);

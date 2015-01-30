@@ -4,10 +4,10 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
-#![allow(unstable)]
+#![feature(core, path, io, collections)]
 #![allow(unused_attributes)]
 
-extern crate serialize;
+extern crate "rustc-serialize" as rustc_serialize;
 
 extern crate log;
 
