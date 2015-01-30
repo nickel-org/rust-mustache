@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use serialize::Encodable;
+use rustc_serialize::Encodable;
 
 use encoder;
 use encoder::Error;

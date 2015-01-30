@@ -5,3 +5,8 @@ authors = ["erick.tryzelaar@gmail.com"]
 
 [lib]
 name = "mustache"
+
+[dependencies]
+
+rustc-serialize = "*"
+log = "*"
