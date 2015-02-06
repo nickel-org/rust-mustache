@@ -347,7 +347,7 @@ impl<'a> RenderContext<'a> {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
-    use std::io::{File, MemWriter, TempDir};
+    use std::old_io::{File, MemWriter, TempDir};
     use std::collections::HashMap;
     use rustc_serialize::{json, Encodable};
     use rustc_serialize::json::Json;
@@ -358,7 +358,7 @@ mod tests {
     use super::super::{Data, StrVal, VecVal, Map, Fun};
     use super::super::{Context, Template};
 
-    #[derive(Encodable)]
+    #[derive(RustcEncodable)]
     struct Name { name: String }
 
     fn render<'a, 'b, T: Encodable>(
@@ -511,7 +511,7 @@ mod tests {
         let s = String::from_utf8(file_contents.as_slice().to_vec())
                      .ok().expect("File was not UTF8 encoded");
 
-        match json::from_str(s.as_slice()) {
+        match Json::from_str(s.as_slice()) {
             Err(e) =>  panic!("{:?}", e),
             Ok(json) => {
                 match json {
@@ -679,7 +679,7 @@ mod tests {
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Interpolation - Multiple Calls" => {
-                    let f = move |&mut: _text| {
+                    let f = move |_text: String| {
                         calls += 1;
                         calls.to_string()
                     };

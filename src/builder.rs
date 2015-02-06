@@ -124,7 +124,7 @@ impl<'a> MapBuilder<'a> {
     /// use mustache::MapBuilder;
     /// let mut count = 0;
     /// let data = MapBuilder::new()
-    ///     .insert_fn("increment", move |&mut: _| {
+    ///     .insert_fn("increment", move |_| {
     ///         count += 1us;
     ///         count.to_string()
     ///     })
@@ -260,7 +260,7 @@ impl<'a> VecBuilder<'a> {
     /// use mustache::VecBuilder;
     /// let mut count = 0;
     /// let data = VecBuilder::new()
-    ///     .push_fn(move |&mut: s| {
+    ///     .push_fn(move |s| {
     ///         count += 1us;
     ///         s + count.to_string().as_slice()
     ///     })
@@ -339,7 +339,7 @@ mod tests {
 
         let mut count = 0us;
         let data = MapBuilder::new()
-            .insert_fn("count".to_string(), move |&mut: s| {
+            .insert_fn("count".to_string(), move |s| {
                 count += 1us;
                 s.clone() + count.to_string().as_slice()
             })
@@ -368,7 +368,7 @@ mod tests {
 
         let mut count = 0us;
         let data = VecBuilder::new()
-            .push_fn(move |&mut: s| {
+            .push_fn(move |s| {
                 count += 1us;
                 s + count.to_string().as_slice()
             })
