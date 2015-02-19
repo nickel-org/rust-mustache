@@ -132,7 +132,7 @@ impl<'a> MapBuilder<'a> {
     /// ```
     #[inline]
     pub fn insert_fn<K: Str, F>(self, key: K, f: F) -> MapBuilder<'a>
-                                where F: FnMut(String) -> String + Send {
+                                where F: FnMut(String) -> String + Send + 'static {
         let MapBuilder { mut data } = self;
         data.insert(key.as_slice().to_string(), Fun(RefCell::new(Box::new(f))));
         MapBuilder { data: data }
@@ -268,7 +268,7 @@ impl<'a> VecBuilder<'a> {
     /// ```
     #[inline]
     pub fn push_fn<F>(self, f: F) -> VecBuilder<'a>
-                   where F: FnMut(String) -> String + Send {
+                   where F: FnMut(String) -> String + Send + 'static {
         let VecBuilder { mut data } = self;
         data.push(Fun(RefCell::new(Box::new(f))));
         VecBuilder { data: data }
