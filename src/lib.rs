@@ -1,6 +1,5 @@
 #![crate_name = "mustache"]
 
-#![license = "MIT/ASL2"]
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
