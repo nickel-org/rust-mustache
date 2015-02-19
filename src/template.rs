@@ -281,7 +281,7 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render_fun(&self, src: &str, otag: &str, ctag: &str, f: &mut Box<FnMut(String) -> String + Send>) -> Vec<Token> {
+    fn render_fun(&self, src: &str, otag: &str, ctag: &str, f: &mut Box<FnMut(String) -> String + Send + 'static>) -> Vec<Token> {
         let src = f(src.to_string());
 
         let compiler = Compiler::new_with(
