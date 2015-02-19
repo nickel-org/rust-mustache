@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::old_io::MemWriter;
 use std::mem;
 use std::str;
 use rustc_serialize::Encodable;
@@ -13,7 +12,7 @@ use encoder::Error;
 use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun};
 
 /// `Template` represents a compiled mustache file.
-#[derive(Show, Clone)]
+#[derive(Debug, Clone)]
 pub struct Template {
     ctx: Context,
     tokens: Vec<Token>,
@@ -156,14 +155,13 @@ impl<'a> RenderContext<'a> {
         stack: &mut Vec<&Data<'b>>,
         path: &[String]
     ) {
-        let mut mem_wr = MemWriter::new();
+        let mut bytes = vec![];
 
-        self.render_utag(&mut mem_wr, stack, path);
+        self.render_utag(&mut bytes, stack, path);
 
-        let bytes = mem_wr.into_inner();
-        let s = str::from_utf8(bytes.as_slice()).unwrap().to_string();
+        let s = str::from_utf8(&bytes).unwrap();
 
-        for c in s.as_slice().chars() {
+        for c in s.chars() {
             match c {
                 '<'  => { wr.write_str("&lt;").unwrap(); }
                 '>'  => { wr.write_str("&gt;").unwrap(); }
@@ -347,7 +345,7 @@ impl<'a> RenderContext<'a> {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
-    use std::old_io::{File, MemWriter, TempDir};
+    use std::old_io::{File, TempDir};
     use std::collections::HashMap;
     use rustc_serialize::{json, Encodable};
     use rustc_serialize::json::Json;
@@ -367,10 +365,10 @@ mod tests {
     ) -> Result<String, Error> {
         let template = compile_str(template);
 
-        let mut wr = MemWriter::new();
-        try!(template.render(&mut wr, data));
+        let mut bytes = vec![];
+        try!(template.render(&mut bytes, data));
 
-        Ok(String::from_utf8(wr.into_inner()).ok().expect("fail"))
+        Ok(String::from_utf8(bytes).unwrap())
     }
 
     #[test]
@@ -399,9 +397,9 @@ mod tests {
     }
 
     fn render_data<'a>(template: &Template, data: &Data<'a>) -> String {
-        let mut wr = MemWriter::new();
-        template.render_data(&mut wr, data);
-        String::from_utf8(wr.into_inner()).ok().expect("fail")
+        let mut bytes = vec![];
+        template.render_data(&mut bytes, data);
+        String::from_utf8(bytes).unwrap()
     }
 
     #[test]
@@ -536,7 +534,7 @@ mod tests {
                         &Json::String(ref s) => {
                             let mut path = tmpdir.clone();
                             path.push(key.clone() + ".mustache");
-                            File::create(&path).write(s.as_bytes()).unwrap();
+                            File::create(&path).write_all(s.as_bytes()).unwrap();
                         }
                         _ => panic!(),
                     }

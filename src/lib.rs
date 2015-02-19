@@ -3,7 +3,7 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
-#![feature(core, path, io, collections)]
+#![feature(core, collections, old_path, old_io)]
 #![allow(unused_attributes)]
 
 extern crate "rustc-serialize" as rustc_serialize;
