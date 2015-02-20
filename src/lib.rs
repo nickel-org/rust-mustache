@@ -29,17 +29,17 @@ mod compiler;
 mod parser;
 mod template;
 
-pub enum Data<'a> {
+pub enum Data {
     StrVal(String),
     Bool(bool),
-    VecVal(Vec<Data<'a>>),
-    Map(HashMap<String, Data<'a>>),
+    VecVal(Vec<Data>),
+    Map(HashMap<String, Data>),
     Fun(RefCell<Box<FnMut(String) -> String + Send>>),
 }
 
-impl<'a> PartialEq for Data<'a> {
+impl<'a> PartialEq for Data {
     #[inline]
-    fn eq(&self, other: &Data<'a>) -> bool {
+    fn eq(&self, other: &Data) -> bool {
         match (self, other) {
             (&StrVal(ref v0), &StrVal(ref v1)) => v0 == v1,
             (&Bool(ref v0), &Bool(ref v1)) => v0 == v1,
@@ -51,7 +51,7 @@ impl<'a> PartialEq for Data<'a> {
     }
 }
 
-impl<'a> fmt::Debug for Data<'a> {
+impl<'a> fmt::Debug for Data {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             StrVal(ref v) => write!(f, "StrVal({})", v),

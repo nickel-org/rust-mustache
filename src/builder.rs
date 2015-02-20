@@ -7,14 +7,14 @@ use encoder::Error;
 use super::{Data, StrVal, Bool, VecVal, Map, Fun};
 
 /// `MapBuilder` is a helper type that construct `Data` types.
-pub struct MapBuilder<'a> {
-    data: HashMap<String, Data<'a>>,
+pub struct MapBuilder {
+    data: HashMap<String, Data>,
 }
 
-impl<'a> MapBuilder<'a> {
+impl MapBuilder {
     /// Create a `MapBuilder`
     #[inline]
-    pub fn new() -> MapBuilder<'a> {
+    pub fn new() -> MapBuilder {
         MapBuilder {
             data: HashMap::new(),
         }
@@ -32,7 +32,7 @@ impl<'a> MapBuilder<'a> {
     #[inline]
     pub fn insert<
         K: Str, T: Encodable
-    >(self, key: K, value: &T) -> Result<MapBuilder<'a>, Error> {
+    >(self, key: K, value: &T) -> Result<MapBuilder, Error> {
         let MapBuilder { mut data } = self;
         let value = try!(encoder::encode(value));
         data.insert(key.as_slice().to_string(), value);
@@ -50,7 +50,7 @@ impl<'a> MapBuilder<'a> {
     #[inline]
     pub fn insert_str<
         K: Str, V: Str
-    >(self, key: K, value: V) -> MapBuilder<'a> {
+    >(self, key: K, value: V) -> MapBuilder {
         let MapBuilder { mut data } = self;
         data.insert(key.as_slice().to_string(), StrVal(value.as_slice().to_string()));
         MapBuilder { data: data }
@@ -65,7 +65,7 @@ impl<'a> MapBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_bool<K: Str>(self, key: K, value: bool) -> MapBuilder<'a> {
+    pub fn insert_bool<K: Str>(self, key: K, value: bool) -> MapBuilder {
         let MapBuilder { mut data } = self;
         data.insert(key.as_slice().to_string(), Bool(value));
         MapBuilder { data: data }
@@ -84,8 +84,8 @@ impl<'a> MapBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_vec<K: Str, F>(self, key: K, mut f: F) -> MapBuilder<'a>
-        where F: FnMut(VecBuilder<'a>) -> VecBuilder<'a> {
+    pub fn insert_vec<K: Str, F>(self, key: K, mut f: F) -> MapBuilder
+        where F: FnMut(VecBuilder) -> VecBuilder {
         let MapBuilder { mut data } = self;
         let builder = f(VecBuilder::new());
         data.insert(key.as_slice().to_string(), builder.build());
@@ -110,8 +110,8 @@ impl<'a> MapBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_map<K: Str, F>(self, key: K, mut f: F) -> MapBuilder<'a>
-        where F: FnMut(MapBuilder<'a>) -> MapBuilder<'a> {
+    pub fn insert_map<K: Str, F>(self, key: K, mut f: F) -> MapBuilder
+        where F: FnMut(MapBuilder) -> MapBuilder {
         let MapBuilder { mut data } = self;
         let builder = f(MapBuilder::new());
         data.insert(key.as_slice().to_string(), builder.build());
@@ -131,7 +131,7 @@ impl<'a> MapBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_fn<K: Str, F>(self, key: K, f: F) -> MapBuilder<'a>
+    pub fn insert_fn<K: Str, F>(self, key: K, f: F) -> MapBuilder
                                 where F: FnMut(String) -> String + Send + 'static {
         let MapBuilder { mut data } = self;
         data.insert(key.as_slice().to_string(), Fun(RefCell::new(Box::new(f))));
@@ -140,19 +140,19 @@ impl<'a> MapBuilder<'a> {
 
     /// Return the built `Data`.
     #[inline]
-    pub fn build(self) -> Data<'a> {
+    pub fn build(self) -> Data {
         Map(self.data)
     }
 }
 
-pub struct VecBuilder<'a> {
-    data: Vec<Data<'a>>,
+pub struct VecBuilder {
+    data: Vec<Data>,
 }
 
-impl<'a> VecBuilder<'a> {
+impl<'a> VecBuilder {
     /// Create a `VecBuilder`
     #[inline]
-    pub fn new() -> VecBuilder<'a> {
+    pub fn new() -> VecBuilder {
         VecBuilder {
             data: Vec::new(),
         }
@@ -168,7 +168,7 @@ impl<'a> VecBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn push<T: Encodable>(self, value: &T) -> Result<VecBuilder<'a>, Error> {
+    pub fn push<T: Encodable>(self, value: &T) -> Result<VecBuilder, Error> {
         let VecBuilder { mut data } = self;
         let value = try!(encoder::encode(value));
         data.push(value);
@@ -185,7 +185,7 @@ impl<'a> VecBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn push_str<T: Str>(self, value: T) -> VecBuilder<'a> {
+    pub fn push_str<T: Str>(self, value: T) -> VecBuilder {
         let VecBuilder { mut data } = self;
         data.push(StrVal(value.as_slice().to_string()));
         VecBuilder { data: data }
@@ -201,7 +201,7 @@ impl<'a> VecBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn push_bool(self, value: bool) -> VecBuilder<'a> {
+    pub fn push_bool(self, value: bool) -> VecBuilder {
         let VecBuilder { mut data } = self;
         data.push(Bool(value));
         VecBuilder { data: data }
@@ -220,8 +220,8 @@ impl<'a> VecBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn push_vec<F>(self, mut f: F) -> VecBuilder<'a>
-        where F: FnMut(VecBuilder<'a>) -> VecBuilder<'a> {
+    pub fn push_vec<F>(self, mut f: F) -> VecBuilder
+        where F: FnMut(VecBuilder) -> VecBuilder {
         let VecBuilder { mut data } = self;
         let builder = f(VecBuilder::new());
         data.push(builder.build());
@@ -246,8 +246,8 @@ impl<'a> VecBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn push_map<F>(self, mut f: F) -> VecBuilder<'a>
-        where F: FnMut(MapBuilder<'a>) -> MapBuilder<'a> {
+    pub fn push_map<F>(self, mut f: F) -> VecBuilder
+        where F: FnMut(MapBuilder) -> MapBuilder {
         let VecBuilder { mut data } = self;
         let builder = f(MapBuilder::new());
         data.push(builder.build());
@@ -267,7 +267,7 @@ impl<'a> VecBuilder<'a> {
     ///     .build();
     /// ```
     #[inline]
-    pub fn push_fn<F>(self, f: F) -> VecBuilder<'a>
+    pub fn push_fn<F>(self, f: F) -> VecBuilder
                    where F: FnMut(String) -> String + Send + 'static {
         let VecBuilder { mut data } = self;
         data.push(Fun(RefCell::new(Box::new(f))));
@@ -275,7 +275,7 @@ impl<'a> VecBuilder<'a> {
     }
 
     #[inline]
-    pub fn build(self) -> Data<'a> {
+    pub fn build(self) -> Data {
         VecVal(self.data)
     }
 }

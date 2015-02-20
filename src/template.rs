@@ -42,7 +42,7 @@ impl Template {
     }
 
     /// Renders the template with the `Data`.
-    pub fn render_data<'a, W: Writer>(&self, wr: &mut W, data: &Data<'a>) {
+    pub fn render_data<'a, W: Writer>(&self, wr: &mut W, data: &Data) {
         let mut render_ctx = RenderContext::new(self);
         let mut stack = vec!(data);
 
@@ -69,7 +69,7 @@ impl<'a> RenderContext<'a> {
     fn render<'b, W: Writer>(
         &mut self,
         wr: &mut W,
-        stack: &mut Vec<&Data<'b>>,
+        stack: &mut Vec<&Data>,
         tokens: &[Token]
     ) {
         for token in tokens.iter() {
@@ -80,7 +80,7 @@ impl<'a> RenderContext<'a> {
     fn render_token<'b, W: Writer>(
         &mut self,
         wr: &mut W,
-        stack: &mut Vec<&Data<'b>>,
+        stack: &mut Vec<&Data>,
         token: &Token
     ) {
         match *token {
@@ -152,7 +152,7 @@ impl<'a> RenderContext<'a> {
     fn render_etag<'b, W: Writer>(
         &mut self,
         wr: &mut W,
-        stack: &mut Vec<&Data<'b>>,
+        stack: &mut Vec<&Data>,
         path: &[String]
     ) {
         let mut bytes = vec![];
@@ -176,7 +176,7 @@ impl<'a> RenderContext<'a> {
     fn render_utag<'b, W: Writer>(
         &mut self,
         wr: &mut W,
-        stack: &mut Vec<&Data<'b>>,
+        stack: &mut Vec<&Data>,
         path: &[String]
     ) {
         match self.find(path, stack) {
@@ -205,7 +205,7 @@ impl<'a> RenderContext<'a> {
     fn render_inverted_section<'b, W: Writer>(
         &mut self,
         wr: &mut W,
-        stack: &mut Vec<&Data<'b>>,
+        stack: &mut Vec<&Data>,
         path: &[String],
         children: &[Token]
     ) {
@@ -222,7 +222,7 @@ impl<'a> RenderContext<'a> {
     fn render_section<'b, W: Writer>(
         &mut self,
         wr: &mut W,
-        stack: &mut Vec<&Data<'b>>,
+        stack: &mut Vec<&Data>,
         path: &[String],
         children: &[Token],
         src: &str,
@@ -263,7 +263,7 @@ impl<'a> RenderContext<'a> {
     fn render_partial<'b, W: Writer>(
         &mut self,
         wr: &mut W,
-        stack: &mut Vec<&Data<'b>>,
+        stack: &mut Vec<&Data>,
         name: &str,
         indent: &str
     ) {
@@ -293,7 +293,7 @@ impl<'a> RenderContext<'a> {
         tokens
     }
 
-    fn find<'b, 'c>(&self, path: &[String], stack: &mut Vec<&'c Data<'b>>) -> Option<&'c Data<'b>> {
+    fn find<'b, 'c>(&self, path: &[String], stack: &mut Vec<&'c Data>) -> Option<&'c Data> {
         // If we have an empty path, we just want the top value in our stack.
         if path.is_empty() {
             match stack.last() {
@@ -396,7 +396,7 @@ mod tests {
         assert_eq!(render("hello {{{name}}}", &ctx), Ok("hello world".to_string()));
     }
 
-    fn render_data<'a>(template: &Template, data: &Data<'a>) -> String {
+    fn render_data(template: &Template, data: &Data) -> String {
         let mut bytes = vec![];
         template.render_data(&mut bytes, data);
         String::from_utf8(bytes).unwrap()
