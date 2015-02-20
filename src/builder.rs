@@ -125,7 +125,7 @@ impl MapBuilder {
     /// let mut count = 0;
     /// let data = MapBuilder::new()
     ///     .insert_fn("increment", move |_| {
-    ///         count += 1us;
+    ///         count += 1usize;
     ///         count.to_string()
     ///     })
     ///     .build();
@@ -261,7 +261,7 @@ impl<'a> VecBuilder {
     /// let mut count = 0;
     /// let data = VecBuilder::new()
     ///     .push_fn(move |s| {
-    ///         count += 1us;
+    ///         count += 1usize;
     ///         s + count.to_string().as_slice()
     ///     })
     ///     .build();
@@ -317,7 +317,7 @@ mod tests {
             MapBuilder::new()
                 .insert_str("first_name", "Jane")
                 .insert_str("last_name", "Austen")
-                .insert("age", &41us).ok().unwrap()
+                .insert("age", &41usize).ok().unwrap()
                 .insert_bool("died", true)
                 .insert_vec("works", |builder| {
                     builder
@@ -325,7 +325,7 @@ mod tests {
                         .push_map(|builder| {
                             builder
                                 .insert_str("title", "Pride and Prejudice")
-                                .insert("publish_date", &1813us).ok().unwrap()
+                                .insert("publish_date", &1813usize).ok().unwrap()
                         })
                 })
                 .build(),
@@ -337,10 +337,10 @@ mod tests {
         // We can't directly compare closures, so just make sure we thread
         // through the builder.
 
-        let mut count = 0us;
+        let mut count = 0usize;
         let data = MapBuilder::new()
             .insert_fn("count".to_string(), move |s| {
-                count += 1us;
+                count += 1usize;
                 s.clone() + count.to_string().as_slice()
             })
             .build();
@@ -366,10 +366,10 @@ mod tests {
         // We can't directly compare closures, so just make sure we thread
         // through the builder.
 
-        let mut count = 0us;
+        let mut count = 0usize;
         let data = VecBuilder::new()
             .push_fn(move |s| {
-                count += 1us;
+                count += 1usize;
                 s + count.to_string().as_slice()
             })
             .build();

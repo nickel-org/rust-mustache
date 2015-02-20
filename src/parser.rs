@@ -418,7 +418,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
             '=' => {
                 self.eat_whitespace();
 
-                if len > 2us && content.ends_with("=") {
+                if len > 2usize && content.ends_with("=") {
                     let s = self.check_content(&content[1..len - 1]);
 
                     fn is_whitespace(c: char) -> bool { c.is_whitespace() }

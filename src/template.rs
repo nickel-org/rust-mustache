@@ -661,7 +661,7 @@ mod tests {
             };
 
             // needed for the closure test.
-            let mut calls = 0us;
+            let mut calls = 0usize;
 
             match s.as_slice() {
                 "Interpolation" => {
