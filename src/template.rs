@@ -665,15 +665,15 @@ mod tests {
 
             match s.as_slice() {
                 "Interpolation" => {
-                    let f = |&:_text| { "world".to_string() };
+                    let f = |_text| { "world".to_string() };
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Interpolation - Expansion" => {
-                    let f = |&:_text| { "{{planet}}".to_string() };
+                    let f = |_text| { "{{planet}}".to_string() };
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Interpolation - Alternate Delimiters" => {
-                    let f = |&:_text| { "|planet| => {{planet}}".to_string() };
+                    let f = |_text| { "|planet| => {{planet}}".to_string() };
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Interpolation - Multiple Calls" => {
@@ -684,11 +684,11 @@ mod tests {
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Escaping" => {
-                    let f = |&:_text| { ">".to_string() };
+                    let f = |_text| { ">".to_string() };
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Section" => {
-                    let f = |&: text: String| {
+                    let f = | text: String| {
                         if text.as_slice() == "{{x}}" {
                             "yes".to_string()
                         } else {
@@ -698,19 +698,19 @@ mod tests {
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Section - Expansion" => {
-                    let f = |&: text: String| { text.clone() + "{{planet}}" + text.clone().as_slice() };
+                    let f = | text: String| { text.clone() + "{{planet}}" + text.clone().as_slice() };
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Section - Alternate Delimiters" => {
-                    let f = |&: text: String| { text.clone() + "{{planet}} => |planet|" + text.clone().as_slice() };
+                    let f = | text: String| { text.clone() + "{{planet}} => |planet|" + text.clone().as_slice() };
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Section - Multiple Calls" => {
-                    let f = |&: text: String| { "__".to_string() + text.as_slice() + "__" };
+                    let f = | text: String| { "__".to_string() + text.as_slice() + "__" };
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Inverted Section" => {
-                    let f= |&:_text| { "".to_string() };
+                    let f= |_text| { "".to_string() };
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 value => { panic!("{}", value) }
