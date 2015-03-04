@@ -9,17 +9,17 @@ use parser::{Parser, Token};
 use super::Context;
 
 /// `Compiler` is a object that compiles a string into a `Vec<Token>`.
-pub struct Compiler<T, P: AsPath + Clone> {
-    ctx: Context<P>,
+pub struct Compiler<T> {
+    ctx: Context,
     reader: T,
     partials: HashMap<String, Vec<Token>>,
     otag: String,
     ctag: String,
 }
 
-impl<T: Iterator<Item=char>, P: AsPath + Clone> Compiler<T, P> {
+impl<T: Iterator<Item=char>> Compiler<T> {
     /// Construct a default compiler.
-    pub fn new(ctx: Context<P>, reader: T) -> Compiler<T, P> {
+    pub fn new(ctx: Context, reader: T) -> Compiler<T> {
         Compiler {
             ctx: ctx,
             reader: reader,
@@ -30,11 +30,11 @@ impl<T: Iterator<Item=char>, P: AsPath + Clone> Compiler<T, P> {
     }
 
     /// Construct a default compiler.
-    pub fn new_with(ctx: Context<P>,
+    pub fn new_with(ctx: Context,
                     reader: T,
                     partials: HashMap<String, Vec<Token>>,
                     otag: String,
-                    ctag: String) -> Compiler<T, P> {
+                    ctag: String) -> Compiler<T> {
         Compiler {
             ctx: ctx,
             reader: reader,

@@ -69,12 +69,12 @@ impl<'a> fmt::Debug for Data {
 /// Represents the shared metadata needed to compile and render a mustache
 /// template.
 #[derive(Clone)]
-pub struct Context<P: AsPath> {
-    pub template_path: P,
+pub struct Context {
+    pub template_path: PathBuf,
     pub template_extension: String,
 }
 
-impl<P: AsPath> fmt::Debug for Context<P> {
+impl fmt::Debug for Context {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Context {{ template_path: {:?}, template_extension: {} }}",
                self.template_path.as_path(),
@@ -82,9 +82,9 @@ impl<P: AsPath> fmt::Debug for Context<P> {
     }
 }
 
-impl<P: AsPath + Clone> Context<P> {
+impl< > Context {
     /// Configures a mustache context the specified path to the templates.
-    pub fn new(path: P) -> Context<P> {
+    pub fn new(path: PathBuf) -> Context {
         Context {
             template_path: path,
             template_extension: "mustache".to_string(),
@@ -92,7 +92,7 @@ impl<P: AsPath + Clone> Context<P> {
     }
 
     /// Compiles a template from a string
-    pub fn compile<IT: Iterator<Item=char>>(&self, reader: IT) -> Template<P> {
+    pub fn compile<IT: Iterator<Item=char>>(&self, reader: IT) -> Template {
         let compiler = compiler::Compiler::new(self.clone(), reader);
         let (tokens, partials) = compiler.compile();
 
@@ -100,7 +100,7 @@ impl<P: AsPath + Clone> Context<P> {
     }
 
     /// Compiles a template from a path.
-    pub fn compile_path<U: AsPath>(&self, path: U) -> Result<Template<P>, Error> {
+    pub fn compile_path<U: AsPath>(&self, path: U) -> Result<Template, Error> {
         // FIXME(#6164): This should use the file decoding tools when they are
         // written. For now we'll just read the file and treat it as UTF-8file.
         let mut path = self.template_path.as_path().join(path.as_path());
@@ -120,17 +120,17 @@ impl<P: AsPath + Clone> Context<P> {
 }
 
 /// Compiles a template from an `Iterator<char>`.
-pub fn compile_iter<T: Iterator<Item=char>>(iter: T) -> Template<PathBuf> {
+pub fn compile_iter<T: Iterator<Item=char>>(iter: T) -> Template {
     Context::new(PathBuf::new(".")).compile(iter)
 }
 
 /// Compiles a template from a path.
 /// returns None if the file cannot be read OR the file is not UTF-8 encoded
-pub fn compile_path<U: AsPath>(path: U) -> Result<Template<PathBuf>, Error> {
+pub fn compile_path<U: AsPath>(path: U) -> Result<Template, Error> {
     Context::new(PathBuf::new(".")).compile_path(path)
 }
 
 /// Compiles a template from a string.
-pub fn compile_str(template: &str) -> Template<PathBuf> {
+pub fn compile_str(template: &str) -> Template {
     compile_iter(template.chars())
 }

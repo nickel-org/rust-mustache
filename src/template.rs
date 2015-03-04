@@ -15,16 +15,16 @@ use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun};
 
 /// `Template` represents a compiled mustache file.
 #[derive(Debug, Clone)]
-pub struct Template<P: AsPath> {
-    ctx: Context<P>,
+pub struct Template {
+    ctx: Context,
     tokens: Vec<Token>,
     partials: HashMap<String, Vec<Token>>
 }
 
 /// Construct a `Template`. This is not part of the impl of Template so it is
 /// not exported outside of mustache.
-pub fn new<P: AsPath + Clone>(ctx: Context<P>, tokens: Vec<Token>, partials: HashMap<String,
-Vec<Token>>) -> Template<P> {
+pub fn new< >(ctx: Context, tokens: Vec<Token>, partials: HashMap<String,
+Vec<Token>>) -> Template {
     Template {
         ctx: ctx,
         tokens: tokens,
@@ -32,7 +32,7 @@ Vec<Token>>) -> Template<P> {
     }
 }
 
-impl<P: AsPath + Clone> Template<P> {
+impl< > Template {
     /// Renders the template with the `Encodable` data.
     pub fn render<'a, W: Write, T: Encodable>(
         &self,
@@ -55,13 +55,13 @@ impl<P: AsPath + Clone> Template<P> {
     }
 }
 
-struct RenderContext<'a, P: AsPath + Clone + 'a> {
-    template: &'a Template<P>,
+struct RenderContext<'a> {
+    template: &'a Template,
     indent: String,
 }
 
-impl<'a, P: AsPath + Clone> RenderContext<'a, P> {
-    fn new(template: &'a Template<P>) -> RenderContext<'a, P> {
+impl<'a,  > RenderContext<'a> {
+    fn new(template: &'a Template) -> RenderContext<'a> {
         RenderContext {
             template: template,
             indent: "".to_string(),
@@ -400,7 +400,7 @@ mod tests {
         assert_eq!(render("hello {{{name}}}", &ctx), Ok("hello world".to_string()));
     }
 
-    fn render_data<P: AsPath + Clone>(template: &Template<P>, data: &Data) -> String {
+    fn render_data< >(template: &Template, data: &Data) -> String {
         let mut bytes = vec![];
         template.render_data(&mut bytes, data);
         String::from_utf8(bytes).unwrap()
@@ -570,7 +570,7 @@ mod tests {
             None => {},
         }
 
-        let ctx = Context::new(tmpdir.path().clone());
+        let ctx = Context::new(tmpdir.path().to_path_buf());
         let template = ctx.compile(template.as_slice().chars());
         let result = render_data(&template, &data);
 
