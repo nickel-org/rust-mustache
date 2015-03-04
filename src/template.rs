@@ -23,7 +23,7 @@ pub struct Template {
 
 /// Construct a `Template`. This is not part of the impl of Template so it is
 /// not exported outside of mustache.
-pub fn new< >(ctx: Context, tokens: Vec<Token>, partials: HashMap<String,
+pub fn new(ctx: Context, tokens: Vec<Token>, partials: HashMap<String,
 Vec<Token>>) -> Template {
     Template {
         ctx: ctx,
@@ -32,7 +32,7 @@ Vec<Token>>) -> Template {
     }
 }
 
-impl< > Template {
+impl Template {
     /// Renders the template with the `Encodable` data.
     pub fn render<'a, W: Write, T: Encodable>(
         &self,
@@ -60,7 +60,7 @@ struct RenderContext<'a> {
     indent: String,
 }
 
-impl<'a,  > RenderContext<'a> {
+impl<'a> RenderContext<'a> {
     fn new(template: &'a Template) -> RenderContext<'a> {
         RenderContext {
             template: template,
@@ -400,7 +400,7 @@ mod tests {
         assert_eq!(render("hello {{{name}}}", &ctx), Ok("hello world".to_string()));
     }
 
-    fn render_data< >(template: &Template, data: &Data) -> String {
+    fn render_data(template: &Template, data: &Data) -> String {
         let mut bytes = vec![];
         template.render_data(&mut bytes, data);
         String::from_utf8(bytes).unwrap()

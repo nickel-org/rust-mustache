@@ -82,7 +82,7 @@ impl fmt::Debug for Context {
     }
 }
 
-impl< > Context {
+impl Context {
     /// Configures a mustache context the specified path to the templates.
     pub fn new(path: PathBuf) -> Context {
         Context {
