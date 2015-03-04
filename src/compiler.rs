@@ -1,22 +1,25 @@
 use std::collections::HashMap;
-use std::old_io::{File, FileNotFound};
+use std::io::ErrorKind::FileNotFound;
+use std::io::Read;
+use std::fs::File;
 use std::str;
+use std::path::AsPath;
 
 use parser::{Parser, Token};
 use super::Context;
 
 /// `Compiler` is a object that compiles a string into a `Vec<Token>`.
-pub struct Compiler<T> {
-    ctx: Context,
+pub struct Compiler<T, P: AsPath + Clone> {
+    ctx: Context<P>,
     reader: T,
     partials: HashMap<String, Vec<Token>>,
     otag: String,
     ctag: String,
 }
 
-impl<T: Iterator<Item=char>> Compiler<T> {
+impl<T: Iterator<Item=char>, P: AsPath + Clone> Compiler<T, P> {
     /// Construct a default compiler.
-    pub fn new(ctx: Context, reader: T) -> Compiler<T> {
+    pub fn new(ctx: Context<P>, reader: T) -> Compiler<T, P> {
         Compiler {
             ctx: ctx,
             reader: reader,
@@ -27,13 +30,11 @@ impl<T: Iterator<Item=char>> Compiler<T> {
     }
 
     /// Construct a default compiler.
-    pub fn new_with(
-        ctx: Context,
-        reader: T,
-        partials: HashMap<String, Vec<Token>>,
-        otag: String,
-        ctag: String
-    ) -> Compiler<T> {
+    pub fn new_with(ctx: Context<P>,
+                    reader: T,
+                    partials: HashMap<String, Vec<Token>>,
+                    otag: String,
+                    ctag: String) -> Compiler<T, P> {
         Compiler {
             ctx: ctx,
             reader: reader,
@@ -52,14 +53,18 @@ impl<T: Iterator<Item=char>> Compiler<T> {
 
         // Compile the partials if we haven't done so already.
         for name in partials.into_iter() {
-            let path = self.ctx.template_path.join(name.clone() + "." + self.ctx.template_extension.as_slice());
+            let path = self.ctx.template_path
+                               .as_path()
+                               .join(&(name.clone() + "." + self.ctx.template_extension.as_slice()));
 
             if !self.partials.contains_key(&name) {
                 // Insert a placeholder so we don't recurse off to infinity.
                 self.partials.insert(name.to_string(), Vec::new());
 
-                match File::open(&path).read_to_end() {
-                    Ok(contents) => {
+                match File::open(&path) {
+                    Ok(mut file) => {
+                        let mut contents = vec![];
+                        file.read_to_end(&mut contents).unwrap();
                         let string = match str::from_utf8(contents.as_slice()) {
                             Ok(string) => string.to_string(),
                             Err(_) => { panic!("Failed to parse file as UTF-8"); }
@@ -79,7 +84,7 @@ impl<T: Iterator<Item=char>> Compiler<T> {
                     },
                     Err(e) => {
                         // Ignore missing files.
-                        if e.kind != FileNotFound {
+                        if e.kind() != FileNotFound {
                             panic!("error reading file: {}", e);
                         }
                     }
@@ -98,9 +103,10 @@ mod tests {
     use parser::{Token, Text, ETag, UTag, Section, IncompleteSection, Partial};
     use super::Compiler;
     use super::super::Context;
+    use std::path::PathBuf;
 
     fn compile_str(template: &str) -> Vec<Token> {
-        let ctx = Context::new(Path::new("."));
+        let ctx = Context::new(PathBuf::new("."));
         let (tokens, _) = Compiler::new(ctx, template.chars()).compile();
         tokens
     }

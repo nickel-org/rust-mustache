@@ -3,7 +3,8 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
-#![feature(core, collections, old_path, old_io)]
+#![feature(core, collections, path, fs, io)]
+#![cfg_attr(test, feature(tempdir))]
 #![allow(unused_attributes)]
 
 extern crate "rustc-serialize" as rustc_serialize;
@@ -13,8 +14,10 @@ extern crate log;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
-use std::old_io::File;
+use std::fs::File;
+use std::io::Read;
 use std::str;
+use std::path::{PathBuf, AsPath};
 
 pub use self::Data::*;
 pub use builder::{MapBuilder, VecBuilder};
@@ -66,22 +69,22 @@ impl<'a> fmt::Debug for Data {
 /// Represents the shared metadata needed to compile and render a mustache
 /// template.
 #[derive(Clone)]
-pub struct Context {
-    pub template_path: Path,
+pub struct Context<P: AsPath> {
+    pub template_path: P,
     pub template_extension: String,
 }
 
-impl fmt::Debug for Context {
+impl<P: AsPath> fmt::Debug for Context<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Context {{ template_path: {}, template_extension: {} }}",
-               self.template_path.display(),
+        write!(f, "Context {{ template_path: {:?}, template_extension: {} }}",
+               self.template_path.as_path(),
                self.template_extension)
     }
 }
 
-impl Context {
+impl<P: AsPath + Clone> Context<P> {
     /// Configures a mustache context the specified path to the templates.
-    pub fn new(path: Path) -> Context {
+    pub fn new(path: P) -> Context<P> {
         Context {
             template_path: path,
             template_extension: "mustache".to_string(),
@@ -89,7 +92,7 @@ impl Context {
     }
 
     /// Compiles a template from a string
-    pub fn compile<IT: Iterator<Item=char>>(&self, reader: IT) -> Template {
+    pub fn compile<IT: Iterator<Item=char>>(&self, reader: IT) -> Template<P> {
         let compiler = compiler::Compiler::new(self.clone(), reader);
         let (tokens, partials) = compiler.compile();
 
@@ -97,19 +100,17 @@ impl Context {
     }
 
     /// Compiles a template from a path.
-    pub fn compile_path(&self, path: Path) -> Result<Template, Error> {
+    pub fn compile_path<U: AsPath>(&self, path: U) -> Result<Template<P>, Error> {
         // FIXME(#6164): This should use the file decoding tools when they are
         // written. For now we'll just read the file and treat it as UTF-8file.
-        let mut path = self.template_path.join(path);
-        path.set_extension(self.template_extension.clone());
-
-        let s = match File::open(&path).read_to_end() {
-            Ok(s) => s,
-            Err(err) => { return Err(IoError(err)); }
-        };
+        let mut path = self.template_path.as_path().join(path.as_path());
+        path.set_extension(&self.template_extension);
+        let mut s = vec![];
+        let mut file = try!(File::open(&path));
+        try!(file.read_to_end(&mut s));
 
         // TODO: maybe allow UTF-16 as well?
-        let template = match str::from_utf8(s.as_slice()) {
+        let template = match str::from_utf8(&*s) {
             Ok(string) => string,
             _ => { return Result::Err(Error::InvalidStr); }
         };
@@ -119,17 +120,17 @@ impl Context {
 }
 
 /// Compiles a template from an `Iterator<char>`.
-pub fn compile_iter<T: Iterator<Item=char>>(iter: T) -> Template {
-    Context::new(Path::new(".")).compile(iter)
+pub fn compile_iter<T: Iterator<Item=char>>(iter: T) -> Template<PathBuf> {
+    Context::new(PathBuf::new(".")).compile(iter)
 }
 
 /// Compiles a template from a path.
 /// returns None if the file cannot be read OR the file is not UTF-8 encoded
-pub fn compile_path(path: Path) -> Result<Template, Error> {
-    Context::new(Path::new(".")).compile_path(path)
+pub fn compile_path<U: AsPath>(path: U) -> Result<Template<PathBuf>, Error> {
+    Context::new(PathBuf::new(".")).compile_path(path)
 }
 
 /// Compiles a template from a string.
-pub fn compile_str(template: &str) -> Template {
+pub fn compile_str(template: &str) -> Template<PathBuf> {
     compile_iter(template.chars())
 }
