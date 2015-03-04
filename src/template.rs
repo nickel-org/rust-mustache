@@ -1,6 +1,8 @@
+use std::io::Write;
 use std::collections::HashMap;
 use std::mem;
 use std::str;
+use std::path::AsPath;
 use rustc_serialize::Encodable;
 
 use encoder;
@@ -21,7 +23,7 @@ pub struct Template {
 
 /// Construct a `Template`. This is not part of the impl of Template so it is
 /// not exported outside of mustache.
-pub fn new(ctx: Context, tokens: Vec<Token>, partials: HashMap<String,
+pub fn new< >(ctx: Context, tokens: Vec<Token>, partials: HashMap<String,
 Vec<Token>>) -> Template {
     Template {
         ctx: ctx,
@@ -30,9 +32,9 @@ Vec<Token>>) -> Template {
     }
 }
 
-impl Template {
+impl< > Template {
     /// Renders the template with the `Encodable` data.
-    pub fn render<'a, W: Writer, T: Encodable>(
+    pub fn render<'a, W: Write, T: Encodable>(
         &self,
         wr: &mut W,
         data: &T
@@ -42,7 +44,7 @@ impl Template {
     }
 
     /// Renders the template with the `Data`.
-    pub fn render_data<'a, W: Writer>(&self, wr: &mut W, data: &Data) {
+    pub fn render_data<'a, W: Write>(&self, wr: &mut W, data: &Data) {
         let mut render_ctx = RenderContext::new(self);
         let mut stack = vec!(data);
 
@@ -58,7 +60,7 @@ struct RenderContext<'a> {
     indent: String,
 }
 
-impl<'a> RenderContext<'a> {
+impl<'a,  > RenderContext<'a> {
     fn new(template: &'a Template) -> RenderContext<'a> {
         RenderContext {
             template: template,
@@ -66,7 +68,7 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render<'b, W: Writer>(
+    fn render<'b, W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -77,7 +79,7 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render_token<'b, W: Writer>(
+    fn render_token<'b, W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -113,14 +115,14 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render_text<W: Writer>(
+    fn render_text<W: Write>(
         &mut self,
         wr: &mut W,
         value: &str
     ) {
         // Indent the lines.
         if self.indent.is_empty() {
-            wr.write_str(value).unwrap();
+            wr.write_all(value.as_bytes()).unwrap();
         } else {
             let mut pos = 0;
             let len = value.len();
@@ -141,15 +143,15 @@ impl<'a> RenderContext<'a> {
                 };
 
                 if line.char_at(0) != '\n' {
-                    wr.write_str(self.indent.as_slice()).unwrap();
+                    wr.write_all(self.indent.as_bytes()).unwrap();
                 }
 
-                wr.write_str(line).unwrap();
+                wr.write_all(line.as_bytes()).unwrap();
             }
         }
     }
 
-    fn render_etag<'b, W: Writer>(
+    fn render_etag<'b, W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -161,19 +163,19 @@ impl<'a> RenderContext<'a> {
 
         let s = str::from_utf8(&bytes).unwrap();
 
-        for c in s.chars() {
-            match c {
-                '<'  => { wr.write_str("&lt;").unwrap(); }
-                '>'  => { wr.write_str("&gt;").unwrap(); }
-                '&'  => { wr.write_str("&amp;").unwrap(); }
-                '"'  => { wr.write_str("&quot;").unwrap(); }
-                '\'' => { wr.write_str("&#39;").unwrap(); }
-                _    => { wr.write_char(c).unwrap(); }
+        for b in s.bytes() {
+            match b {
+                b'<'  => { wr.write_all(b"&lt;").unwrap(); }
+                b'>'  => { wr.write_all(b"&gt;").unwrap(); }
+                b'&'  => { wr.write_all(b"&amp;").unwrap(); }
+                b'"'  => { wr.write_all(b"&quot;").unwrap(); }
+                b'\'' => { wr.write_all(b"&#39;").unwrap(); }
+                _    => { wr.write_all(&[b]).unwrap(); }
             }
         }
     }
 
-    fn render_utag<'b, W: Writer>(
+    fn render_utag<'b, W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -182,11 +184,11 @@ impl<'a> RenderContext<'a> {
         match self.find(path, stack) {
             None => { }
             Some(value) => {
-                wr.write_str(self.indent.as_slice()).unwrap();
+                wr.write_all(self.indent.as_bytes()).unwrap();
 
                 match *value {
                     StrVal(ref value) => {
-                        wr.write_str(value.as_slice()).unwrap();
+                        wr.write_all(value.as_bytes()).unwrap();
                     }
 
                     // etags and utags use the default delimiter.
@@ -202,7 +204,7 @@ impl<'a> RenderContext<'a> {
         };
     }
 
-    fn render_inverted_section<'b, W: Writer>(
+    fn render_inverted_section<'b, W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -219,7 +221,7 @@ impl<'a> RenderContext<'a> {
         self.render(wr, stack, children);
     }
 
-    fn render_section<'b, W: Writer>(
+    fn render_section<'b, W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -260,7 +262,7 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render_partial<'b, W: Writer>(
+    fn render_partial<'b, W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -345,7 +347,9 @@ impl<'a> RenderContext<'a> {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
-    use std::old_io::{File, TempDir};
+    use std::fs::{File, TempDir};
+    use std::io::{Read, Write};
+    use std::path::{PathBuf, Path, AsPath};
     use std::collections::HashMap;
     use rustc_serialize::{json, Encodable};
     use rustc_serialize::json::Json;
@@ -396,7 +400,7 @@ mod tests {
         assert_eq!(render("hello {{{name}}}", &ctx), Ok("hello world".to_string()));
     }
 
-    fn render_data(template: &Template, data: &Data) -> String {
+    fn render_data< >(template: &Template, data: &Data) -> String {
         let mut bytes = vec![];
         template.render_data(&mut bytes, data);
         String::from_utf8(bytes).unwrap()
@@ -460,8 +464,8 @@ mod tests {
 
     #[test]
     fn test_render_partial() {
-        let template = Context::new(Path::new("src/test-data"))
-            .compile_path(Path::new("base"))
+        let template = Context::new(PathBuf::new("src/test-data"))
+            .compile_path(PathBuf::new("base"))
             .ok()
             .unwrap();
 
@@ -499,10 +503,10 @@ mod tests {
     }
 
     fn parse_spec_tests(src: &str) -> Vec<json::Json> {
-        let path = Path::new(src);
-
-        let file_contents = match File::open(&path).read_to_end() {
-            Ok(reader) => reader,
+        let path = PathBuf::new(src);
+        let mut file_contents = vec![];
+        match File::open(&path).and_then(|mut f| f.read_to_end(&mut file_contents)) {
+            Ok(()) => {},
             Err(e) => panic!("Could not read file {}", e),
         };
 
@@ -532,9 +536,8 @@ mod tests {
                 for (key, value) in d.iter() {
                     match value {
                         &Json::String(ref s) => {
-                            let mut path = tmpdir.clone();
-                            path.push(key.clone() + ".mustache");
-                            File::create(&path).write_all(s.as_bytes()).unwrap();
+                            let path = tmpdir.join(&(key.clone() + ".mustache"));
+                            File::create(&path).and_then(|mut f| f.write_all(s.as_bytes())).unwrap();
                         }
                         _ => panic!(),
                     }
@@ -567,7 +570,7 @@ mod tests {
             None => {},
         }
 
-        let ctx = Context::new(tmpdir.path().clone());
+        let ctx = Context::new(tmpdir.path().to_path_buf());
         let template = ctx.compile(template.as_slice().chars());
         let result = render_data(&template, &data);
 

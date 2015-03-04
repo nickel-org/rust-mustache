@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
-use std::old_io::IoError as StdIoError;
+use std::io::Error as StdIoError;
+use std::error::FromError;
 use std::iter::repeat;
 use rustc_serialize;
 
@@ -35,6 +36,12 @@ impl fmt::Debug for Error {
             KeyIsNotString => "key is not a string".fmt(f),
             IoError(ref err) => err.fmt(f),
         }
+    }
+}
+
+impl FromError<StdIoError> for Error {
+    fn from_error(err: StdIoError) -> Error {
+        IoError(err)
     }
 }
 
