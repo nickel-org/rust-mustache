@@ -3,13 +3,12 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
-#![feature(core, collections, path, fs, io)]
-#![cfg_attr(test, feature(tempdir))]
+#![feature(core, std_misc, str_char)]
 #![allow(unused_attributes)]
 
 extern crate "rustc-serialize" as rustc_serialize;
-
 extern crate log;
+#[cfg(test)]extern crate tempdir;
 
 use std::cell::RefCell;
 use std::collections::HashMap;

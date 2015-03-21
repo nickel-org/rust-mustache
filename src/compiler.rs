@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::ErrorKind::FileNotFound;
+use std::io::ErrorKind::NotFound;
 use std::io::Read;
 use std::fs::File;
 use std::str;
@@ -84,7 +84,7 @@ impl<T: Iterator<Item=char>> Compiler<T> {
                     },
                     Err(e) => {
                         // Ignore missing files.
-                        if e.kind() != FileNotFound {
+                        if e.kind() != NotFound {
                             panic!("error reading file: {}", e);
                         }
                     }

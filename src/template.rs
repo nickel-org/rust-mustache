@@ -2,7 +2,6 @@ use std::io::Write;
 use std::collections::HashMap;
 use std::mem;
 use std::str;
-use std::path::AsPath;
 use rustc_serialize::Encodable;
 
 use encoder;
@@ -347,9 +346,10 @@ impl<'a> RenderContext<'a> {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
-    use std::fs::{File, TempDir};
+    use tempdir::TempDir;
+    use std::fs::File;
     use std::io::{Read, Write};
-    use std::path::{PathBuf, Path, AsPath};
+    use std::path::{PathBuf, Path};
     use std::collections::HashMap;
     use rustc_serialize::{json, Encodable};
     use rustc_serialize::json::Json;
@@ -506,7 +506,7 @@ mod tests {
         let path = PathBuf::new(src);
         let mut file_contents = vec![];
         match File::open(&path).and_then(|mut f| f.read_to_end(&mut file_contents)) {
-            Ok(()) => {},
+            Ok(_) => {},
             Err(e) => panic!("Could not read file {}", e),
         };
 

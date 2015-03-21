@@ -11,3 +11,6 @@ name = "mustache"
 
 rustc-serialize = "*"
 log = "*"
+
+[dev-dependencies]
+tempdir = "*"
