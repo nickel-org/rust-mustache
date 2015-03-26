@@ -3,7 +3,6 @@ use std::io::ErrorKind::NotFound;
 use std::io::Read;
 use std::fs::File;
 use std::str;
-use std::path::AsPath;
 
 use parser::{Parser, Token};
 use super::Context;
@@ -47,15 +46,14 @@ impl<T: Iterator<Item=char>> Compiler<T> {
     /// Compiles a template into a series of tokens.
     pub fn compile(mut self) -> (Vec<Token>, HashMap<String, Vec<Token>>) {
         let (tokens, partials) = {
-            let parser = Parser::new(&mut self.reader, self.otag.as_slice(), self.ctag.as_slice());
+            let parser = Parser::new(&mut self.reader, &self.otag, &self.ctag);
             parser.parse()
         };
 
         // Compile the partials if we haven't done so already.
         for name in partials.into_iter() {
             let path = self.ctx.template_path
-                               .as_path()
-                               .join(&(name.clone() + "." + self.ctx.template_extension.as_slice()));
+                               .join(&(name.clone() + "." + &self.ctx.template_extension));
 
             if !self.partials.contains_key(&name) {
                 // Insert a placeholder so we don't recurse off to infinity.
@@ -65,14 +63,14 @@ impl<T: Iterator<Item=char>> Compiler<T> {
                     Ok(mut file) => {
                         let mut contents = vec![];
                         file.read_to_end(&mut contents).unwrap();
-                        let string = match str::from_utf8(contents.as_slice()) {
+                        let string = match str::from_utf8(&contents) {
                             Ok(string) => string.to_string(),
                             Err(_) => { panic!("Failed to parse file as UTF-8"); }
                         };
 
                         let compiler = Compiler {
                             ctx: self.ctx.clone(),
-                            reader: string.as_slice().chars(),
+                            reader: string.chars(),
                             partials: self.partials.clone(),
                             otag: "{{".to_string(),
                             ctag: "}}".to_string(),
@@ -106,7 +104,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn compile_str(template: &str) -> Vec<Token> {
-        let ctx = Context::new(PathBuf::new("."));
+        let ctx = Context::new(PathBuf::from("."));
         let (tokens, _) = Compiler::new(ctx, template.chars()).compile();
         tokens
     }

@@ -3,10 +3,10 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
-#![feature(core, std_misc, str_char)]
+#![feature(str_char, convert)]
 #![allow(unused_attributes)]
 
-extern crate "rustc-serialize" as rustc_serialize;
+extern crate rustc_serialize;
 extern crate log;
 #[cfg(test)]extern crate tempdir;
 
@@ -16,7 +16,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::str;
-use std::path::{PathBuf, AsPath};
+use std::path::{PathBuf, Path};
 
 pub use self::Data::*;
 pub use builder::{MapBuilder, VecBuilder};
@@ -76,7 +76,7 @@ pub struct Context {
 impl fmt::Debug for Context {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Context {{ template_path: {:?}, template_extension: {} }}",
-               self.template_path.as_path(),
+               &*self.template_path,
                self.template_extension)
     }
 }
@@ -99,10 +99,10 @@ impl Context {
     }
 
     /// Compiles a template from a path.
-    pub fn compile_path<U: AsPath>(&self, path: U) -> Result<Template, Error> {
+    pub fn compile_path<U: AsRef<Path>>(&self, path: U) -> Result<Template, Error> {
         // FIXME(#6164): This should use the file decoding tools when they are
         // written. For now we'll just read the file and treat it as UTF-8file.
-        let mut path = self.template_path.as_path().join(path.as_path());
+        let mut path = self.template_path.join(path.as_ref());
         path.set_extension(&self.template_extension);
         let mut s = vec![];
         let mut file = try!(File::open(&path));
@@ -120,13 +120,13 @@ impl Context {
 
 /// Compiles a template from an `Iterator<char>`.
 pub fn compile_iter<T: Iterator<Item=char>>(iter: T) -> Template {
-    Context::new(PathBuf::new(".")).compile(iter)
+    Context::new(PathBuf::from(".")).compile(iter)
 }
 
 /// Compiles a template from a path.
 /// returns None if the file cannot be read OR the file is not UTF-8 encoded
-pub fn compile_path<U: AsPath>(path: U) -> Result<Template, Error> {
-    Context::new(PathBuf::new(".")).compile_path(path)
+pub fn compile_path<U: AsRef<Path>>(path: U) -> Result<Template, Error> {
+    Context::new(PathBuf::from(".")).compile_path(path)
 }
 
 /// Compiles a template from a string.

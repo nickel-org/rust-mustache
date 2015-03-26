@@ -50,7 +50,7 @@ impl Template {
         render_ctx.render(
             wr,
             &mut stack,
-            self.tokens.as_slice());
+            &self.tokens);
     }
 }
 
@@ -86,29 +86,29 @@ impl<'a> RenderContext<'a> {
     ) {
         match *token {
             Text(ref value) => {
-                self.render_text(wr, value.as_slice());
+                self.render_text(wr, value);
             },
             ETag(ref path, _) => {
-                self.render_etag(wr, stack, path.as_slice());
+                self.render_etag(wr, stack, path);
             }
             UTag(ref path, _) => {
-                self.render_utag(wr, stack, path.as_slice());
+                self.render_utag(wr, stack, path);
             }
             Section(ref path, true, ref children, _, _, _, _, _) => {
-                self.render_inverted_section(wr, stack, path.as_slice(), children.as_slice());
+                self.render_inverted_section(wr, stack, path, children);
             }
             Section(ref path, false, ref children, ref otag, _, ref src, _, ref ctag) => {
                 self.render_section(
                     wr,
                     stack,
-                    path.as_slice(),
-                    children.as_slice(),
-                    src.as_slice(),
-                    otag.as_slice(),
-                    ctag.as_slice())
+                    path,
+                    children,
+                    src,
+                    otag,
+                    ctag)
             }
             Partial(ref name, ref indent, _) => {
-                self.render_partial(wr, stack, name.as_slice(), indent.as_slice());
+                self.render_partial(wr, stack, name, indent);
             }
             _ => { panic!() }
         }
@@ -194,7 +194,7 @@ impl<'a> RenderContext<'a> {
                     Fun(ref fcell) => {
                         let f = &mut *fcell.borrow_mut();
                         let tokens = self.render_fun("", "{{", "}}", f);
-                        self.render(wr, stack, tokens.as_slice());
+                        self.render(wr, stack, &tokens);
                     }
 
                     ref value => { panic!("unexpected value {:?}", value); }
@@ -253,7 +253,7 @@ impl<'a> RenderContext<'a> {
                     Fun(ref fcell) => {
                         let f = &mut *fcell.borrow_mut();
                         let tokens = self.render_fun(src, otag, ctag, f);
-                        self.render(wr, stack, tokens.as_slice())
+                        self.render(wr, stack, &tokens)
                     }
                     _ => { panic!("unexpected value {:?}", value) }
                 }
@@ -274,7 +274,7 @@ impl<'a> RenderContext<'a> {
                 let mut indent = self.indent.clone() + indent;
 
                 mem::swap(&mut self.indent, &mut indent);
-                self.render(wr, stack, tokens.as_slice());
+                self.render(wr, stack, &tokens);
                 mem::swap(&mut self.indent, &mut indent);
             }
         }
@@ -285,7 +285,7 @@ impl<'a> RenderContext<'a> {
 
         let compiler = Compiler::new_with(
             self.template.ctx.clone(),
-            src.as_slice().chars(),
+            src.chars(),
             self.template.partials.clone(),
             otag.to_string(),
             ctag.to_string());
@@ -464,8 +464,8 @@ mod tests {
 
     #[test]
     fn test_render_partial() {
-        let template = Context::new(PathBuf::new("src/test-data"))
-            .compile_path(PathBuf::new("base"))
+        let template = Context::new(PathBuf::from("src/test-data"))
+            .compile_path(PathBuf::from("base"))
             .ok()
             .unwrap();
 
@@ -503,17 +503,17 @@ mod tests {
     }
 
     fn parse_spec_tests(src: &str) -> Vec<json::Json> {
-        let path = PathBuf::new(src);
+        let path = PathBuf::from(src);
         let mut file_contents = vec![];
         match File::open(&path).and_then(|mut f| f.read_to_end(&mut file_contents)) {
             Ok(_) => {},
             Err(e) => panic!("Could not read file {}", e),
         };
 
-        let s = String::from_utf8(file_contents.as_slice().to_vec())
+        let s = String::from_utf8(file_contents.to_vec())
                      .ok().expect("File was not UTF8 encoded");
 
-        match Json::from_str(s.as_slice()) {
+        match Json::from_str(&s) {
             Err(e) =>  panic!("{:?}", e),
             Ok(json) => {
                 match json {
@@ -571,7 +571,7 @@ mod tests {
         }
 
         let ctx = Context::new(tmpdir.path().to_path_buf());
-        let template = ctx.compile(template.as_slice().chars());
+        let template = ctx.compile(template.chars());
         let result = render_data(&template, &data);
 
         if result != expected {
@@ -666,7 +666,7 @@ mod tests {
             // needed for the closure test.
             let mut calls = 0usize;
 
-            match s.as_slice() {
+            match &*s {
                 "Interpolation" => {
                     let f = |_text| { "world".to_string() };
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
@@ -692,7 +692,7 @@ mod tests {
                 },
                 "Section" => {
                     let f = | text: String| {
-                        if text.as_slice() == "{{x}}" {
+                        if text == "{{x}}" {
                             "yes".to_string()
                         } else {
                             "no".to_string()
@@ -701,15 +701,15 @@ mod tests {
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Section - Expansion" => {
-                    let f = | text: String| { text.clone() + "{{planet}}" + text.clone().as_slice() };
+                    let f = | text: String| { text.clone() + "{{planet}}" + &text };
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Section - Alternate Delimiters" => {
-                    let f = | text: String| { text.clone() + "{{planet}} => |planet|" + text.clone().as_slice() };
+                    let f = | text: String| { text.clone() + "{{planet}} => |planet|" + &text };
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Section - Multiple Calls" => {
-                    let f = | text: String| { "__".to_string() + text.as_slice() + "__" };
+                    let f = | text: String| { "__".to_string() + &text + "__" };
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 },
                 "Inverted Section" => {
