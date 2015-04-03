@@ -379,25 +379,25 @@ mod tests {
     fn test_render_texts() {
         let ctx = Name { name: "world".to_string() };
 
-        assert_eq!(render("hello world", &ctx), Ok("hello world".to_string()));
-        assert_eq!(render("hello {world", &ctx), Ok("hello {world".to_string()));
-        assert_eq!(render("hello world}", &ctx), Ok("hello world}".to_string()));
-        assert_eq!(render("hello {world}", &ctx), Ok("hello {world}".to_string()));
-        assert_eq!(render("hello world}}", &ctx), Ok("hello world}}".to_string()));
+        assert_eq!(&*render("hello world", &ctx).unwrap(), "hello world");
+        assert_eq!(&*render("hello {world", &ctx).unwrap(), "hello {world");
+        assert_eq!(&*render("hello world}", &ctx).unwrap(), "hello world}");
+        assert_eq!(&*render("hello {world}", &ctx).unwrap(), "hello {world}");
+        assert_eq!(&*render("hello world}}", &ctx).unwrap(), "hello world}}");
     }
 
     #[test]
     fn test_render_etags() {
         let ctx = Name { name: "world".to_string() };
 
-        assert_eq!(render("hello {{name}}", &ctx), Ok("hello world".to_string()));
+        assert_eq!(&*render("hello {{name}}", &ctx).unwrap(), "hello world");
     }
 
     #[test]
     fn test_render_utags() {
         let ctx = Name { name: "world".to_string() };
 
-        assert_eq!(render("hello {{{name}}}", &ctx), Ok("hello world".to_string()));
+        assert_eq!(&*render("hello {{{name}}}", &ctx).unwrap(), "hello world");
     }
 
     fn render_data(template: &Template, data: &Data) -> String {
