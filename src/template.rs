@@ -141,7 +141,7 @@ impl<'a> RenderContext<'a> {
                     }
                 };
 
-                if line.char_at(0) != '\n' {
+                if line.as_bytes()[0] != b'\n' {
                     wr.write_all(self.indent.as_bytes()).unwrap();
                 }
 

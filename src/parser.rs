@@ -254,7 +254,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                         }
                     }
                     Some(pos) => {
-                        if s.char_at(pos) == '\n' {
+                        if s.as_bytes()[pos] == b'\n' {
                             if pos == s.len() - 1 {
                                 StandAlone
                             } else {
@@ -303,7 +303,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
         let len = content.len();
         let content = content;
 
-        match content.char_at(0) {
+        match content.as_bytes()[0] as char {
             '!' => {
                 // ignore comments
                 self.eat_whitespace();
