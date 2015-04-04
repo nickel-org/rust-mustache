@@ -27,7 +27,7 @@ impl MapBuilder {
     /// use mustache::MapBuilder;
     /// let data = MapBuilder::new()
     ///     .insert("name", &("Jane Austen")).ok().unwrap()
-    ///     .insert("age", &41u).ok().unwrap()
+    ///     .insert("age", &41usize).ok().unwrap()
     ///     .build();
     /// ```
     #[inline]
@@ -165,7 +165,7 @@ impl<'a> VecBuilder {
     /// use mustache::{VecBuilder, Data};
     /// let data: Data = VecBuilder::new()
     ///     .push(& &"Jane Austen").ok().unwrap()
-    ///     .push(&41u).ok().unwrap()
+    ///     .push(&41usize).ok().unwrap()
     ///     .build();
     /// ```
     #[inline]
@@ -377,14 +377,19 @@ mod tests {
 
         match data {
             VecVal(vs) => {
-                match &*vs {
-                    [Fun(ref f)] => {
-                        let f = &mut *f.borrow_mut();
-                        assert_eq!((*f)("count: ".to_string()), "count: 1".to_string());
-                        assert_eq!((*f)("count: ".to_string()), "count: 2".to_string());
-                        assert_eq!((*f)("count: ".to_string()), "count: 3".to_string());
-                    }
-                    _ => panic!(),
+                let mut iter = vs.iter();
+
+                if let Some(&Fun(ref f)) = iter.next() {
+                    let f = &mut *f.borrow_mut();
+                    assert_eq!((*f)("count: ".to_string()), "count: 1".to_string());
+                    assert_eq!((*f)("count: ".to_string()), "count: 2".to_string());
+                    assert_eq!((*f)("count: ".to_string()), "count: 3".to_string());
+                } else {
+                    panic!()
+                }
+
+                if let Some(..) = iter.next() {
+                    panic!()
                 }
             }
             _ => panic!(),

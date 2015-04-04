@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::io::Error as StdIoError;
-use std::error::FromError;
 use std::iter::repeat;
 use rustc_serialize;
 
@@ -18,7 +17,6 @@ impl Encoder {
     }
 }
 
-#[derive(PartialEq)]
 pub enum Error {
     UnsupportedType,
     InvalidStr,
@@ -39,8 +37,8 @@ impl fmt::Debug for Error {
     }
 }
 
-impl FromError<StdIoError> for Error {
-    fn from_error(err: StdIoError) -> Error {
+impl From<StdIoError> for Error {
+    fn from(err: StdIoError) -> Error {
         IoError(err)
     }
 }
