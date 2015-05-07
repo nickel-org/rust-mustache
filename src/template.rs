@@ -464,10 +464,7 @@ mod tests {
 
     #[test]
     fn test_render_partial() {
-        let template = Context::new(PathBuf::from("src/test-data"))
-            .compile_path(PathBuf::from("base"))
-            .ok()
-            .unwrap();
+        let template = ::compile_path("src/test-data/base").unwrap();
 
         let ctx = HashMap::new();
         assert_eq!(render_data(&template, &Map(ctx)), "<h2>Names</h2>\n".to_string());

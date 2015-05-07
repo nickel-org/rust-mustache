@@ -22,6 +22,7 @@ pub enum Error {
     InvalidStr,
     MissingElements,
     KeyIsNotString,
+    NoFilename,
     IoError(StdIoError),
 }
 
@@ -32,6 +33,7 @@ impl fmt::Debug for Error {
             InvalidStr => "invalid str".fmt(f),
             MissingElements => "no elements in value".fmt(f),
             KeyIsNotString => "key is not a string".fmt(f),
+            NoFilename => "a filename must be provided".fmt(f),
             IoError(ref err) => err.fmt(f),
         }
     }

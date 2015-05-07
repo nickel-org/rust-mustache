@@ -125,7 +125,25 @@ pub fn compile_iter<T: Iterator<Item=char>>(iter: T) -> Template {
 /// Compiles a template from a path.
 /// returns None if the file cannot be read OR the file is not UTF-8 encoded
 pub fn compile_path<U: AsRef<Path>>(path: U) -> Result<Template, Error> {
-    Context::new(PathBuf::from(".")).compile_path(path)
+    let path = path.as_ref();
+
+    match path.file_stem() {
+        Some(stem) => {
+            let template_dir = path.parent().unwrap_or(Path::new("."));
+            // FIXME: Should work with OsStrings, this will not use provided extension if
+            // the extension is not utf8 :(
+            let extension = path.extension()
+                                .and_then(|ext| ext.to_str())
+                                .unwrap_or("mustache");
+
+            let context = Context {
+                template_path: template_dir.to_path_buf(),
+                template_extension: extension.to_string()
+            };
+            context.compile_path(stem)
+        }
+        None => Result::Err(Error::NoFilename)
+    }
 }
 
 /// Compiles a template from a string.
