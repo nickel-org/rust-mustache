@@ -1,7 +1,7 @@
 Mustache [![Ohloh statistics](http://www.ohloh.net/p/rust-mustache/widgets/project_thin_badge.gif)](https://www.ohloh.net/p/rust-mustache)
 ========
 
-[![Build Status](http://travis-ci.org/erickt/rust-mustache.png?branch=master)](https://travis-ci.org/erickt/rust-mustache)
+[![Build Status](http://travis-ci.org/nickel-org/rust-mustache.png?branch=master)](https://travis-ci.org/nickel-org/rust-mustache)
 ========
 
 Inspired by [ctemplate][1] and [et][2], [Mustache][3] is a framework-agnostic way
@@ -21,8 +21,8 @@ The different Mustache tags are documented at [mustache(5)][4].
 Install it through Cargo!
 
 ```toml
-[dependencies.rust-mustache]
-git = "https://github.com/erickt/rust-mustache"
+[dependencies]
+mustache = "*"
 ```
 
 Then link it within your crate:
