@@ -462,10 +462,7 @@ mod tests {
         assert_eq!(render_data(&template, &Map(ctx0)), "05".to_string());
     }
 
-    #[test]
-    fn test_render_partial() {
-        let template = ::compile_path("src/test-data/base").unwrap();
-
+    fn assert_partials_data(template: Template) {
         let ctx = HashMap::new();
         assert_eq!(render_data(&template, &Map(ctx)), "<h2>Names</h2>\n".to_string());
 
@@ -497,6 +494,18 @@ mod tests {
         assert_eq!(
             render_data(&template, &Map(ctx0)),
             "<h2>Names</h2>\n  <strong>a</strong>\n\n  <strong>&lt;b&gt;</strong>\n\n".to_string());
+    }
+
+    #[test]
+    fn test_render_partial_dot_filename() {
+        let template = ::compile_path("src/test-data/base.foo.mustache").unwrap();
+        assert_partials_data(template);
+    }
+
+    #[test]
+    fn test_render_partial() {
+        let template = ::compile_path("src/test-data/base").unwrap();
+        assert_partials_data(template);
     }
 
     fn parse_spec_tests(src: &str) -> Vec<json::Json> {
