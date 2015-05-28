@@ -25,24 +25,18 @@ Install it through Cargo!
 mustache = "*"
 ```
 
-Then link it within your crate:
+# Basic example
 
 ```rust
 extern crate mustache;
-```
-
-# Getting Started
-
-```rust
-extern crate mustache;
-extern crate serialize;
+extern crate rustc_serialize;
 
 use std::io;
 use mustache::MapBuilder;
 
-#[derive(Encodable)]
+#[derive(RustcEncodable)]
 struct Planet {
-    name: ~str,
+    name: String,
 }
 
 fn main() {
@@ -50,7 +44,7 @@ fn main() {
     let template = mustache::compile_str("hello {{name}}");
 
     // You can either use an encodable type to print "hello Mercury".
-    let planet = Planet { name: "Mercury" };
+    let planet = Planet { name: "Mercury".into() };
     template.render(&mut io::stdout(), &planet).unwrap();
     println!("");
 
@@ -66,8 +60,8 @@ fn main() {
     let mut planets = vec!("Jupiter", "Mars", "Earth");
 
     let data = MapBuilder::new()
-        .insert_fn("name", |_| {
-            planets.pop().unwrap()
+        .insert_fn("name", move |_| {
+            planets.pop().unwrap().into()
         })
         .build();
 
@@ -95,7 +89,7 @@ cargo test
 
 If you want to run the test cases, you'll need the spec as well.
 
-```ignore
+```bash
 git submodule init
 git submodule update
 cargo test
@@ -108,47 +102,4 @@ cargo test
 
 # License
 
-Copyright (c) 2012 Erick Tryzelaar
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-Inspired by https://github.com/vspy/mustache:
-
-Copyright (c) 2010 Victor Bilyk
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+See LICENSE File
