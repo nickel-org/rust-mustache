@@ -1,3 +1,7 @@
 language: rust
 script:
-  - cargo test
+  - |
+    cargo build &&
+    cargo test &&
+    echo "Testing README" &&
+    rustdoc --test README.md -L dependency=./target/debug/deps --extern mustache=./target/debug/libmustache.rlib
