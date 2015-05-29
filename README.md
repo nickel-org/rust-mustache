@@ -13,6 +13,8 @@ rust-mustache is a rust implementation of Mustache.
 
 The different Mustache tags are documented at [mustache(5)][4].
 
+Documentation for this library is [here][5].
+
 ## Install
 
 Install it through Cargo!
@@ -96,6 +98,7 @@ cargo test
 [2]: http://www.ivan.fomichev.name/2008/05/erlang-template-engine-prototype.html
 [3]: http://defunkt.github.com/mustache/
 [4]: http://mustache.github.com/mustache.5.html
+[5]: http://docs.nickel.rs/rust-mustache/mustache/index.html
 
 # License
 
