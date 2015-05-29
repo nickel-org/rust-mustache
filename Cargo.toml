@@ -6,8 +6,10 @@ version = "0.6.1"
 authors = ["erick.tryzelaar@gmail.com"]
 license = "MIT/Apache-2.0"
 
-[dependencies]
+[features]
+unstable = []
 
+[dependencies]
 rustc-serialize = "*"
 log = "*"
 
