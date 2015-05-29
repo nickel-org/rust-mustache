@@ -1,3 +1,31 @@
 language: rust
+sudo: false
+
+cache:
+  directories:
+    - target
+
+rust:
+- 1.0.0
+- nightly
+- beta
+
+before_script:
+- pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+
 script:
-  - cargo test
+- |
+    travis-cargo build &&
+    travis-cargo test &&
+    travis-cargo doc &&
+    echo "Testing README" &&
+    rustdoc --test README.md -L dependency=./target/debug/deps --extern mustache=./target/debug/libmustache.rlib --extern rustc_serialize=./target/debug/deps/librustc_serialize
+
+after_success:
+- |
+    (echo "mustache.nickel.rs" > target/doc/CNAME) &&
+    travis-cargo --only 1.0.0 doc-upload
+
+env:
+  global:
+    secure: dKGat/Zb9K7hjdKnQGeKIDlBkBPA+vGZsc9h43WC9SyCQM8srwg2+A0q/Bu59T35BuTXoT1J1mo4f5HztTK0cRS3eJX6nBflTy7g/mrkrsTT8wYNfcZUu0FyXV8xozOohBXW4xMSSLUmaz3VGrbWrHH31Wb8RexVBDmWWGyv810=
