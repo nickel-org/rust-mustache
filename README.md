@@ -1,7 +1,4 @@
-Mustache [![Ohloh statistics](http://www.ohloh.net/p/rust-mustache/widgets/project_thin_badge.gif)](https://www.ohloh.net/p/rust-mustache)
-========
-
-[![Build Status](http://travis-ci.org/nickel-org/rust-mustache.png?branch=master)](https://travis-ci.org/nickel-org/rust-mustache)
+Mustache [![Ohloh statistics](http://www.ohloh.net/p/rust-mustache/widgets/project_thin_badge.gif)](https://www.ohloh.net/p/rust-mustache) [![Build Status](http://travis-ci.org/nickel-org/rust-mustache.png?branch=master)](https://travis-ci.org/nickel-org/rust-mustache) [![](http://meritbadge.herokuapp.com/mustache)](https://crates.io/crates/mustache)
 ========
 
 Inspired by [ctemplate][1] and [et][2], [Mustache][3] is a framework-agnostic way
