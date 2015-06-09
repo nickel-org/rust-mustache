@@ -101,10 +101,21 @@ impl Context {
     pub fn compile_path<U: AsRef<Path>>(&self, path: U) -> Result<Template, Error> {
         // FIXME(#6164): This should use the file decoding tools when they are
         // written. For now we'll just read the file and treat it as UTF-8file.
-        let mut path = self.template_path.join(path.as_ref());
-        path.set_extension(&self.template_extension);
+        //
+        // Additionally, when std::fs::PathExt stabilizes, this code should use
+        // is_file to determine whether or not the file exists. We're just going
+        // to brute force it in the name of Rust 1.0.0 compatibility.
+        let mut extended_path = self.template_path.join(path.as_ref());
+        extended_path.set_extension(&self.template_extension);
+
         let mut s = vec![];
-        let mut file = try!(File::open(&path));
+
+        let mut file = match File::open(&extended_path) {
+            Ok(file) => file,
+            Err(e) => {
+                try!(File::open(self.template_path.join(path.as_ref())))
+            }
+        };
         try!(file.read_to_end(&mut s));
 
         // TODO: maybe allow UTF-16 as well?
