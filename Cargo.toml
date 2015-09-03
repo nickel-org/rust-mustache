@@ -1,0 +1,9 @@
+[package]
+name = "mustache-bug-repro"
+version = "0.1.0"
+authors = ["Christoph Burgdorf <christoph.burgdorf@bvsn.org>"]
+
+
+[dependencies]
+nickel = "*"
+rustc-serialize = "*"
