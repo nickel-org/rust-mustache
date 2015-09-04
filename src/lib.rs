@@ -31,6 +31,7 @@ mod parser;
 mod template;
 
 pub enum Data {
+    OptVal(Option<Box<Data>>),
     StrVal(String),
     Bool(bool),
     VecVal(Vec<Data>),
@@ -42,6 +43,7 @@ impl<'a> PartialEq for Data {
     #[inline]
     fn eq(&self, other: &Data) -> bool {
         match (self, other) {
+            (&OptVal(ref v0), &OptVal(ref v1)) => v0 == v1,
             (&StrVal(ref v0), &StrVal(ref v1)) => v0 == v1,
             (&Bool(ref v0), &Bool(ref v1)) => v0 == v1,
             (&VecVal(ref v0), &VecVal(ref v1)) => v0 == v1,
@@ -55,6 +57,7 @@ impl<'a> PartialEq for Data {
 impl<'a> fmt::Debug for Data {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            OptVal(ref v) => write!(f, "OptVal({:?})", v),
             StrVal(ref v) => write!(f, "StrVal({})", v),
             Bool(v) => write!(f, "Bool({:?})", v),
             VecVal(ref v) => write!(f, "VecVal({:?})", v),
