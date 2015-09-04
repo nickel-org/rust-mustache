@@ -457,6 +457,23 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(message="nested Option types are not supported")]
+    fn test_render_option_nested() {
+        #[derive(RustcEncodable)]
+        struct Nested { opt: Option<Option<u32>> }
+
+        let template = "-{{opt}}+";
+        let ctx = Nested { opt: None };
+        assert_eq!(&*render(template, &ctx).unwrap(), "-+");
+
+        let ctx = Nested { opt: Some(None) };
+        assert_eq!(&*render(template, &ctx).unwrap(), "-+");
+
+        let ctx = Nested { opt: Some(Some(42)) };
+        assert_eq!(&*render(template, &ctx).unwrap(), "-42+");
+    }
+
+    #[test]
     fn test_render_option_complex() {
         let template = "{{name}} - \
                         {{#info}}{{description}}; \

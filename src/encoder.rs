@@ -18,6 +18,7 @@ impl Encoder {
 }
 
 pub enum Error {
+    NestedOptions,
     UnsupportedType,
     InvalidStr,
     MissingElements,
@@ -29,6 +30,7 @@ pub enum Error {
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            NestedOptions => "nested Option types are not supported".fmt(f),
             UnsupportedType => "unsupported type".fmt(f),
             InvalidStr => "invalid str".fmt(f),
             MissingElements => "no elements in value".fmt(f),
@@ -181,6 +183,7 @@ impl rustc_serialize::Encoder for Encoder {
   where F : FnOnce(&mut Encoder) -> EncoderResult {
         try!(f(self));
         let val = match self.data.pop() {
+            Some(OptVal(_)) => { return Err(NestedOptions) },
             Some(d) => d,
             _ => { return Err(UnsupportedType); }
         };
