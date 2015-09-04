@@ -76,8 +76,12 @@ impl<T: Iterator<Item=char>> Compiler<T> {
                             ctag: "}}".to_string(),
                         };
 
-                        let (tokens, _) = compiler.compile();
+                        let (tokens, subpartials) = compiler.compile();
 
+                        // Include subpartials
+                        self.partials.extend(subpartials.into_iter());
+
+                        // Set final compiled tokens for *this* partial
                         self.partials.insert(name, tokens);
                     },
                     Err(e) => {
