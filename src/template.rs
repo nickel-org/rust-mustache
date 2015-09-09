@@ -10,7 +10,7 @@ use parser::Token;
 use parser::Token::*;
 use encoder::Error;
 
-use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun};
+use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun, OptVal};
 
 /// `Template` represents a compiled mustache file.
 #[derive(Debug, Clone)]
@@ -182,8 +182,19 @@ impl<'a> RenderContext<'a> {
     ) {
         match self.find(path, stack) {
             None => { }
-            Some(value) => {
+            Some(mut value) => {
                 wr.write_all(self.indent.as_bytes()).unwrap();
+
+                // Currently this doesn't allow Option<Option<Foo>>, which
+                // would be un-nameable in the view anyway, so I'm unsure if it's
+                // a real problem. Having {{foo}} render only when `foo = Some(Some(val))`
+                // seems unintuitive and may be surprising in practice.
+                if let OptVal(ref inner) = *value {
+                    match *inner {
+                        Some(ref inner) => value = inner,
+                        None => return
+                    }
+                }
 
                 match *value {
                     StrVal(ref value) => {
@@ -214,6 +225,7 @@ impl<'a> RenderContext<'a> {
             None => { }
             Some(&Bool(false)) => { }
             Some(&VecVal(ref xs)) if xs.is_empty() => { }
+            Some(&OptVal(ref val)) if val.is_none() => { }
             Some(_) => { return; }
         }
 
@@ -254,6 +266,16 @@ impl<'a> RenderContext<'a> {
                         let f = &mut *fcell.borrow_mut();
                         let tokens = self.render_fun(src, otag, ctag, f);
                         self.render(wr, stack, &tokens)
+                    },
+                    OptVal(ref val) => {
+                        match *val {
+                            Some(ref val) => {
+                                stack.push(val);
+                                self.render(wr, stack, children);
+                                stack.pop();
+                            }
+                            None => {}
+                        }
                     }
                     _ => { panic!("unexpected value {:?}", value) }
                 }
@@ -361,7 +383,17 @@ mod tests {
     use super::super::{Context, Template};
 
     #[derive(RustcEncodable)]
-    struct Name { name: String }
+    struct Planet { name: String, info: Option<PlanetInfo> }
+
+    #[derive(RustcEncodable)]
+    struct PlanetInfo {
+        moons: Vec<String>,
+        population: u64,
+        description: String
+    }
+
+    #[derive(RustcEncodable)]
+    struct Person { name: String, age: Option<u32> }
 
     fn render<'a, 'b, T: Encodable>(
         template: &str,
@@ -377,7 +409,7 @@ mod tests {
 
     #[test]
     fn test_render_texts() {
-        let ctx = Name { name: "world".to_string() };
+        let ctx = Planet { name: "world".to_string(), info: None };
 
         assert_eq!(&*render("hello world", &ctx).unwrap(), "hello world");
         assert_eq!(&*render("hello {world", &ctx).unwrap(), "hello {world");
@@ -388,16 +420,78 @@ mod tests {
 
     #[test]
     fn test_render_etags() {
-        let ctx = Name { name: "world".to_string() };
+        let ctx = Planet { name: "world".to_string(), info: None };
 
         assert_eq!(&*render("hello {{name}}", &ctx).unwrap(), "hello world");
     }
 
     #[test]
     fn test_render_utags() {
-        let ctx = Name { name: "world".to_string() };
+        let ctx = Planet { name: "world".to_string(), info: None };
 
         assert_eq!(&*render("hello {{{name}}}", &ctx).unwrap(), "hello world");
+
+        assert_eq!(&*render("hello {{{name}}}", &ctx).unwrap(), "hello world");
+    }
+
+    #[test]
+    fn test_render_option() {
+        let template = "{{name}}, {{age}}";
+        let ctx = Person { name: "Dennis".to_string(), age: None };
+
+        assert_eq!(&*render(template, &ctx).unwrap(), "Dennis, ");
+
+        let ctx = Person { name: "Dennis".to_string(), age: Some(42) };
+        assert_eq!(&*render(template, &ctx).unwrap(), "Dennis, 42");
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit() {
+        let template = "{{name}}, {{#age}}{{.}}{{/age}}{{^age}}No age{{/age}}";
+        let ctx = Person { name: "Dennis".to_string(), age: None };
+
+        assert_eq!(&*render(template, &ctx).unwrap(), "Dennis, No age");
+
+        let ctx = Person { name: "Dennis".to_string(), age: Some(42) };
+        assert_eq!(&*render(template, &ctx).unwrap(), "Dennis, 42");
+    }
+
+    #[test]
+    #[should_panic(message="nested Option types are not supported")]
+    fn test_render_option_nested() {
+        #[derive(RustcEncodable)]
+        struct Nested { opt: Option<Option<u32>> }
+
+        let template = "-{{opt}}+";
+        let ctx = Nested { opt: None };
+        assert_eq!(&*render(template, &ctx).unwrap(), "-+");
+
+        let ctx = Nested { opt: Some(None) };
+        assert_eq!(&*render(template, &ctx).unwrap(), "-+");
+
+        let ctx = Nested { opt: Some(Some(42)) };
+        assert_eq!(&*render(template, &ctx).unwrap(), "-42+");
+    }
+
+    #[test]
+    fn test_render_option_complex() {
+        let template = "{{name}} - \
+                        {{#info}}{{description}}; \
+                        It's moons are [{{#moons}}{{.}}{{/moons}}] \
+                        and has a population of {{population}}{{/info}}\
+                        {{^info}}No additional info{{/info}}";
+        let ctx = Planet { name: "Jupiter".to_string(), info: None };
+        assert_eq!(&*render(template, &ctx).unwrap(), "Jupiter - No additional info");
+
+        let address = PlanetInfo {
+            moons: vec!["Luna".to_string()],
+            population: 7300000000,
+            description: "Birthplace of rust-lang".to_string(),
+        };
+        let ctx = Planet { name: "Earth".to_string(), info: Some(address) };
+        assert_eq!(&*render(template, &ctx).unwrap(),
+                   "Earth - Birthplace of rust-lang; It's moons are [Luna] and \
+                   has a population of 7300000000");
     }
 
     fn render_data(template: &Template, data: &Data) -> String {

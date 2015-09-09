@@ -4,7 +4,7 @@ use std::io::Error as StdIoError;
 use std::iter::repeat;
 use rustc_serialize;
 
-use super::{Data, StrVal, Bool, VecVal, Map};
+use super::{Data, StrVal, Bool, VecVal, Map, OptVal};
 pub use self::Error::*;
 
 pub struct Encoder {
@@ -18,6 +18,7 @@ impl Encoder {
 }
 
 pub enum Error {
+    NestedOptions,
     UnsupportedType,
     InvalidStr,
     MissingElements,
@@ -29,6 +30,7 @@ pub enum Error {
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            NestedOptions => "nested Option types are not supported".fmt(f),
             UnsupportedType => "unsupported type".fmt(f),
             InvalidStr => "invalid str".fmt(f),
             MissingElements => "no elements in value".fmt(f),
@@ -167,18 +169,26 @@ impl rustc_serialize::Encoder for Encoder {
     }
 
     // Specialized types:
-    fn emit_option< F >(&mut self, _f: F) -> EncoderResult
+    fn emit_option< F >(&mut self, f: F) -> EncoderResult
     where F : FnOnce(&mut Encoder) -> EncoderResult  {
-        Err(UnsupportedType)
+        f(self)
     }
 
     fn emit_option_none(&mut self) -> EncoderResult {
-        Err(UnsupportedType)
+        self.data.push(OptVal(None));
+        Ok(())
     }
 
-    fn emit_option_some< F >(&mut self, _f: F) -> EncoderResult
+    fn emit_option_some< F >(&mut self, f: F) -> EncoderResult
   where F : FnOnce(&mut Encoder) -> EncoderResult {
-        Err(UnsupportedType)
+        try!(f(self));
+        let val = match self.data.pop() {
+            Some(OptVal(_)) => { return Err(NestedOptions) },
+            Some(d) => d,
+            _ => { return Err(UnsupportedType); }
+        };
+        self.data.push(OptVal(Some(Box::new(val))));
+        Ok(())
     }
 
     fn emit_seq< F >(&mut self, _len: usize, f: F) -> EncoderResult
