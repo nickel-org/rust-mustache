@@ -57,6 +57,7 @@ impl Template {
 struct RenderContext<'a> {
     template: &'a Template,
     indent: String,
+    line_start: bool,
 }
 
 impl<'a> RenderContext<'a> {
@@ -64,6 +65,7 @@ impl<'a> RenderContext<'a> {
         RenderContext {
             template: template,
             indent: "".to_string(),
+            line_start: true,
         }
     }
 
@@ -114,6 +116,21 @@ impl<'a> RenderContext<'a> {
         }
     }
 
+    fn write_tracking_newlines<W: Write>(&mut self, wr: &mut W, value: &str) {
+        wr.write_all(value.as_bytes()).unwrap();
+        self.line_start = match value.chars().last() {
+            None => self.line_start, // None == ""
+            Some('\n') => true,
+            _ => false
+        };
+    }
+
+    fn write_indent<W: Write>(&mut self, wr: &mut W) {
+        if self.line_start {
+            wr.write_all(self.indent.as_bytes()).unwrap();
+        }
+    }
+
     fn render_text<W: Write>(
         &mut self,
         wr: &mut W,
@@ -121,7 +138,7 @@ impl<'a> RenderContext<'a> {
     ) {
         // Indent the lines.
         if self.indent.is_empty() {
-            wr.write_all(value.as_bytes()).unwrap();
+            self.write_tracking_newlines(wr, value);
         } else {
             let mut pos = 0;
             let len = value.len();
@@ -142,10 +159,10 @@ impl<'a> RenderContext<'a> {
                 };
 
                 if line.as_bytes()[0] != b'\n' {
-                    wr.write_all(self.indent.as_bytes()).unwrap();
+                    self.write_indent(wr)
                 }
 
-                wr.write_all(line.as_bytes()).unwrap();
+                self.write_tracking_newlines(wr, line);
             }
         }
     }
@@ -183,7 +200,7 @@ impl<'a> RenderContext<'a> {
         match self.find(path, stack) {
             None => { }
             Some(mut value) => {
-                wr.write_all(self.indent.as_bytes()).unwrap();
+                self.write_indent(wr);
 
                 // Currently this doesn't allow Option<Option<Foo>>, which
                 // would be un-nameable in the view anyway, so I'm unsure if it's
@@ -198,7 +215,7 @@ impl<'a> RenderContext<'a> {
 
                 match *value {
                     StrVal(ref value) => {
-                        wr.write_all(value.as_bytes()).unwrap();
+                        self.write_tracking_newlines(wr, value);
                     }
 
                     // etags and utags use the default delimiter.
