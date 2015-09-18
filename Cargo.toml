@@ -2,7 +2,7 @@
 name = "mustache"
 description = "Rust implementation of Mustache"
 repository = "https://github.com/nickel-org/rust-mustache"
-version = "0.6.2"
+version = "0.6.3"
 authors = ["erick.tryzelaar@gmail.com"]
 license = "MIT/Apache-2.0"
 
