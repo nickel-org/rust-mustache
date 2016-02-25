@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::io::Error as StdIoError;
+use std::error;
 use std::iter::repeat;
 use rustc_serialize;
 
@@ -17,6 +18,7 @@ impl Encoder {
     }
 }
 
+#[derive(Debug)]
 pub enum Error {
     NestedOptions,
     UnsupportedType,
@@ -27,16 +29,24 @@ pub enum Error {
     IoError(StdIoError),
 }
 
-impl fmt::Debug for Error {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use std::error::Error;
+        self.description().fmt(f)
+    }
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        use std::error::Error;
         match *self {
-            NestedOptions => "nested Option types are not supported".fmt(f),
-            UnsupportedType => "unsupported type".fmt(f),
-            InvalidStr => "invalid str".fmt(f),
-            MissingElements => "no elements in value".fmt(f),
-            KeyIsNotString => "key is not a string".fmt(f),
-            NoFilename => "a filename must be provided".fmt(f),
-            IoError(ref err) => err.fmt(f),
+            NestedOptions => "nested Option types are not supported",
+            UnsupportedType => "unsupported type",
+            InvalidStr => "invalid str",
+            MissingElements => "no elements in value",
+            KeyIsNotString => "key is not a string",
+            NoFilename => "a filename must be provided",
+            IoError(ref err) => err.description(),
         }
     }
 }
