@@ -1,8 +1,9 @@
 use std::mem;
 
 pub use self::Token::*;
-pub use self::ParserState::*;
-pub use self::TokenClass::*;
+
+use self::TokenClass::*;
+use self::ParserState::*;
 
 /// `Token` is a section of a compiled mustache string.
 #[derive(Clone, Debug)]
