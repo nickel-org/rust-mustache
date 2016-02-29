@@ -127,9 +127,9 @@ mod tests {
                 let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
                 let children = children.iter().map(|x| token_to_str(x)).collect::<Vec<String>>();
                 format!("Section(vec!({}), {}, vec!({}), {}, {}, {}, {}, {})",
-                        name.connect(", "),
+                        name.join(", "),
                         inverted,
-                        children.connect(", "),
+                        children.join(", "),
                         otag,
                         osection,
                         src,
@@ -138,16 +138,16 @@ mod tests {
             }
             ETag(ref name, ref tag) => {
                 let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
-                format!("ETag(vec!({}), {})", name.connect(", "), *tag)
+                format!("ETag(vec!({}), {})", name.join(", "), *tag)
             }
             UTag(ref name, ref tag) => {
                 let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
-                format!("UTag(vec!({}), {})", name.connect(", "), *tag)
+                format!("UTag(vec!({}), {})", name.join(", "), *tag)
             }
             IncompleteSection(ref name, ref inverted, ref osection, ref newlined) => {
                 let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
                 format!("IncompleteSection(vec!({}), {}, {}, {})",
-                        name.connect(", "),
+                        name.join(", "),
                         *inverted,
                         *osection,
                         *newlined)

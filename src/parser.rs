@@ -198,7 +198,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
         for token in self.tokens.iter() {
             match *token {
                 IncompleteSection(ref path, _, _, _) => {
-                    panic!("Unclosed mustache section {}", path.connect("."));
+                    panic!("Unclosed mustache section {}", path.join("."));
               }
               _ => {}
             }
