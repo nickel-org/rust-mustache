@@ -263,7 +263,7 @@ impl rustc_serialize::Encoder for Encoder {
     }
 }
 
-pub fn encode<'a, T: rustc_serialize::Encodable>(data: &T) -> Result<Data, Error> {
+pub fn encode<T: rustc_serialize::Encodable>(data: &T) -> Result<Data, Error> {
     let mut encoder = Encoder::new();
     try!(data.encode(&mut encoder));
     assert_eq!(encoder.data.len(), 1);
