@@ -72,16 +72,13 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
             Some(ch) => { self.ch = Some(ch); }
         }
 
-        match self.ch {
-            Some(ch) => {
-                if ch == '\n' {
-                    self.line += 1;
-                    self.col = 1;
-                } else {
-                    self.col += 1;
-                }
+        if let Some(ch) = self.ch {
+            if ch == '\n' {
+                self.line += 1;
+                self.col = 1;
+            } else {
+                self.col += 1;
             }
-            None => { }
         }
     }
 
@@ -192,13 +189,10 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
 
         // Check that we don't have any incomplete sections.
         for token in self.tokens.iter() {
-            match *token {
-                IncompleteSection(ref path, _, _, _) => {
-                    panic!("Unclosed mustache section {}", path.join("."));
-              }
-              _ => {}
+            if let IncompleteSection(ref path, _, _, _) = *token {
+                panic!("Unclosed mustache section {}", path.join("."));
             }
-        };
+        }
 
         let Parser { tokens, partials, .. } = self;
 
@@ -221,12 +215,9 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
     //
     fn classify_token(&mut self) -> TokenClass {
         // Exit early if the next character is not '\n' or '\r\n'.
-        match self.ch {
-            None => { }
-            Some(ch) => {
-                if !(ch == '\n' || (ch == '\r' && self.peek() == Some('\n'))) {
-                    return Normal;
-                }
+        if let Some(ch) = self.ch {
+            if !(ch == '\n' || (ch == '\r' && self.peek() == Some('\n'))) {
+                return Normal;
             }
         }
 
@@ -402,11 +393,8 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                                 panic!("Unclosed section");
                             }
                         }
-                        _ => { match last {
-                            Some(last_token) => {children.push(last_token); }
-                            None => ()
-                            }
-                        }
+                        Some(last_token) => children.push(last_token),
+                        None => (),
                     }
                 }
             }
