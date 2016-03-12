@@ -204,7 +204,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
             let mut content = String::new();
             mem::swap(&mut content, &mut self.content);
 
-            self.tokens.push(Text(content.to_string()));
+            self.tokens.push(Text(content));
         }
     }
 
@@ -235,7 +235,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                     // It's all whitespace.
                     None => {
                         if self.tokens.len() == 1 {
-                            WhiteSpace(s.to_string(), 0)
+                            WhiteSpace(s.clone(), 0)
                         } else {
                             Normal
                         }
@@ -245,7 +245,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                             if pos == s.len() - 1 {
                                 StandAlone
                             } else {
-                                WhiteSpace(s.to_string(), pos + 1)
+                                WhiteSpace(s.clone(), pos + 1)
                             }
                         } else { Normal }
                     }
@@ -383,11 +383,11 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                                         name,
                                         inverted,
                                         children,
-                                        self.otag.to_string(),
+                                        self.otag.clone(),
                                         osection,
-                                        src.to_string(),
+                                        src,
                                         tag,
-                                        self.ctag.to_string()));
+                                        self.ctag.clone()));
                                 break;
                             } else {
                                 panic!("Unclosed section");
@@ -473,7 +473,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
         let name = &content[1..content.len()];
         let name = self.check_content(name);
 
-        self.tokens.push(Partial(name.to_string(), indent, tag));
+        self.tokens.push(Partial(name.clone(), indent, tag));
         self.partials.push(name);
     }
 
