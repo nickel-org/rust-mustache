@@ -8,13 +8,14 @@ use rustc_serialize;
 use super::{Data, StrVal, Bool, VecVal, Map, OptVal};
 pub use self::Error::*;
 
+#[derive(Default)]
 pub struct Encoder {
     pub data: Vec<Data>,
 }
 
 impl Encoder {
     pub fn new() -> Encoder {
-        Encoder { data: Vec::new() }
+        Encoder::default()
     }
 }
 
