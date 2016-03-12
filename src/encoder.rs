@@ -8,13 +8,14 @@ use rustc_serialize;
 use super::{Data, StrVal, Bool, VecVal, Map, OptVal};
 pub use self::Error::*;
 
+#[derive(Default)]
 pub struct Encoder {
     pub data: Vec<Data>,
 }
 
 impl Encoder {
     pub fn new() -> Encoder {
-        Encoder { data: Vec::new() }
+        Encoder::default()
     }
 }
 
@@ -263,7 +264,7 @@ impl rustc_serialize::Encoder for Encoder {
     }
 }
 
-pub fn encode<'a, T: rustc_serialize::Encodable>(data: &T) -> Result<Data, Error> {
+pub fn encode<T: rustc_serialize::Encodable>(data: &T) -> Result<Data, Error> {
     let mut encoder = Encoder::new();
     try!(data.encode(&mut encoder));
     assert_eq!(encoder.data.len(), 1);

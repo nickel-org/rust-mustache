@@ -8,6 +8,7 @@ use encoder::Error;
 use super::{Data, StrVal, Bool, VecVal, Map, Fun};
 
 /// `MapBuilder` is a helper type that construct `Data` types.
+#[derive(Default)]
 pub struct MapBuilder {
     data: HashMap<String, Data>,
 }
@@ -16,9 +17,7 @@ impl MapBuilder {
     /// Create a `MapBuilder`
     #[inline]
     pub fn new() -> MapBuilder {
-        MapBuilder {
-            data: HashMap::new(),
-        }
+        MapBuilder::default()
     }
 
     /// Add an `Encodable` to the `MapBuilder`.
@@ -146,6 +145,7 @@ impl MapBuilder {
     }
 }
 
+#[derive(Default)]
 pub struct VecBuilder {
     data: Vec<Data>,
 }
@@ -154,9 +154,7 @@ impl<'a> VecBuilder {
     /// Create a `VecBuilder`
     #[inline]
     pub fn new() -> VecBuilder {
-        VecBuilder {
-            data: Vec::new(),
-        }
+        VecBuilder::default()
     }
 
     /// Add an `Encodable` to the `VecBuilder`.
