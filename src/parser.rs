@@ -355,7 +355,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                 let mut children: Vec<Token> = Vec::new();
 
                 loop {
-                    if self.tokens.len() == 0 {
+                    if self.tokens.is_empty() {
                         panic!("closing unopened section");
                     }
 
@@ -514,7 +514,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
 
     fn check_content(&self, content: &str) -> String {
         let trimmed = content.trim();
-        if trimmed.len() == 0 {
+        if trimmed.is_empty() {
             panic!("empty tag");
         }
         trimmed.to_string()
