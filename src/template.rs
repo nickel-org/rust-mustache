@@ -285,13 +285,10 @@ impl<'a> RenderContext<'a> {
                         self.render(wr, stack, &tokens)
                     },
                     OptVal(ref val) => {
-                        match *val {
-                            Some(ref val) => {
-                                stack.push(val);
-                                self.render(wr, stack, children);
-                                stack.pop();
-                            }
-                            None => {}
+                        if let Some(ref val) = *val {
+                            stack.push(val);
+                            self.render(wr, stack, children);
+                            stack.pop();
                         }
                     }
                     _ => { panic!("unexpected value {:?}", value) }
@@ -348,12 +345,9 @@ impl<'a> RenderContext<'a> {
         for data in stack.iter().rev() {
             match **data {
                 Map(ref m) => {
-                    match m.get(&path[0]) {
-                        Some(v) => {
-                            value = Some(v);
-                            break;
-                        }
-                        None => { }
+                    if let Some(v) = m.get(&path[0]) {
+                        value = Some(v);
+                        break;
                     }
                 }
                 _ => { panic!("expect map: {:?}", path) }
