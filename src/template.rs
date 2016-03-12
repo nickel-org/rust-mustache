@@ -33,7 +33,7 @@ Vec<Token>>) -> Template {
 
 impl Template {
     /// Renders the template with the `Encodable` data.
-    pub fn render<'a, W: Write, T: Encodable>(
+    pub fn render<W: Write, T: Encodable>(
         &self,
         wr: &mut W,
         data: &T
@@ -43,7 +43,7 @@ impl Template {
     }
 
     /// Renders the template with the `Data`.
-    pub fn render_data<'a, W: Write>(&self, wr: &mut W, data: &Data) {
+    pub fn render_data<W: Write>(&self, wr: &mut W, data: &Data) {
         let mut render_ctx = RenderContext::new(self);
         let mut stack = vec!(data);
 
@@ -69,7 +69,7 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render<'b, W: Write>(
+    fn render<W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -80,7 +80,7 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render_token<'b, W: Write>(
+    fn render_token<W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -167,7 +167,7 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render_etag<'b, W: Write>(
+    fn render_etag<W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -191,7 +191,7 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render_utag<'b, W: Write>(
+    fn render_utag<W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -231,7 +231,7 @@ impl<'a> RenderContext<'a> {
         };
     }
 
-    fn render_inverted_section<'b, W: Write>(
+    fn render_inverted_section<W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -249,7 +249,7 @@ impl<'a> RenderContext<'a> {
         self.render(wr, stack, children);
     }
 
-    fn render_section<'b, W: Write>(
+    fn render_section<W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -300,7 +300,7 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render_partial<'b, W: Write>(
+    fn render_partial<W: Write>(
         &mut self,
         wr: &mut W,
         stack: &mut Vec<&Data>,
@@ -333,7 +333,7 @@ impl<'a> RenderContext<'a> {
         tokens
     }
 
-    fn find<'b, 'c>(&self, path: &[String], stack: &mut Vec<&'c Data>) -> Option<&'c Data> {
+    fn find<'c>(&self, path: &[String], stack: &mut Vec<&'c Data>) -> Option<&'c Data> {
         // If we have an empty path, we just want the top value in our stack.
         if path.is_empty() {
             match stack.last() {
