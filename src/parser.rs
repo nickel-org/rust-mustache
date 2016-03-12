@@ -106,12 +106,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
     pub fn parse(mut self) -> (Vec<Token>, Vec<String>) {
         let mut curly_brace_tag = false;
 
-        loop {
-            let ch = match self.ch {
-                Some(ch) => ch,
-                None => { break; }
-            };
-
+        while let Some(ch) = self.ch {
             match self.state {
                 TEXT => {
                     if ch == self.otag_chars[0] {
