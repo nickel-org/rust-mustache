@@ -405,8 +405,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                 if len > 2usize && content.ends_with('=') {
                     let s = self.check_content(&content[1..len - 1]);
 
-                    fn is_whitespace(c: char) -> bool { c.is_whitespace() }
-                    let pos = s.find(is_whitespace);
+                    let pos = s.find(char::is_whitespace);
                     let pos = match pos {
                       None => { panic!("invalid change delimiter tag content"); }
                       Some(pos) => { pos }
