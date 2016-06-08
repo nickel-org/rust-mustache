@@ -7,7 +7,8 @@
 
 extern crate rustc_serialize;
 extern crate log;
-#[cfg(test)]extern crate tempdir;
+#[cfg(test)]
+extern crate tempdir;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -77,7 +78,8 @@ pub struct Context {
 
 impl fmt::Debug for Context {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Context {{ template_path: {:?}, template_extension: {} }}",
+        write!(f,
+               "Context {{ template_path: {:?}, template_extension: {} }}",
                &*self.template_path,
                self.template_extension)
     }
@@ -93,7 +95,7 @@ impl Context {
     }
 
     /// Compiles a template from a string
-    pub fn compile<IT: Iterator<Item=char>>(&self, reader: IT) -> Template {
+    pub fn compile<IT: Iterator<Item = char>>(&self, reader: IT) -> Template {
         let compiler = compiler::Compiler::new(self.clone(), reader);
         let (tokens, partials) = compiler.compile();
 
@@ -113,7 +115,9 @@ impl Context {
         // TODO: maybe allow UTF-16 as well?
         let template = match str::from_utf8(&*s) {
             Ok(string) => string,
-            _ => { return Result::Err(Error::InvalidStr); }
+            _ => {
+                return Result::Err(Error::InvalidStr);
+            }
         };
 
         Ok(self.compile(template.chars()))
@@ -121,7 +125,7 @@ impl Context {
 }
 
 /// Compiles a template from an `Iterator<char>`.
-pub fn compile_iter<T: Iterator<Item=char>>(iter: T) -> Template {
+pub fn compile_iter<T: Iterator<Item = char>>(iter: T) -> Template {
     Context::new(PathBuf::from(".")).compile(iter)
 }
 
@@ -135,17 +139,15 @@ pub fn compile_path<U: AsRef<Path>>(path: U) -> Result<Template, Error> {
             let template_dir = path.parent().unwrap_or(Path::new("."));
             // FIXME: Should work with OsStrings, this will not use provided extension if
             // the extension is not utf8 :(
-            let extension = path.extension()
-                                .and_then(|ext| ext.to_str())
-                                .unwrap_or("mustache");
+            let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("mustache");
 
             let context = Context {
                 template_path: template_dir.to_path_buf(),
-                template_extension: extension.to_string()
+                template_extension: extension.to_string(),
             };
             context.compile_path(filename)
         }
-        None => Result::Err(Error::NoFilename)
+        None => Result::Err(Error::NoFilename),
     }
 }
 

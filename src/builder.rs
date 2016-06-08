@@ -30,9 +30,7 @@ impl MapBuilder {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert<
-        K: ToString, T: Encodable
-    >(self, key: K, value: &T) -> Result<MapBuilder, Error> {
+    pub fn insert<K: ToString, T: Encodable>(self, key: K, value: &T) -> Result<MapBuilder, Error> {
         let MapBuilder { mut data } = self;
         let value = try!(encoder::encode(value));
         data.insert(key.to_string(), value);
@@ -48,9 +46,7 @@ impl MapBuilder {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_str<
-        K: ToString, V: ToString
-    >(self, key: K, value: V) -> MapBuilder {
+    pub fn insert_str<K: ToString, V: ToString>(self, key: K, value: V) -> MapBuilder {
         let MapBuilder { mut data } = self;
         data.insert(key.to_string(), StrVal(value.to_string()));
         MapBuilder { data: data }
@@ -85,7 +81,8 @@ impl MapBuilder {
     /// ```
     #[inline]
     pub fn insert_vec<K: ToString, F>(self, key: K, mut f: F) -> MapBuilder
-        where F: FnMut(VecBuilder) -> VecBuilder {
+    where F: FnMut(VecBuilder) -> VecBuilder
+    {
         let MapBuilder { mut data } = self;
         let builder = f(VecBuilder::new());
         data.insert(key.to_string(), builder.build());
@@ -111,7 +108,8 @@ impl MapBuilder {
     /// ```
     #[inline]
     pub fn insert_map<K: ToString, F>(self, key: K, mut f: F) -> MapBuilder
-        where F: FnMut(MapBuilder) -> MapBuilder {
+    where F: FnMut(MapBuilder) -> MapBuilder
+    {
         let MapBuilder { mut data } = self;
         let builder = f(MapBuilder::new());
         data.insert(key.to_string(), builder.build());
@@ -132,7 +130,8 @@ impl MapBuilder {
     /// ```
     #[inline]
     pub fn insert_fn<K: ToString, F>(self, key: K, f: F) -> MapBuilder
-                                where F: FnMut(String) -> String + Send + 'static {
+    where F: FnMut(String) -> String + Send + 'static
+    {
         let MapBuilder { mut data } = self;
         data.insert(key.to_string(), Fun(RefCell::new(Box::new(f))));
         MapBuilder { data: data }
@@ -220,7 +219,8 @@ impl<'a> VecBuilder {
     /// ```
     #[inline]
     pub fn push_vec<F>(self, mut f: F) -> VecBuilder
-        where F: FnMut(VecBuilder) -> VecBuilder {
+    where F: FnMut(VecBuilder) -> VecBuilder
+    {
         let VecBuilder { mut data } = self;
         let builder = f(VecBuilder::new());
         data.push(builder.build());
@@ -246,7 +246,8 @@ impl<'a> VecBuilder {
     /// ```
     #[inline]
     pub fn push_map<F>(self, mut f: F) -> VecBuilder
-        where F: FnMut(MapBuilder) -> MapBuilder {
+    where F: FnMut(MapBuilder) -> MapBuilder
+    {
         let VecBuilder { mut data } = self;
         let builder = f(MapBuilder::new());
         data.push(builder.build());
@@ -267,7 +268,8 @@ impl<'a> VecBuilder {
     /// ```
     #[inline]
     pub fn push_fn<F>(self, f: F) -> VecBuilder
-                   where F: FnMut(String) -> String + Send + 'static {
+    where F: FnMut(String) -> String + Send + 'static
+    {
         let VecBuilder { mut data } = self;
         data.push(Fun(RefCell::new(Box::new(f))));
         VecBuilder { data: data }
@@ -288,19 +290,16 @@ mod tests {
 
     #[test]
     fn test_empty_builders() {
-        assert_eq!(
-            MapBuilder::new().build(),
-            Map(HashMap::new()));
+        assert_eq!(MapBuilder::new().build(), Map(HashMap::new()));
 
-        assert_eq!(
-            VecBuilder::new().build(),
-            VecVal(Vec::new()));
+        assert_eq!(VecBuilder::new().build(), VecVal(Vec::new()));
     }
 
     #[test]
     fn test_builders() {
         let mut pride_and_prejudice = HashMap::new();
-        pride_and_prejudice.insert("title".to_string(), StrVal("Pride and Prejudice".to_string()));
+        pride_and_prejudice.insert("title".to_string(),
+                                   StrVal("Pride and Prejudice".to_string()));
         pride_and_prejudice.insert("publish_date".to_string(), StrVal("1813".to_string()));
 
         let mut m = HashMap::new();
@@ -308,27 +307,27 @@ mod tests {
         m.insert("last_name".to_string(), StrVal("Austen".to_string()));
         m.insert("age".to_string(), StrVal("41".to_string()));
         m.insert("died".to_string(), Bool(true));
-        m.insert("works".to_string(), VecVal(vec!(
-            StrVal("Sense and Sensibility".to_string()),
-            Map(pride_and_prejudice))));
+        m.insert("works".to_string(),
+                 VecVal(vec![StrVal("Sense and Sensibility".to_string()),
+                             Map(pride_and_prejudice)]));
 
-        assert_eq!(
-            MapBuilder::new()
-                .insert_str("first_name", "Jane")
-                .insert_str("last_name", "Austen")
-                .insert("age", &41usize).ok().unwrap()
-                .insert_bool("died", true)
-                .insert_vec("works", |builder| {
-                    builder
-                        .push_str("Sense and Sensibility")
-                        .push_map(|builder| {
-                            builder
-                                .insert_str("title", "Pride and Prejudice")
-                                .insert("publish_date", &1813usize).ok().unwrap()
-                        })
+        assert_eq!(MapBuilder::new()
+                       .insert_str("first_name", "Jane")
+                       .insert_str("last_name", "Austen")
+                       .insert("age", &41usize)
+                       .ok()
+                       .unwrap()
+                       .insert_bool("died", true)
+                       .insert_vec("works", |builder| {
+                builder.push_str("Sense and Sensibility").push_map(|builder| {
+                    builder.insert_str("title", "Pride and Prejudice")
+                        .insert("publish_date", &1813usize)
+                        .ok()
+                        .unwrap()
                 })
-                .build(),
-            Map(m));
+            })
+                       .build(),
+                   Map(m));
     }
 
     #[test]

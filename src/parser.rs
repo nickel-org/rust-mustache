@@ -41,9 +41,14 @@ pub struct Parser<'a, T: 'a> {
     partials: Vec<String>,
 }
 
-enum ParserState { TEXT, OTAG, TAG, CTAG }
+enum ParserState {
+    TEXT,
+    OTAG,
+    TAG,
+    CTAG,
+}
 
-impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
+impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
     pub fn new(reader: &'a mut T, otag: &str, ctag: &str) -> Parser<'a, T> {
         let mut parser = Parser {
             reader: reader,
@@ -68,8 +73,12 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
 
     fn bump(&mut self) {
         match self.lookahead.take() {
-            None => { self.ch = self.reader.next(); }
-            Some(ch) => { self.ch = Some(ch); }
+            None => {
+                self.ch = self.reader.next();
+            }
+            Some(ch) => {
+                self.ch = Some(ch);
+            }
         }
 
         if let Some(ch) = self.ch {
@@ -173,18 +182,28 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                         }
                     } else {
                         panic!("character {} is not part of CTAG: {}",
-                              ch,
-                              self.ctag_chars[self.tag_position]);
+                               ch,
+                               self.ctag_chars[self.tag_position]);
                     }
                 }
             }
         }
 
         match self.state {
-            TEXT => { self.add_text(); }
-            OTAG => { self.not_otag(); self.add_text(); }
-            TAG => { panic!("unclosed tag"); }
-            CTAG => { self.not_ctag(); self.add_text(); }
+            TEXT => {
+                self.add_text();
+            }
+            OTAG => {
+                self.not_otag();
+                self.add_text();
+            }
+            TAG => {
+                panic!("unclosed tag");
+            }
+            CTAG => {
+                self.not_ctag();
+                self.add_text();
+            }
         }
 
         // Check that we don't have any incomplete sections.
@@ -224,14 +243,14 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
         match self.tokens.last() {
             // If the last token ends with a newline (or there is no previous
             // token), then this token is standalone.
-            None => { StandAlone }
+            None => StandAlone,
 
-            Some(&IncompleteSection(_, _, _, true)) => { StandAlone }
+            Some(&IncompleteSection(_, _, _, true)) => StandAlone,
 
             Some(&Text(ref s)) if !s.is_empty() => {
                 // Look for the last newline character that may have whitespace
                 // following it.
-                match s.rfind(| c:char| c == '\n' || !c.is_whitespace()) {
+                match s.rfind(|c: char| c == '\n' || !c.is_whitespace()) {
                     // It's all whitespace.
                     None => {
                         if self.tokens.len() == 1 {
@@ -247,7 +266,9 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                             } else {
                                 WhiteSpace(s.clone(), pos + 1)
                             }
-                        } else { Normal }
+                        } else {
+                            Normal
+                        }
                     }
                 }
             }
@@ -260,14 +281,19 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
         // newline and whitespace, clear out the whitespace.
 
         match self.classify_token() {
-            Normal => { false }
+            Normal => false,
             StandAlone => {
-                if self.ch_is('\r') { self.bump(); }
+                if self.ch_is('\r') {
+                    self.bump();
+                }
                 self.bump();
                 true
             }
-            WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
-                if self.ch_is('\r') { self.bump(); }
+            WhiteSpace(s, pos) |
+            NewLineWhiteSpace(s, pos) => {
+                if self.ch_is('\r') {
+                    self.bump();
+                }
                 self.bump();
 
                 // Trim the whitespace from the last token.
@@ -298,46 +324,38 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
             '&' => {
                 let name = &content[1..len];
                 let name = self.check_content(name);
-                let name = name.split_terminator('.')
-                    .map(|x| x.to_string())
-                    .collect();
+                let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                 self.tokens.push(UTag(name, tag));
             }
             '{' => {
                 if content.ends_with('}') {
                     let name = &content[1..len - 1];
                     let name = self.check_content(name);
-                    let name = name.split_terminator('.')
-                        .map(|x| x.to_string())
-                        .collect();
+                    let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                     self.tokens.push(UTag(name, tag));
-                } else { panic!("unbalanced \"{\" in tag"); }
+                } else {
+                    panic!("unbalanced \"{\" in tag");
+                }
             }
             '#' => {
                 let newlined = self.eat_whitespace();
 
                 let name = self.check_content(&content[1..len]);
-                let name = name.split_terminator('.')
-                    .map(|x| x.to_string())
-                    .collect();
+                let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                 self.tokens.push(IncompleteSection(name, false, tag, newlined));
             }
             '^' => {
                 let newlined = self.eat_whitespace();
 
                 let name = self.check_content(&content[1..len]);
-                let name = name.split_terminator('.')
-                    .map(|x| x.to_string())
-                    .collect();
+                let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                 self.tokens.push(IncompleteSection(name, true, tag, newlined));
             }
             '/' => {
                 self.eat_whitespace();
 
                 let name = self.check_content(&content[1..len]);
-                let name = name.split_terminator('.')
-                    .map(|x| x.to_string())
-                    .collect();
+                let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                 let mut children: Vec<Token> = Vec::new();
 
                 loop {
@@ -355,12 +373,10 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                             let mut srcs = Vec::new();
                             for child in children.iter() {
                                 match *child {
-                                    Text(ref s)
-                                    | ETag(_, ref s)
-                                    | UTag(_, ref s)
-                                    | Partial(_, _, ref s) => {
-                                        srcs.push(s.clone())
-                                    }
+                                    Text(ref s) |
+                                    ETag(_, ref s) |
+                                    UTag(_, ref s) |
+                                    Partial(_, _, ref s) => srcs.push(s.clone()),
                                     Section(_, _, _, _, ref osection, ref src, ref csection, _) => {
                                         srcs.push(osection.clone());
                                         srcs.push(src.clone());
@@ -376,18 +392,18 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                                 // case the user uses a function to instantiate the
                                 // tag.
                                 let mut src = String::new();
-                                for s in srcs.iter() { src.push_str(s); }
+                                for s in srcs.iter() {
+                                    src.push_str(s);
+                                }
 
-                                self.tokens.push(
-                                    Section(
-                                        name,
-                                        inverted,
-                                        children,
-                                        self.otag.clone(),
-                                        osection,
-                                        src,
-                                        tag,
-                                        self.ctag.clone()));
+                                self.tokens.push(Section(name,
+                                                         inverted,
+                                                         children,
+                                                         self.otag.clone(),
+                                                         osection,
+                                                         src,
+                                                         tag,
+                                                         self.ctag.clone()));
                                 break;
                             } else {
                                 panic!("Unclosed section");
@@ -398,7 +414,9 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                     }
                 }
             }
-            '>' => { self.add_partial(&content, tag); }
+            '>' => {
+                self.add_partial(&content, tag);
+            }
             '=' => {
                 self.eat_whitespace();
 
@@ -407,18 +425,22 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
 
                     let pos = s.find(char::is_whitespace);
                     let pos = match pos {
-                      None => { panic!("invalid change delimiter tag content"); }
-                      Some(pos) => { pos }
+                        None => {
+                            panic!("invalid change delimiter tag content");
+                        }
+                        Some(pos) => pos,
                     };
 
                     self.otag = s[0..pos].to_string();
                     self.otag_chars = self.otag.chars().collect();
 
                     let s2 = &s[pos..];
-                    let pos = s2.find(| c : char| !c.is_whitespace());
+                    let pos = s2.find(|c: char| !c.is_whitespace());
                     let pos = match pos {
-                      None => { panic!("invalid change delimiter tag content"); }
-                      Some(pos) => { pos }
+                        None => {
+                            panic!("invalid change delimiter tag content");
+                        }
+                        Some(pos) => pos,
                     };
 
                     self.ctag = s2[pos..].to_string();
@@ -434,9 +456,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
                 let name = if name == "." {
                     Vec::new()
                 } else {
-                    name.split_terminator('.')
-                        .map(|x| x.to_string())
-                        .collect()
+                    name.split_terminator('.').map(|x| x.to_string()).collect()
                 };
 
                 self.tokens.push(ETag(name, tag));
@@ -448,12 +468,17 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
         let indent = match self.classify_token() {
             Normal => "".to_string(),
             StandAlone => {
-                if self.ch_is('\r') { self.bump(); }
+                if self.ch_is('\r') {
+                    self.bump();
+                }
                 self.bump();
                 "".to_string()
             }
-            WhiteSpace(s, pos) | NewLineWhiteSpace(s, pos) => {
-                if self.ch_is('\r') { self.bump(); }
+            WhiteSpace(s, pos) |
+            NewLineWhiteSpace(s, pos) => {
+                if self.ch_is('\r') {
+                    self.bump();
+                }
                 self.bump();
 
                 let ws = &s[pos..];
@@ -479,7 +504,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
     fn not_otag(&mut self) {
         for (i, ch) in self.otag_chars.iter().enumerate() {
             if !(i < self.tag_position) {
-                break
+                break;
             }
             self.content.push(*ch);
         }
@@ -488,7 +513,7 @@ impl<'a, T: Iterator<Item=char>> Parser<'a, T> {
     fn not_ctag(&mut self) {
         for (i, ch) in self.ctag_chars.iter().enumerate() {
             if !(i < self.tag_position) {
-                break
+                break;
             }
             self.content.push(*ch);
         }
