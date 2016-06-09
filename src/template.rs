@@ -2,6 +2,7 @@ use std::io::Write;
 use std::collections::HashMap;
 use std::mem;
 use std::str;
+use std::result::Result as StdResult;
 use rustc_serialize::Encodable;
 
 use encoder;
@@ -11,6 +12,8 @@ use parser::Token::*;
 use encoder::Error;
 
 use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun, OptVal};
+
+pub type Result<T = ()> = StdResult<T, Error>;
 
 /// `Template` represents a compiled mustache file.
 #[derive(Debug, Clone)]
@@ -32,17 +35,17 @@ pub fn new(ctx: Context, tokens: Vec<Token>, partials: HashMap<String, Vec<Token
 
 impl Template {
     /// Renders the template with the `Encodable` data.
-    pub fn render<W: Write, T: Encodable>(&self, wr: &mut W, data: &T) -> Result<(), Error> {
+    pub fn render<W: Write, T: Encodable>(&self, wr: &mut W, data: &T) -> Result {
         let data = try!(encoder::encode(data));
-        Ok(self.render_data(wr, &data))
+        self.render_data(wr, &data)
     }
 
     /// Renders the template with the `Data`.
-    pub fn render_data<W: Write>(&self, wr: &mut W, data: &Data) {
+    pub fn render_data<W: Write>(&self, wr: &mut W, data: &Data) -> Result {
         let mut render_ctx = RenderContext::new(self);
         let mut stack = vec![data];
 
-        render_ctx.render(wr, &mut stack, &self.tokens);
+        render_ctx.render(wr, &mut stack, &self.tokens)
     }
 }
 
@@ -61,31 +64,33 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, tokens: &[Token]) {
+    fn render<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, tokens: &[Token]) -> Result {
         for token in tokens.iter() {
-            self.render_token(wr, stack, token);
+            try!(self.render_token(wr, stack, token));
         }
+
+        Ok(())
     }
 
-    fn render_token<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, token: &Token) {
+    fn render_token<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, token: &Token) -> Result {
         match *token {
             Text(ref value) => {
-                self.render_text(wr, value);
+                self.render_text(wr, value)
             }
             ETag(ref path, _) => {
-                self.render_etag(wr, stack, path);
+                self.render_etag(wr, stack, path)
             }
             UTag(ref path, _) => {
-                self.render_utag(wr, stack, path);
+                self.render_utag(wr, stack, path)
             }
             Section(ref path, true, ref children, _, _, _, _, _) => {
-                self.render_inverted_section(wr, stack, path, children);
+                self.render_inverted_section(wr, stack, path, children)
             }
             Section(ref path, false, ref children, ref otag, _, ref src, _, ref ctag) => {
                 self.render_section(wr, stack, path, children, src, otag, ctag)
             }
             Partial(ref name, ref indent, _) => {
-                self.render_partial(wr, stack, name, indent);
+                self.render_partial(wr, stack, name, indent)
             }
             _ => panic!(),
         }
@@ -106,7 +111,7 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render_text<W: Write>(&mut self, wr: &mut W, value: &str) {
+    fn render_text<W: Write>(&mut self, wr: &mut W, value: &str) -> Result {
         // Indent the lines.
         if self.indent.is_empty() {
             self.write_tracking_newlines(wr, value);
@@ -136,12 +141,14 @@ impl<'a> RenderContext<'a> {
                 self.write_tracking_newlines(wr, line);
             }
         }
+
+        Ok(())
     }
 
-    fn render_etag<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, path: &[String]) {
+    fn render_etag<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, path: &[String]) -> Result {
         let mut bytes = vec![];
 
-        self.render_utag(&mut bytes, stack, path);
+        try!(self.render_utag(&mut bytes, stack, path));
 
         let s = str::from_utf8(&bytes).unwrap();
 
@@ -167,9 +174,11 @@ impl<'a> RenderContext<'a> {
                 }
             }
         }
+
+        Ok(())
     }
 
-    fn render_utag<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, path: &[String]) {
+    fn render_utag<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, path: &[String]) -> Result {
         match self.find(path, stack) {
             None => {}
             Some(mut value) => {
@@ -182,7 +191,7 @@ impl<'a> RenderContext<'a> {
                 if let OptVal(ref inner) = *value {
                     match *inner {
                         Some(ref inner) => value = inner,
-                        None => return,
+                        None => return Ok(()),
                     }
                 }
 
@@ -195,7 +204,7 @@ impl<'a> RenderContext<'a> {
                     Fun(ref fcell) => {
                         let f = &mut *fcell.borrow_mut();
                         let tokens = self.render_fun("", "{{", "}}", f);
-                        self.render(wr, stack, &tokens);
+                        try!(self.render(wr, stack, &tokens));
                     }
 
                     ref value => {
@@ -204,24 +213,26 @@ impl<'a> RenderContext<'a> {
                 }
             }
         };
+
+        Ok(())
     }
 
     fn render_inverted_section<W: Write>(&mut self,
                                          wr: &mut W,
                                          stack: &mut Vec<&Data>,
                                          path: &[String],
-                                         children: &[Token]) {
+                                         children: &[Token]) -> Result {
         match self.find(path, stack) {
             None => {}
             Some(&Bool(false)) => {}
             Some(&VecVal(ref xs)) if xs.is_empty() => {}
             Some(&OptVal(ref val)) if val.is_none() => {}
             Some(_) => {
-                return;
+                return Ok(());
             }
         }
 
-        self.render(wr, stack, children);
+        self.render(wr, stack, children)
     }
 
     fn render_section<W: Write>(&mut self,
@@ -231,60 +242,64 @@ impl<'a> RenderContext<'a> {
                                 children: &[Token],
                                 src: &str,
                                 otag: &str,
-                                ctag: &str) {
+                                ctag: &str) -> Result {
         match self.find(path, stack) {
             None => {}
             Some(value) => {
                 match *value {
                     Bool(true) => {
-                        self.render(wr, stack, children);
+                        try!(self.render(wr, stack, children));
                     }
                     Bool(false) => {}
                     VecVal(ref vs) => {
                         for v in vs.iter() {
                             stack.push(v);
-                            self.render(wr, stack, children);
+                            try!(self.render(wr, stack, children));
                             stack.pop();
                         }
                     }
                     Map(_) => {
                         stack.push(value);
-                        self.render(wr, stack, children);
+                        try!(self.render(wr, stack, children));
                         stack.pop();
                     }
                     Fun(ref fcell) => {
                         let f = &mut *fcell.borrow_mut();
                         let tokens = self.render_fun(src, otag, ctag, f);
-                        self.render(wr, stack, &tokens)
+                        try!(self.render(wr, stack, &tokens));
                     }
                     OptVal(ref val) => {
                         if let Some(ref val) = *val {
                             stack.push(val);
-                            self.render(wr, stack, children);
+                            try!(self.render(wr, stack, children));
                             stack.pop();
                         }
                     }
                     _ => panic!("unexpected value {:?}", value),
                 }
             }
-        }
+        };
+
+        Ok(())
     }
 
     fn render_partial<W: Write>(&mut self,
                                 wr: &mut W,
                                 stack: &mut Vec<&Data>,
                                 name: &str,
-                                indent: &str) {
+                                indent: &str) -> Result {
         match self.template.partials.get(name) {
             None => {}
             Some(ref tokens) => {
                 let mut indent = self.indent.clone() + indent;
 
                 mem::swap(&mut self.indent, &mut indent);
-                self.render(wr, stack, &tokens);
+                try!(self.render(wr, stack, &tokens));
                 mem::swap(&mut self.indent, &mut indent);
             }
-        }
+        };
+
+        Ok(())
     }
 
     fn render_fun(&self,
@@ -525,7 +540,7 @@ mod tests {
 
     fn render_data(template: &Template, data: &Data) -> String {
         let mut bytes = vec![];
-        template.render_data(&mut bytes, data);
+        template.render_data(&mut bytes, data).expect("Failed to render data");
         String::from_utf8(bytes).unwrap()
     }
 
