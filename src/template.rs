@@ -2,18 +2,14 @@ use std::io::Write;
 use std::collections::HashMap;
 use std::mem;
 use std::str;
-use std::result::Result as StdResult;
 use rustc_serialize::Encodable;
 
 use encoder;
 use compiler::Compiler;
 use parser::Token;
 use parser::Token::*;
-use encoder::Error;
 
-use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun, OptVal};
-
-pub type Result<T = ()> = StdResult<T, Error>;
+use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun, OptVal, Result};
 
 /// `Template` represents a compiled mustache file.
 #[derive(Debug, Clone)]
@@ -205,7 +201,7 @@ impl<'a> RenderContext<'a> {
                     // etags and utags use the default delimiter.
                     Fun(ref fcell) => {
                         let f = &mut *fcell.borrow_mut();
-                        let tokens = self.render_fun("", "{{", "}}", f);
+                        let tokens = try!(self.render_fun("", "{{", "}}", f));
                         try!(self.render(wr, stack, &tokens));
                     }
 
@@ -267,7 +263,7 @@ impl<'a> RenderContext<'a> {
                     }
                     Fun(ref fcell) => {
                         let f = &mut *fcell.borrow_mut();
-                        let tokens = self.render_fun(src, otag, ctag, f);
+                        let tokens = try!(self.render_fun(src, otag, ctag, f));
                         try!(self.render(wr, stack, &tokens));
                     }
                     OptVal(ref val) => {
@@ -309,7 +305,7 @@ impl<'a> RenderContext<'a> {
                   otag: &str,
                   ctag: &str,
                   f: &mut Box<FnMut(String) -> String + Send + 'static>)
-                  -> Vec<Token> {
+                  -> Result<Vec<Token>> {
         let src = f(src.to_string());
 
         let compiler = Compiler::new_with(self.template.ctx.clone(),
@@ -318,8 +314,8 @@ impl<'a> RenderContext<'a> {
                                           otag.to_string(),
                                           ctag.to_string());
 
-        let (tokens, _) = compiler.compile();
-        tokens
+        let (tokens, _) = try!(compiler.compile());
+        Ok(tokens)
     }
 
     fn find<'c>(&self, path: &[String], stack: &mut Vec<&'c Data>) -> Option<&'c Data> {
@@ -394,7 +390,6 @@ mod tests {
 
     use encoder::{Encoder, Error};
 
-    use super::super::compile_str;
     use super::super::{Data, StrVal, VecVal, Map, Fun};
     use super::super::{Context, Template};
 
@@ -415,6 +410,10 @@ mod tests {
     struct Person {
         name: String,
         age: Option<u32>,
+    }
+
+    fn compile_str(s: &str) -> Template {
+        ::compile_str(s).expect(&format!("Failed to compile: {}", s))
     }
 
     fn assert_render<'a, 'b, T: Encodable + Debug>(template: &str, data: &T) -> String {
@@ -751,7 +750,8 @@ mod tests {
         }
 
         let ctx = Context::new(tmpdir.path().to_path_buf());
-        let template = ctx.compile(template.chars());
+        let template = ctx.compile(template.chars())
+                          .expect(&format!("Failed to compile: {}", template));
         let result = render_data(&template, &data);
 
         if result != expected {

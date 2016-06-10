@@ -14,7 +14,7 @@ fn main() {
                    Hello {{name}}!
                    {{/users}}";
 
-    let template = mustache::compile_str(template);
+    let template = mustache::compile_str(template).expect("Failed to compile");
 
     let users = vec![
         User { name: "Harry".into() },

@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::io::ErrorKind::NotFound;
 use std::io::Read;
 use std::fs::File;
-use std::str;
 
 use parser::{Parser, Token};
 use super::Context;
+
+use Result;
 
 pub type PartialsMap = HashMap<String, Vec<Token>>;
 
@@ -47,7 +48,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
     }
 
     /// Compiles a template into a series of tokens.
-    pub fn compile(mut self) -> (Vec<Token>, PartialsMap) {
+    pub fn compile(mut self) -> Result<(Vec<Token>, PartialsMap)> {
         let (tokens, partials) = {
             let parser = Parser::new(&mut self.reader, &self.otag, &self.ctag);
             parser.parse()
@@ -64,14 +65,8 @@ impl<T: Iterator<Item = char>> Compiler<T> {
 
                 match File::open(&path) {
                     Ok(mut file) => {
-                        let mut contents = vec![];
-                        file.read_to_end(&mut contents).unwrap();
-                        let string = match str::from_utf8(&contents) {
-                            Ok(string) => string.to_string(),
-                            Err(_) => {
-                                panic!("Failed to parse file as UTF-8");
-                            }
-                        };
+                        let mut string = String::new();
+                        try!(file.read_to_string(&mut string));
 
                         let compiler = Compiler {
                             ctx: self.ctx.clone(),
@@ -81,7 +76,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
                             ctag: "}}".to_string(),
                         };
 
-                        let (tokens, subpartials) = compiler.compile();
+                        let (tokens, subpartials) = try!(compiler.compile());
 
                         // Include subpartials
                         self.partials.extend(subpartials.into_iter());
@@ -89,19 +84,16 @@ impl<T: Iterator<Item = char>> Compiler<T> {
                         // Set final compiled tokens for *this* partial
                         self.partials.insert(name, tokens);
                     }
-                    Err(e) => {
-                        // Ignore missing files.
-                        if e.kind() != NotFound {
-                            panic!("error reading file: {}", e);
-                        }
-                    }
+                    // Ignore missing files.
+                    Err(ref e) if e.kind() == NotFound => {},
+                    Err(e) => return Err(e.into()),
                 }
             }
         }
 
         let Compiler { partials, .. } = self;
 
-        (tokens, partials)
+        Ok((tokens, partials))
     }
 }
 
@@ -114,7 +106,9 @@ mod tests {
 
     fn compile_str(template: &str) -> Vec<Token> {
         let ctx = Context::new(PathBuf::from("."));
-        let (tokens, _) = Compiler::new(ctx, template.chars()).compile();
+        let (tokens, _) = Compiler::new(ctx, template.chars())
+                                   .compile()
+                                   .expect("Failed to compile");
         tokens
     }
 
