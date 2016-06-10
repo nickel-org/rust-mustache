@@ -96,25 +96,29 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn write_tracking_newlines<W: Write>(&mut self, wr: &mut W, value: &str) {
-        wr.write_all(value.as_bytes()).unwrap();
+    fn write_tracking_newlines<W: Write>(&mut self, wr: &mut W, value: &str) -> Result {
+        try!(wr.write_all(value.as_bytes()));
         self.line_start = match value.chars().last() {
             None => self.line_start, // None == ""
             Some('\n') => true,
             _ => false,
         };
+
+        Ok(())
     }
 
-    fn write_indent<W: Write>(&mut self, wr: &mut W) {
+    fn write_indent<W: Write>(&mut self, wr: &mut W) -> Result {
         if self.line_start {
-            wr.write_all(self.indent.as_bytes()).unwrap();
+            try!(wr.write_all(self.indent.as_bytes()));
         }
+
+        Ok(())
     }
 
     fn render_text<W: Write>(&mut self, wr: &mut W, value: &str) -> Result {
         // Indent the lines.
         if self.indent.is_empty() {
-            self.write_tracking_newlines(wr, value);
+            return self.write_tracking_newlines(wr, value);
         } else {
             let mut pos = 0;
             let len = value.len();
@@ -135,10 +139,10 @@ impl<'a> RenderContext<'a> {
                 };
 
                 if line.as_bytes()[0] != b'\n' {
-                    self.write_indent(wr)
+                    try!(self.write_indent(wr));
                 }
 
-                self.write_tracking_newlines(wr, line);
+                try!(self.write_tracking_newlines(wr, line));
             }
         }
 
@@ -155,22 +159,22 @@ impl<'a> RenderContext<'a> {
         for b in s.bytes() {
             match b {
                 b'<' => {
-                    wr.write_all(b"&lt;").unwrap();
+                    try!(wr.write_all(b"&lt;"));
                 }
                 b'>' => {
-                    wr.write_all(b"&gt;").unwrap();
+                    try!(wr.write_all(b"&gt;"));
                 }
                 b'&' => {
-                    wr.write_all(b"&amp;").unwrap();
+                    try!(wr.write_all(b"&amp;"));
                 }
                 b'"' => {
-                    wr.write_all(b"&quot;").unwrap();
+                    try!(wr.write_all(b"&quot;"));
                 }
                 b'\'' => {
-                    wr.write_all(b"&#39;").unwrap();
+                    try!(wr.write_all(b"&#39;"));
                 }
                 _ => {
-                    wr.write_all(&[b]).unwrap();
+                    try!(wr.write_all(&[b]));
                 }
             }
         }
@@ -182,7 +186,7 @@ impl<'a> RenderContext<'a> {
         match self.find(path, stack) {
             None => {}
             Some(mut value) => {
-                self.write_indent(wr);
+                try!(self.write_indent(wr));
 
                 // Currently this doesn't allow Option<Option<Foo>>, which
                 // would be un-nameable in the view anyway, so I'm unsure if it's
@@ -197,7 +201,7 @@ impl<'a> RenderContext<'a> {
 
                 match *value {
                     StrVal(ref value) => {
-                        self.write_tracking_newlines(wr, value);
+                        try!(self.write_tracking_newlines(wr, value));
                     }
 
                     // etags and utags use the default delimiter.
@@ -542,6 +546,32 @@ mod tests {
         let mut bytes = vec![];
         template.render_data(&mut bytes, data).expect("Failed to render data");
         String::from_utf8(bytes).unwrap()
+    }
+
+    #[test]
+    fn test_write_failure() {
+        use std::error::Error;
+
+        let mut ctx = HashMap::new();
+        ctx.insert("name", "foobar");
+
+        let template = compile_str("{{name}}");
+        let mut buffer = [0u8; 6];
+        {
+            let mut writer: &mut [u8] = &mut buffer;
+            template.render(&mut writer, &ctx).unwrap();
+        }
+
+        assert_eq!(&buffer, b"foobar");
+
+        ctx.insert("name", "longerthansix");
+
+        let mut writer: &mut [u8] = &mut buffer;
+        match template.render(&mut writer, &ctx) {
+            Err(e) => assert_eq!(e.description(), "failed to write whole buffer"),
+            _ => unreachable!()
+
+        }
     }
 
     #[test]
