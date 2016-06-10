@@ -7,11 +7,13 @@ use std::str;
 use parser::{Parser, Token};
 use super::Context;
 
+pub type PartialsMap = HashMap<String, Vec<Token>>;
+
 /// `Compiler` is a object that compiles a string into a `Vec<Token>`.
 pub struct Compiler<T> {
     ctx: Context,
     reader: T,
-    partials: HashMap<String, Vec<Token>>,
+    partials: PartialsMap,
     otag: String,
     ctag: String,
 }
@@ -31,7 +33,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
     /// Construct a default compiler.
     pub fn new_with(ctx: Context,
                     reader: T,
-                    partials: HashMap<String, Vec<Token>>,
+                    partials: PartialsMap,
                     otag: String,
                     ctag: String)
                     -> Compiler<T> {
@@ -45,7 +47,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
     }
 
     /// Compiles a template into a series of tokens.
-    pub fn compile(mut self) -> (Vec<Token>, HashMap<String, Vec<Token>>) {
+    pub fn compile(mut self) -> (Vec<Token>, PartialsMap) {
         let (tokens, partials) = {
             let parser = Parser::new(&mut self.reader, &self.otag, &self.ctag);
             parser.parse()
