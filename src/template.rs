@@ -386,6 +386,7 @@ impl<'a> RenderContext<'a> {
 mod tests {
     use std::cell::RefCell;
     use tempdir::TempDir;
+    use std::fmt::Debug;
     use std::fs::File;
     use std::io::{Read, Write};
     use std::path::{PathBuf, Path};
@@ -399,23 +400,29 @@ mod tests {
     use super::super::{Data, StrVal, VecVal, Map, Fun};
     use super::super::{Context, Template};
 
-    #[derive(RustcEncodable)]
+    #[derive(RustcEncodable, Debug)]
     struct Planet {
         name: String,
         info: Option<PlanetInfo>,
     }
 
-    #[derive(RustcEncodable)]
+    #[derive(RustcEncodable, Debug)]
     struct PlanetInfo {
         moons: Vec<String>,
         population: u64,
         description: String,
     }
 
-    #[derive(RustcEncodable)]
+    #[derive(RustcEncodable, Debug)]
     struct Person {
         name: String,
         age: Option<u32>,
+    }
+
+    fn assert_render<'a, 'b, T: Encodable + Debug>(template: &str, data: &T) -> String {
+        render(template, data).expect(&format!("Failed to render: template: {:?}\ndata: {:?}",
+                                                template,
+                                                data))
     }
 
     fn render<'a, 'b, T: Encodable>(template: &str, data: &T) -> Result<String, Error> {
@@ -424,7 +431,7 @@ mod tests {
         let mut bytes = vec![];
         try!(template.render(&mut bytes, data));
 
-        Ok(String::from_utf8(bytes).unwrap())
+        Ok(String::from_utf8(bytes).expect("Failed to encode String"))
     }
 
     #[test]
@@ -434,11 +441,11 @@ mod tests {
             info: None,
         };
 
-        assert_eq!(&*render("hello world", &ctx).unwrap(), "hello world");
-        assert_eq!(&*render("hello {world", &ctx).unwrap(), "hello {world");
-        assert_eq!(&*render("hello world}", &ctx).unwrap(), "hello world}");
-        assert_eq!(&*render("hello {world}", &ctx).unwrap(), "hello {world}");
-        assert_eq!(&*render("hello world}}", &ctx).unwrap(), "hello world}}");
+        assert_eq!(assert_render("hello world", &ctx), "hello world");
+        assert_eq!(assert_render("hello {world", &ctx), "hello {world");
+        assert_eq!(assert_render("hello world}", &ctx), "hello world}");
+        assert_eq!(assert_render("hello {world}", &ctx), "hello {world}");
+        assert_eq!(assert_render("hello world}}", &ctx), "hello world}}");
     }
 
     #[test]
@@ -448,7 +455,7 @@ mod tests {
             info: None,
         };
 
-        assert_eq!(&*render("hello {{name}}", &ctx).unwrap(), "hello world");
+        assert_eq!(assert_render("hello {{name}}", &ctx), "hello world");
     }
 
     #[test]
@@ -458,9 +465,9 @@ mod tests {
             info: None,
         };
 
-        assert_eq!(&*render("hello {{{name}}}", &ctx).unwrap(), "hello world");
+        assert_eq!(assert_render("hello {{{name}}}", &ctx), "hello world");
 
-        assert_eq!(&*render("hello {{{name}}}", &ctx).unwrap(), "hello world");
+        assert_eq!(assert_render("hello {{{name}}}", &ctx), "hello world");
     }
 
     #[test]
@@ -471,13 +478,13 @@ mod tests {
             age: None,
         };
 
-        assert_eq!(&*render(template, &ctx).unwrap(), "Dennis, ");
+        assert_eq!(assert_render(template, &ctx), "Dennis, ");
 
         let ctx = Person {
             name: "Dennis".to_string(),
             age: Some(42),
         };
-        assert_eq!(&*render(template, &ctx).unwrap(), "Dennis, 42");
+        assert_eq!(assert_render(template, &ctx), "Dennis, 42");
     }
 
     #[test]
@@ -488,32 +495,32 @@ mod tests {
             age: None,
         };
 
-        assert_eq!(&*render(template, &ctx).unwrap(), "Dennis, No age");
+        assert_eq!(assert_render(template, &ctx), "Dennis, No age");
 
         let ctx = Person {
             name: "Dennis".to_string(),
             age: Some(42),
         };
-        assert_eq!(&*render(template, &ctx).unwrap(), "Dennis, 42");
+        assert_eq!(assert_render(template, &ctx), "Dennis, 42");
     }
 
     #[test]
     #[should_panic(message="nested Option types are not supported")]
     fn test_render_option_nested() {
-        #[derive(RustcEncodable)]
+        #[derive(RustcEncodable, Debug)]
         struct Nested {
             opt: Option<Option<u32>>,
         }
 
         let template = "-{{opt}}+";
         let ctx = Nested { opt: None };
-        assert_eq!(&*render(template, &ctx).unwrap(), "-+");
+        assert_eq!(assert_render(template, &ctx), "-+");
 
         let ctx = Nested { opt: Some(None) };
-        assert_eq!(&*render(template, &ctx).unwrap(), "-+");
+        assert_eq!(assert_render(template, &ctx), "-+");
 
         let ctx = Nested { opt: Some(Some(42)) };
-        assert_eq!(&*render(template, &ctx).unwrap(), "-42+");
+        assert_eq!(assert_render(template, &ctx), "-42+");
     }
 
     #[test]
@@ -525,8 +532,7 @@ mod tests {
             name: "Jupiter".to_string(),
             info: None,
         };
-        assert_eq!(&*render(template, &ctx).unwrap(),
-                   "Jupiter - No additional info");
+        assert_eq!(assert_render(template, &ctx), "Jupiter - No additional info");
 
         let address = PlanetInfo {
             moons: vec!["Luna".to_string()],
@@ -537,15 +543,15 @@ mod tests {
             name: "Earth".to_string(),
             info: Some(address),
         };
-        assert_eq!(&*render(template, &ctx).unwrap(),
-                   "Earth - Birthplace of rust-lang; It's moons are [Luna] and \
-                   has a population of 7300000000");
+        assert_eq!(assert_render(template, &ctx), "Earth - Birthplace of rust-lang; \
+                                                   It's moons are [Luna] and has a \
+                                                   population of 7300000000");
     }
 
     fn render_data(template: &Template, data: &Data) -> String {
         let mut bytes = vec![];
         template.render_data(&mut bytes, data).expect("Failed to render data");
-        String::from_utf8(bytes).unwrap()
+        String::from_utf8(bytes).expect("Failed ot encode as String")
     }
 
     #[test]
@@ -559,7 +565,7 @@ mod tests {
         let mut buffer = [0u8; 6];
         {
             let mut writer: &mut [u8] = &mut buffer;
-            template.render(&mut writer, &ctx).unwrap();
+            template.render(&mut writer, &ctx).expect("Failed to render");
         }
 
         assert_eq!(&buffer, b"foobar");
@@ -667,13 +673,13 @@ mod tests {
 
     #[test]
     fn test_render_partial_dot_filename() {
-        let template = ::compile_path("src/test-data/base.foo.mustache").unwrap();
+        let template = ::compile_path("src/test-data/base.foo.mustache").expect("Failed to compile");
         assert_partials_data(template);
     }
 
     #[test]
     fn test_render_partial() {
-        let template = ::compile_path("src/test-data/base").unwrap();
+        let template = ::compile_path("src/test-data/base").expect("Failed to compile");
         assert_partials_data(template);
     }
 
@@ -713,7 +719,7 @@ mod tests {
                             let path = tmpdir.join(&(key.clone() + ".mustache"));
                             File::create(&path)
                                 .and_then(|mut f| f.write_all(s.as_bytes()))
-                                .unwrap();
+                                .expect("Failed to generate partial");
                         }
                         _ => panic!(),
                     }
@@ -751,10 +757,8 @@ mod tests {
         let result = render_data(&template, &data);
 
         if result != expected {
-            println!("desc:     {}",
-                     test.get(&"desc".to_string()).unwrap().to_string());
-            println!("context:  {}",
-                     test.get(&"data".to_string()).unwrap().to_string());
+            println!("desc:     {:?}", test.get("desc"));
+            println!("context:  {:?}", test.get("data"));
             println!("=>");
             println!("template: {:?}", template);
             println!("expected: {}", expected);
@@ -777,10 +781,10 @@ mod tests {
             };
 
             let mut encoder = Encoder::new();
-            data.encode(&mut encoder).ok().unwrap();
+            data.encode(&mut encoder).expect("Failed to encode");
             assert_eq!(encoder.data.len(), 1);
 
-            run_test(test, encoder.data.pop().unwrap());
+            run_test(test, encoder.data.pop().expect("Failed to pop data"));
         }
     }
 
@@ -834,10 +838,10 @@ mod tests {
             };
 
             let mut encoder = Encoder::new();
-            data.encode(&mut encoder).ok().unwrap();
+            data.encode(&mut encoder).ok().expect("Failed to encode");
 
-            let mut ctx = match encoder.data.pop().unwrap() {
-                Map(ctx) => ctx,
+            let mut ctx = match encoder.data.pop() {
+                Some(Map(ctx)) => ctx,
                 _ => panic!(),
             };
 
