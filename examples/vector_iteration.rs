@@ -25,7 +25,7 @@ fn main() {
     data.insert("users", users);
 
     let mut bytes = vec![];
-    template.render(&mut bytes, &data).unwrap();
+    template.render(&mut bytes, &data).expect("Failed to render");
 
     assert_eq!(str::from_utf8(&bytes), Ok("Hello Harry!\nHello Samantha!\n"))
 }

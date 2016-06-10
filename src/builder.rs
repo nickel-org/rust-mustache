@@ -25,8 +25,8 @@ impl MapBuilder {
     /// ```rust
     /// use mustache::MapBuilder;
     /// let data = MapBuilder::new()
-    ///     .insert("name", &("Jane Austen")).ok().unwrap()
-    ///     .insert("age", &41usize).ok().unwrap()
+    ///     .insert("name", &("Jane Austen")).expect("Failed to encode name")
+    ///     .insert("age", &41usize).expect("Failed to encode age")
     ///     .build();
     /// ```
     #[inline]
@@ -161,8 +161,8 @@ impl<'a> VecBuilder {
     /// ```rust
     /// use mustache::{VecBuilder, Data};
     /// let data: Data = VecBuilder::new()
-    ///     .push(& &"Jane Austen").ok().unwrap()
-    ///     .push(&41usize).ok().unwrap()
+    ///     .push(& &"Jane Austen").unwrap()
+    ///     .push(&41usize).unwrap()
     ///     .build();
     /// ```
     #[inline]
@@ -314,16 +314,12 @@ mod tests {
         assert_eq!(MapBuilder::new()
                        .insert_str("first_name", "Jane")
                        .insert_str("last_name", "Austen")
-                       .insert("age", &41usize)
-                       .ok()
-                       .unwrap()
+                       .insert("age", &41usize).expect("age")
                        .insert_bool("died", true)
                        .insert_vec("works", |builder| {
                 builder.push_str("Sense and Sensibility").push_map(|builder| {
                     builder.insert_str("title", "Pride and Prejudice")
-                        .insert("publish_date", &1813usize)
-                        .ok()
-                        .unwrap()
+                        .insert("publish_date", &1813usize).expect("publish_date")
                 })
             })
                        .build(),
@@ -345,8 +341,8 @@ mod tests {
 
         match data {
             Map(m) => {
-                match *m.get(&"count".to_string()).unwrap() {
-                    Fun(ref f) => {
+                match m.get("count") {
+                    Some(&Fun(ref f)) => {
                         let f = &mut *f.borrow_mut();
                         assert_eq!((*f)("count: ".to_string()), "count: 1".to_string());
                         assert_eq!((*f)("count: ".to_string()), "count: 2".to_string());
