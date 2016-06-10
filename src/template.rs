@@ -154,9 +154,7 @@ impl<'a> RenderContext<'a> {
 
         try!(self.render_utag(&mut bytes, stack, path));
 
-        let s = str::from_utf8(&bytes).unwrap();
-
-        for b in s.bytes() {
+        for b in bytes {
             match b {
                 b'<' => {
                     try!(wr.write_all(b"&lt;"));
