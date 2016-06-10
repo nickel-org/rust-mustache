@@ -161,12 +161,8 @@ mod tests {
         }
     }
 
-    fn check_tokens(_actual: Vec<Token>, _expected: &[Token]) {
-        // TODO: equality is currently broken for enums
-        // let actual: Vec<String> = actual.iter().map(token_to_str).collect();
-        // let expected = expected.iter().map(token_to_str).collect();
-
-        // assert_eq!(actual, expected);
+    fn check_tokens(actual: Vec<Token>, expected: &[Token]) {
+        assert_eq!(actual, expected);
     }
 
     #[test]
