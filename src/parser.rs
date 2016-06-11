@@ -361,6 +361,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         let mut content = String::new();
         mem::swap(&mut content, &mut self.content);
         let len = content.len();
+        try!(deny_blank(&content));
         let content = content;
 
         match content.as_bytes()[0] as char {
@@ -370,14 +371,14 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             }
             '&' => {
                 let name = &content[1..len];
-                let name = try!(self.check_content(name));
+                let name = try!(deny_blank(name));
                 let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                 self.tokens.push(UTag(name, tag));
             }
             '{' => {
                 if content.ends_with('}') {
                     let name = &content[1..len - 1];
-                    let name = try!(self.check_content(name));
+                    let name = try!(deny_blank(name));
                     let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                     self.tokens.push(UTag(name, tag));
                 } else {
@@ -387,21 +388,21 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             '#' => {
                 let newlined = self.eat_whitespace();
 
-                let name = try!(self.check_content(&content[1..len]));
+                let name = try!(deny_blank(&content[1..len]));
                 let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                 self.tokens.push(IncompleteSection(name, false, tag, newlined));
             }
             '^' => {
                 let newlined = self.eat_whitespace();
 
-                let name = try!(self.check_content(&content[1..len]));
+                let name = try!(deny_blank(&content[1..len]));
                 let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                 self.tokens.push(IncompleteSection(name, true, tag, newlined));
             }
             '/' => {
                 self.eat_whitespace();
 
-                let name = try!(self.check_content(&content[1..len]));
+                let name = try!(deny_blank(&content[1..len]));
                 let name = name.split_terminator('.').map(|x| x.to_string()).collect::<Vec<String>>();
                 let mut children: Vec<Token> = Vec::new();
 
@@ -470,7 +471,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                 self.eat_whitespace();
 
                 if len > 2usize && content.ends_with('=') {
-                    let s = try!(self.check_content(&content[1..len - 1]));
+                    let s = try!(deny_blank(&content[1..len - 1]));
 
                     let pos = s.find(char::is_whitespace);
                     let pos = match pos {
@@ -497,7 +498,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             _ => {
                 // If the name is "." then we want the top element, which we represent with
                 // an empty name.
-                let name = try!(self.check_content(&content));
+                let name = try!(deny_blank(&content));
                 let name = if name == "." {
                     Vec::new()
                 } else {
@@ -542,10 +543,10 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         // partial. So instead, we'll cache the partials we used and look them
         // up later.
         let name = &content[1..content.len()];
-        let name = try!(self.check_content(name));
+        let name = try!(deny_blank(name));
 
-        self.tokens.push(Partial(name.clone(), indent, tag));
-        self.partials.push(name);
+        self.tokens.push(Partial(name.into(), indent, tag));
+        self.partials.push(name.into());
 
         Ok(())
     }
@@ -567,14 +568,14 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             self.content.push(*ch);
         }
     }
+}
 
-    fn check_content(&self, content: &str) -> Result<String, Error> {
-        let trimmed = content.trim();
-        if trimmed.is_empty() {
-            Err(Error::EmptyTag)
-        } else {
-            Ok(trimmed.to_string())
-        }
+fn deny_blank(content: &str) -> Result<&str, Error> {
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        Err(Error::EmptyTag)
+    } else {
+        Ok(trimmed)
     }
 }
 
@@ -601,7 +602,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore(reason = "index out of bounds")]
     fn empty_tag() {
         assert_eq!(parse("{{}}"), Err(Error::EmptyTag));
     }
