@@ -51,7 +51,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
     pub fn compile(mut self) -> Result<(Vec<Token>, PartialsMap)> {
         let (tokens, partials) = {
             let parser = Parser::new(&mut self.reader, &self.otag, &self.ctag);
-            parser.parse()
+            try!(parser.parse())
         };
 
         // Compile the partials if we haven't done so already.

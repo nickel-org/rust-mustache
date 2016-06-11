@@ -1,4 +1,6 @@
+use std::error::Error as StdError;
 use std::mem;
+use std::fmt;
 
 pub use self::Token::*;
 
@@ -14,6 +16,54 @@ pub enum Token {
     Section(Vec<String>, bool, Vec<Token>, String, String, String, String, String),
     IncompleteSection(Vec<String>, bool, String, bool),
     Partial(String, String, String),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Error {
+    BadClosingTag(char, char),
+    UnclosedTag,
+    UnclosedSection(String),
+    UnbalancedUnescapeTag,
+    EmptyTag,
+    EarlySectionClose(String),
+    MissingSetDelimeterClosingTag,
+    InvalidSetDelimeterSyntax,
+}
+
+impl StdError for Error {
+    fn description(&self) -> &'static str {
+        match *self {
+            Error::BadClosingTag(..) => "found a malformed closing tag",
+            Error::UnclosedTag => "found an unclosed tag",
+            Error::UnclosedSection(..) => "found an unclosed section",
+            Error::UnbalancedUnescapeTag => "found an unbalanced unescape tag",
+            Error::EmptyTag => "found an empty tag",
+            Error::EarlySectionClose(..) => "found a closing tag for an unopened section",
+            Error::MissingSetDelimeterClosingTag => "missing the new closing tag in set delimeter tag",
+            Error::InvalidSetDelimeterSyntax => "invalid set delimeter tag syntax",
+        }
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Provide more information where possible
+        match *self {
+            Error::BadClosingTag(actual, expected) => {
+                write!(f,
+                       "character {:?} was unexpected in the closing tag, expected {:?}",
+                       actual,
+                       expected)
+            }
+            Error::UnclosedSection(ref name) => {
+                write!(f, "found an unclosed section: {:?}", name)
+            },
+            Error::EarlySectionClose(ref name) => {
+                write!(f, "found a closing tag for an unopened section {:?}", name)
+            },
+            _ => write!(f, "{}", self.description()),
+        }
+    }
 }
 
 enum TokenClass {
@@ -109,7 +159,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
     }
 
     /// Parse the template into tokens and a list of partial files.
-    pub fn parse(mut self) -> (Vec<Token>, Vec<String>) {
+    pub fn parse(mut self) -> Result<(Vec<Token>, Vec<String>), Error> {
         let mut curly_brace_tag = false;
 
         while let Some(ch) = self.ch {
@@ -161,7 +211,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                             self.state = CTAG;
                             self.bump();
                         } else {
-                            self.add_tag();
+                            try!(self.add_tag());
                             self.state = TEXT;
                         }
                     } else {
@@ -172,7 +222,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                 CTAG => {
                     if ch == self.ctag_chars[self.tag_position] {
                         if self.tag_position == self.ctag_chars.len() - 1 {
-                            self.add_tag();
+                            try!(self.add_tag());
                             self.state = TEXT;
                         } else {
                             self.state = TAG;
@@ -181,9 +231,8 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                             self.bump();
                         }
                     } else {
-                        panic!("character {} is not part of CTAG: {}",
-                               ch,
-                               self.ctag_chars[self.tag_position]);
+                        let expected = self.ctag_chars[self.tag_position];
+                        return Err(Error::BadClosingTag(ch, expected));
                     }
                 }
             }
@@ -197,25 +246,23 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                 self.not_otag();
                 self.add_text();
             }
-            TAG => {
-                panic!("unclosed tag");
-            }
             CTAG => {
                 self.not_ctag();
                 self.add_text();
             }
+            TAG => return Err(Error::UnclosedTag),
         }
 
         // Check that we don't have any incomplete sections.
         for token in self.tokens.iter() {
             if let IncompleteSection(ref path, _, _, _) = *token {
-                panic!("Unclosed mustache section {}", path.join("."));
+                return Err(Error::UnclosedSection(path.join(".")))
             }
         }
 
         let Parser { tokens, partials, .. } = self;
 
-        (tokens, partials)
+        Ok((tokens, partials))
     }
 
     fn add_text(&mut self) {
@@ -305,7 +352,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         }
     }
 
-    fn add_tag(&mut self) {
+    fn add_tag(&mut self) -> Result<(), Error> {
         self.bump();
 
         let tag = self.otag.clone() + &self.content + &self.ctag;
@@ -323,44 +370,44 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             }
             '&' => {
                 let name = &content[1..len];
-                let name = self.check_content(name);
+                let name = try!(self.check_content(name));
                 let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                 self.tokens.push(UTag(name, tag));
             }
             '{' => {
                 if content.ends_with('}') {
                     let name = &content[1..len - 1];
-                    let name = self.check_content(name);
+                    let name = try!(self.check_content(name));
                     let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                     self.tokens.push(UTag(name, tag));
                 } else {
-                    panic!("unbalanced \"{\" in tag");
+                    return Err(Error::UnbalancedUnescapeTag)
                 }
             }
             '#' => {
                 let newlined = self.eat_whitespace();
 
-                let name = self.check_content(&content[1..len]);
+                let name = try!(self.check_content(&content[1..len]));
                 let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                 self.tokens.push(IncompleteSection(name, false, tag, newlined));
             }
             '^' => {
                 let newlined = self.eat_whitespace();
 
-                let name = self.check_content(&content[1..len]);
+                let name = try!(self.check_content(&content[1..len]));
                 let name = name.split_terminator('.').map(|x| x.to_string()).collect();
                 self.tokens.push(IncompleteSection(name, true, tag, newlined));
             }
             '/' => {
                 self.eat_whitespace();
 
-                let name = self.check_content(&content[1..len]);
-                let name = name.split_terminator('.').map(|x| x.to_string()).collect();
+                let name = try!(self.check_content(&content[1..len]));
+                let name = name.split_terminator('.').map(|x| x.to_string()).collect::<Vec<String>>();
                 let mut children: Vec<Token> = Vec::new();
 
                 loop {
                     if self.tokens.is_empty() {
-                        panic!("closing unopened section");
+                        return Err(Error::EarlySectionClose(name.join(".")))
                     }
 
                     let last = self.tokens.pop();
@@ -382,7 +429,9 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                                         srcs.push(src.clone());
                                         srcs.push(csection.clone());
                                     }
-                                    _ => panic!(),
+                                    _ => unreachable!("bug: Incomplete sections should not be nested \
+                                                       Please report this issue on GitHub if you find \
+                                                       an input that triggers this case."),
                                 }
                             }
 
@@ -406,7 +455,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                                                          self.ctag.clone()));
                                 break;
                             } else {
-                                panic!("Unclosed section");
+                                return Err(Error::UnclosedSection(section_name.join(".")))
                             }
                         }
                         Some(last_token) => children.push(last_token),
@@ -415,19 +464,17 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                 }
             }
             '>' => {
-                self.add_partial(&content, tag);
+                try!(self.add_partial(&content, tag));
             }
             '=' => {
                 self.eat_whitespace();
 
                 if len > 2usize && content.ends_with('=') {
-                    let s = self.check_content(&content[1..len - 1]);
+                    let s = try!(self.check_content(&content[1..len - 1]));
 
                     let pos = s.find(char::is_whitespace);
                     let pos = match pos {
-                        None => {
-                            panic!("invalid change delimiter tag content");
-                        }
+                        None => return Err(Error::MissingSetDelimeterClosingTag),
                         Some(pos) => pos,
                     };
 
@@ -437,22 +484,20 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                     let s2 = &s[pos..];
                     let pos = s2.find(|c: char| !c.is_whitespace());
                     let pos = match pos {
-                        None => {
-                            panic!("invalid change delimiter tag content");
-                        }
+                        None => return Err(Error::MissingSetDelimeterClosingTag),
                         Some(pos) => pos,
                     };
 
                     self.ctag = s2[pos..].to_string();
                     self.ctag_chars = self.ctag.chars().collect();
                 } else {
-                    panic!("invalid change delimiter tag content");
+                    return Err(Error::InvalidSetDelimeterSyntax)
                 }
             }
             _ => {
                 // If the name is "." then we want the top element, which we represent with
                 // an empty name.
-                let name = self.check_content(&content);
+                let name = try!(self.check_content(&content));
                 let name = if name == "." {
                     Vec::new()
                 } else {
@@ -461,10 +506,12 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
 
                 self.tokens.push(ETag(name, tag));
             }
-        }
+        };
+
+        Ok(())
     }
 
-    fn add_partial(&mut self, content: &str, tag: String) {
+    fn add_partial(&mut self, content: &str, tag: String) -> Result<(), Error> {
         let indent = match self.classify_token() {
             Normal => "".to_string(),
             StandAlone => {
@@ -495,10 +542,12 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         // partial. So instead, we'll cache the partials we used and look them
         // up later.
         let name = &content[1..content.len()];
-        let name = self.check_content(name);
+        let name = try!(self.check_content(name));
 
         self.tokens.push(Partial(name.clone(), indent, tag));
         self.partials.push(name);
+
+        Ok(())
     }
 
     fn not_otag(&mut self) {
@@ -519,11 +568,179 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         }
     }
 
-    fn check_content(&self, content: &str) -> String {
+    fn check_content(&self, content: &str) -> Result<String, Error> {
         let trimmed = content.trim();
         if trimmed.is_empty() {
-            panic!("empty tag");
+            Err(Error::EmptyTag)
+        } else {
+            Ok(trimmed.to_string())
         }
-        trimmed.to_string()
+    }
+}
+
+//FIXME: These tests are mainly to guide the removal of panics from the parser (turning them
+// into `Error`s instead). It would be good to make them more robust and make assertions on
+// the tokens & partials returned.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    pub fn parse(input: &str) -> Result<(Vec<Token>, Vec<String>), Error> {
+        let input = &mut input.chars();
+        let parser = Parser::new(input, "{{", "}}");
+        parser.parse()
+    }
+
+    pub fn assert_parse(input: &str) -> (Vec<Token>, Vec<String>) {
+        parse(input).expect(&format!("Failed to parse: {}", input))
+    }
+
+    #[test]
+    fn empty_input() {
+        assert_parse("");
+    }
+
+    #[test]
+    #[ignore(reason = "index out of bounds")]
+    fn empty_tag() {
+        assert_eq!(parse("{{}}"), Err(Error::EmptyTag));
+    }
+
+    #[test]
+    fn whitespace_only_tag() {
+        assert_eq!(parse("{{ }}"), Err(Error::EmptyTag));
+    }
+
+    #[test]
+    fn bad_closing_tag() {
+        assert_eq!(parse("{{hello}?"), Err(Error::BadClosingTag('?', '}')))
+    }
+
+    #[test]
+    fn unclosed_tag() {
+        assert_eq!(parse("{{hi"), Err(Error::UnclosedTag))
+    }
+
+    mod sections {
+        use super::super::*;
+        use super::*;
+
+        #[test]
+        fn sanity() {
+            assert_parse("{{#people}} Hi {{name}}! {{/people}}");
+        }
+
+        #[test]
+        fn unclosed() {
+            assert_eq!(parse("{{#world}}hi"), Err(Error::UnclosedSection("world".into())))
+        }
+
+        #[test]
+        fn unclosed_nested_with_wrong_closing_tag() {
+            assert_eq!(
+                parse("{{#universe}} {{#world}} {{/universe}}"),
+                Err(Error::UnclosedSection("world".into()))
+            )
+        }
+
+        #[test]
+        #[ignore(reason = "currently wrong behaviour")]
+        fn unclosed_nested() {
+            assert_eq!(
+                parse("{{#universe}} {{#world}}"),
+                Err(Error::UnclosedSection("world".into()))
+            )
+        }
+
+        #[test]
+        fn unclosed_with_path() {
+            assert_eq!(
+                parse("{{#universe}} {{#world.and.stuff}} {{/universe}}"),
+                Err(Error::UnclosedSection("world.and.stuff".into()))
+            )
+        }
+
+        #[test]
+        fn early_close() {
+            assert_eq!(parse("{{/world}}"), Err(Error::EarlySectionClose("world".into())))
+        }
+    }
+
+    mod inverted {
+        use super::super::*;
+        use super::*;
+
+        #[test]
+        fn sanity() {
+            assert_parse("{{^people}} No people! {{/people}}");
+        }
+
+        #[test]
+        fn unclosed() {
+            assert_eq!(parse("{{^world}}hi"), Err(Error::UnclosedSection("world".into())))
+        }
+
+        #[test]
+        fn unclosed_nested_with_wrong_closing_tag() {
+            assert_eq!(
+                parse("{{#universe}} {{^world}} {{/universe}}"),
+                Err(Error::UnclosedSection("world".into()))
+            );
+
+            assert_eq!(
+                parse("{{^universe}} {{^world}} {{/universe}}"),
+                Err(Error::UnclosedSection("world".into()))
+            )
+        }
+
+        #[test]
+        #[ignore(reason = "currently wrong behaviour")]
+        fn unclosed_nested() {
+            assert_eq!(
+                parse("{{#universe}} {{^world}}"),
+                Err(Error::UnclosedSection("world".into()))
+            )
+        }
+
+        #[test]
+        fn unclosed_with_path() {
+            assert_eq!(
+                parse("{{#universe}} {{^world.and.stuff}} {{/universe}}"),
+                Err(Error::UnclosedSection("world.and.stuff".into()))
+            )
+        }
+    }
+
+    mod set_delimeter {
+        use super::super::*;
+        use super::*;
+
+        #[test]
+        fn sanity() {
+            assert_parse("{{=<% %>=}}");
+        }
+
+        #[test]
+        fn closing_tag_is_whitespace() {
+            assert_eq!(parse("{{=<% =}}"), Err(Error::MissingSetDelimeterClosingTag))
+        }
+
+        #[test]
+        fn missing_closing_tag() {
+            assert_eq!(parse("{{=<%=}}"), Err(Error::MissingSetDelimeterClosingTag))
+        }
+
+        #[test]
+        fn missing_closing_equals() {
+            assert_eq!(parse("{{=<% %>}}"), Err(Error::InvalidSetDelimeterSyntax))
+        }
+    }
+
+    #[test]
+    fn unbalanced_unescape() {
+        // use the set delimiter tag to change the brace type. Currently this error will
+        // not trigger with "{{{ }}"
+        let input = "{{=<% %>=}} <%{ %>";
+        assert_eq!(parse(input), Err(Error::UnbalancedUnescapeTag))
     }
 }

@@ -8,6 +8,8 @@ use rustc_serialize;
 use super::{Data, StrVal, Bool, VecVal, Map, OptVal};
 pub use self::Error::*;
 
+use parser;
+
 #[derive(Default)]
 pub struct Encoder {
     pub data: Vec<Data>,
@@ -28,6 +30,7 @@ pub enum Error {
     KeyIsNotString,
     NoFilename,
     IoError(StdIoError),
+    ParseError(parser::Error),
 }
 
 impl fmt::Display for Error {
@@ -48,6 +51,7 @@ impl error::Error for Error {
             KeyIsNotString => "key is not a string",
             NoFilename => "a filename must be provided",
             IoError(ref err) => err.description(),
+            ParseError(ref err) => err.description(),
         }
     }
 }
@@ -55,6 +59,12 @@ impl error::Error for Error {
 impl From<StdIoError> for Error {
     fn from(err: StdIoError) -> Error {
         IoError(err)
+    }
+}
+
+impl From<parser::Error> for Error {
+    fn from(err: parser::Error) -> Error {
+        ParseError(err)
     }
 }
 
