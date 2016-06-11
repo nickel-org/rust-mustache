@@ -254,7 +254,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         }
 
         // Check that we don't have any incomplete sections.
-        for token in self.tokens.iter() {
+        for token in self.tokens.iter().rev() {
             if let IncompleteSection(ref path, _, _, _) = *token {
                 return Err(Error::UnclosedSection(path.join(".")))
             }
@@ -644,7 +644,6 @@ mod tests {
         }
 
         #[test]
-        #[ignore(reason = "currently wrong behaviour")]
         fn unclosed_nested() {
             assert_eq!(
                 parse("{{#universe}} {{#world}}"),
@@ -694,7 +693,6 @@ mod tests {
         }
 
         #[test]
-        #[ignore(reason = "currently wrong behaviour")]
         fn unclosed_nested() {
             assert_eq!(
                 parse("{{#universe}} {{^world}}"),
