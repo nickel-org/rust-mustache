@@ -5,7 +5,6 @@ use std::fmt;
 pub use self::Token::*;
 
 use self::TokenClass::*;
-use self::ParserState::*;
 
 /// `Token` is a section of a compiled mustache string.
 #[derive(Clone, Debug, PartialEq)]
@@ -82,24 +81,24 @@ pub struct Parser<'a, T: 'a> {
     col: usize,
     content: String,
     state: ParserState,
-    otag: String,
-    ctag: String,
-    otag_chars: Vec<char>,
-    ctag_chars: Vec<char>,
+    opening_tag: String,
+    closing_tag: String,
+    opening_tag_chars: Vec<char>,
+    closing_tag_chars: Vec<char>,
     tag_position: usize,
     tokens: Vec<Token>,
     partials: Vec<String>,
 }
 
 enum ParserState {
-    TEXT,
-    OTAG,
-    TAG,
-    CTAG,
+    Text,
+    OpeningTag,
+    Tag,
+    ClosingTag,
 }
 
 impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
-    pub fn new(reader: &'a mut T, otag: &str, ctag: &str) -> Parser<'a, T> {
+    pub fn new(reader: &'a mut T, opening_tag: &str, closing_tag: &str) -> Parser<'a, T> {
         let mut parser = Parser {
             reader: reader,
             ch: None,
@@ -107,11 +106,11 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             line: 1,
             col: 1,
             content: String::new(),
-            state: TEXT,
-            otag: otag.to_string(),
-            ctag: ctag.to_string(),
-            otag_chars: otag.chars().collect(),
-            ctag_chars: ctag.chars().collect(),
+            state: ParserState::Text,
+            opening_tag: opening_tag.to_string(),
+            closing_tag: closing_tag.to_string(),
+            opening_tag_chars: opening_tag.chars().collect(),
+            closing_tag_chars: closing_tag.chars().collect(),
             tag_position: 0,
             tokens: Vec::new(),
             partials: Vec::new(),
@@ -164,39 +163,39 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
 
         while let Some(ch) = self.ch {
             match self.state {
-                TEXT => {
-                    if ch == self.otag_chars[0] {
-                        if self.otag_chars.len() > 1 {
+                ParserState::Text => {
+                    if ch == self.opening_tag_chars[0] {
+                        if self.opening_tag_chars.len() > 1 {
                             self.tag_position = 1;
-                            self.state = OTAG;
+                            self.state = ParserState::OpeningTag;
                         } else {
                             self.add_text();
-                            self.state = TAG;
+                            self.state = ParserState::Tag;
                         }
                     } else {
                         self.content.push(ch);
                     }
                     self.bump();
                 }
-                OTAG => {
-                    if ch == self.otag_chars[self.tag_position] {
-                        if self.tag_position == self.otag_chars.len() - 1 {
+                ParserState::OpeningTag => {
+                    if ch == self.opening_tag_chars[self.tag_position] {
+                        if self.tag_position == self.opening_tag_chars.len() - 1 {
                             self.add_text();
                             curly_brace_tag = false;
-                            self.state = TAG;
+                            self.state = ParserState::Tag;
                         } else {
                             self.tag_position = self.tag_position + 1;
                         }
                     } else {
                         // We don't have a tag, so add all the tag parts we've seen
                         // so far to the string.
-                        self.state = TEXT;
+                        self.state = ParserState::Text;
                         self.not_otag();
                         self.content.push(ch);
                     }
                     self.bump();
                 }
-                TAG => {
+                ParserState::Tag => {
                     if self.content.is_empty() && ch == '{' {
                         curly_brace_tag = true;
                         self.content.push(ch);
@@ -205,33 +204,33 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                         curly_brace_tag = false;
                         self.content.push(ch);
                         self.bump();
-                    } else if ch == self.ctag_chars[0] {
-                        if self.ctag_chars.len() > 1 {
+                    } else if ch == self.closing_tag_chars[0] {
+                        if self.closing_tag_chars.len() > 1 {
                             self.tag_position = 1;
-                            self.state = CTAG;
+                            self.state = ParserState::ClosingTag;
                             self.bump();
                         } else {
                             try!(self.add_tag());
-                            self.state = TEXT;
+                            self.state = ParserState::Text;
                         }
                     } else {
                         self.content.push(ch);
                         self.bump();
                     }
                 }
-                CTAG => {
-                    if ch == self.ctag_chars[self.tag_position] {
-                        if self.tag_position == self.ctag_chars.len() - 1 {
+                ParserState::ClosingTag => {
+                    if ch == self.closing_tag_chars[self.tag_position] {
+                        if self.tag_position == self.closing_tag_chars.len() - 1 {
                             try!(self.add_tag());
-                            self.state = TEXT;
+                            self.state = ParserState::Text;
                         } else {
-                            self.state = TAG;
+                            self.state = ParserState::Tag;
                             self.not_ctag();
                             self.content.push(ch);
                             self.bump();
                         }
                     } else {
-                        let expected = self.ctag_chars[self.tag_position];
+                        let expected = self.closing_tag_chars[self.tag_position];
                         return Err(Error::BadClosingTag(ch, expected));
                     }
                 }
@@ -239,18 +238,18 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         }
 
         match self.state {
-            TEXT => {
+            ParserState::Text => {
                 self.add_text();
             }
-            OTAG => {
+            ParserState::OpeningTag => {
                 self.not_otag();
                 self.add_text();
             }
-            CTAG => {
+            ParserState::ClosingTag => {
                 self.not_ctag();
                 self.add_text();
             }
-            TAG => return Err(Error::UnclosedTag),
+            ParserState::Tag => return Err(Error::UnclosedTag),
         }
 
         // Check that we don't have any incomplete sections.
@@ -355,7 +354,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
     fn add_tag(&mut self) -> Result<(), Error> {
         self.bump();
 
-        let tag = self.otag.clone() + &self.content + &self.ctag;
+        let tag = self.opening_tag.clone() + &self.content + &self.closing_tag;
 
         // Move the content to avoid a copy.
         let mut content = String::new();
@@ -449,11 +448,11 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                                 self.tokens.push(Section(name,
                                                          inverted,
                                                          children,
-                                                         self.otag.clone(),
+                                                         self.opening_tag.clone(),
                                                          osection,
                                                          src,
                                                          tag,
-                                                         self.ctag.clone()));
+                                                         self.closing_tag.clone()));
                                 break;
                             } else {
                                 return Err(Error::UnclosedSection(section_name.join(".")))
@@ -479,8 +478,8 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                         Some(pos) => pos,
                     };
 
-                    self.otag = s[0..pos].to_string();
-                    self.otag_chars = self.otag.chars().collect();
+                    self.opening_tag = s[0..pos].to_string();
+                    self.opening_tag_chars = self.opening_tag.chars().collect();
 
                     let s2 = &s[pos..];
                     let pos = s2.find(|c: char| !c.is_whitespace());
@@ -489,8 +488,8 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                         Some(pos) => pos,
                     };
 
-                    self.ctag = s2[pos..].to_string();
-                    self.ctag_chars = self.ctag.chars().collect();
+                    self.closing_tag = s2[pos..].to_string();
+                    self.closing_tag_chars = self.closing_tag.chars().collect();
                 } else {
                     return Err(Error::InvalidSetDelimeterSyntax)
                 }
@@ -552,7 +551,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
     }
 
     fn not_otag(&mut self) {
-        for (i, ch) in self.otag_chars.iter().enumerate() {
+        for (i, ch) in self.opening_tag_chars.iter().enumerate() {
             if !(i < self.tag_position) {
                 break;
             }
@@ -561,7 +560,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
     }
 
     fn not_ctag(&mut self) {
-        for (i, ch) in self.ctag_chars.iter().enumerate() {
+        for (i, ch) in self.closing_tag_chars.iter().enumerate() {
             if !(i < self.tag_position) {
                 break;
             }
