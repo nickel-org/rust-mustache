@@ -10,8 +10,8 @@ use self::TokenClass::*;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     Text(String),
-    ETag(Vec<String>, String),
-    UTag(Vec<String>, String),
+    EscapedTag(Vec<String>, String),
+    UnescapedTag(Vec<String>, String),
     Section(Vec<String>, bool, Vec<Token>, String, String, String, String, String),
     IncompleteSection(Vec<String>, bool, String, bool),
     Partial(String, String, String),
@@ -372,14 +372,14 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                 let name = &content[1..len];
                 let name = try!(deny_blank(name));
                 let name = name.split_terminator('.').map(|x| x.to_string()).collect();
-                self.tokens.push(UTag(name, tag));
+                self.tokens.push(UnescapedTag(name, tag));
             }
             '{' => {
                 if content.ends_with('}') {
                     let name = &content[1..len - 1];
                     let name = try!(deny_blank(name));
                     let name = name.split_terminator('.').map(|x| x.to_string()).collect();
-                    self.tokens.push(UTag(name, tag));
+                    self.tokens.push(UnescapedTag(name, tag));
                 } else {
                     return Err(Error::UnbalancedUnescapeTag)
                 }
@@ -421,8 +421,8 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                             for child in children.iter() {
                                 match *child {
                                     Text(ref s) |
-                                    ETag(_, ref s) |
-                                    UTag(_, ref s) |
+                                    EscapedTag(_, ref s) |
+                                    UnescapedTag(_, ref s) |
                                     Partial(_, _, ref s) => srcs.push(s.clone()),
                                     Section(_, _, _, _, ref osection, ref src, ref csection, _) => {
                                         srcs.push(osection.clone());
@@ -504,7 +504,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                     name.split_terminator('.').map(|x| x.to_string()).collect()
                 };
 
-                self.tokens.push(ETag(name, tag));
+                self.tokens.push(EscapedTag(name, tag));
             }
         };
 

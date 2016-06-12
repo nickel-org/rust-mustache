@@ -73,10 +73,10 @@ impl<'a> RenderContext<'a> {
             Text(ref value) => {
                 self.render_text(wr, value)
             }
-            ETag(ref path, _) => {
+            EscapedTag(ref path, _) => {
                 self.render_etag(wr, stack, path)
             }
-            UTag(ref path, _) => {
+            UnescapedTag(ref path, _) => {
                 self.render_utag(wr, stack, path)
             }
             Section(ref path, true, ref children, _, _, _, _, _) => {

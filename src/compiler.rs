@@ -99,7 +99,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
 
 #[cfg(test)]
 mod tests {
-    use parser::{Token, Text, ETag, UTag, Section, IncompleteSection, Partial};
+    use parser::{Token, Text, EscapedTag, UnescapedTag, Section, IncompleteSection, Partial};
     use super::Compiler;
     use super::super::Context;
     use std::path::PathBuf;
@@ -135,13 +135,13 @@ mod tests {
                         tag,
                         ctag)
             }
-            ETag(ref name, ref tag) => {
+            EscapedTag(ref name, ref tag) => {
                 let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
-                format!("ETag(vec!({}), {})", name.join(", "), *tag)
+                format!("EscapedTag(vec!({}), {})", name.join(", "), *tag)
             }
-            UTag(ref name, ref tag) => {
+            UnescapedTag(ref name, ref tag) => {
                 let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
-                format!("UTag(vec!({}), {})", name.join(", "), *tag)
+                format!("UnescapedTag(vec!({}), {})", name.join(", "), *tag)
             }
             IncompleteSection(ref name, ref inverted, ref osection, ref newlined) => {
                 let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
@@ -174,38 +174,38 @@ mod tests {
     #[test]
     fn test_compile_etags() {
         check_tokens(compile_str("{{ name }}"),
-                     &[ETag(vec!["name".to_string()], "{{ name }}".to_string())]);
+                     &[EscapedTag(vec!["name".to_string()], "{{ name }}".to_string())]);
 
         check_tokens(compile_str("before {{name}} after"),
                      &[Text("before ".to_string()),
-                       ETag(vec!["name".to_string()], "{{name}}".to_string()),
+                       EscapedTag(vec!["name".to_string()], "{{name}}".to_string()),
                        Text(" after".to_string())]);
 
         check_tokens(compile_str("before {{name}}"),
                      &[Text("before ".to_string()),
-                       ETag(vec!["name".to_string()], "{{name}}".to_string())]);
+                       EscapedTag(vec!["name".to_string()], "{{name}}".to_string())]);
 
         check_tokens(compile_str("{{name}} after"),
-                     &[ETag(vec!["name".to_string()], "{{name}}".to_string()),
+                     &[EscapedTag(vec!["name".to_string()], "{{name}}".to_string()),
                        Text(" after".to_string())]);
     }
 
     #[test]
     fn test_compile_utags() {
         check_tokens(compile_str("{{{name}}}"),
-                     &[UTag(vec!["name".to_string()], "{{{name}}}".to_string())]);
+                     &[UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string())]);
 
         check_tokens(compile_str("before {{{name}}} after"),
                      &[Text("before ".to_string()),
-                       UTag(vec!["name".to_string()], "{{{name}}}".to_string()),
+                       UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string()),
                        Text(" after".to_string())]);
 
         check_tokens(compile_str("before {{{name}}}"),
                      &[Text("before ".to_string()),
-                       UTag(vec!["name".to_string()], "{{{name}}}".to_string())]);
+                       UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string())]);
 
         check_tokens(compile_str("{{{name}}} after"),
-                     &[UTag(vec!["name".to_string()], "{{{name}}}".to_string()),
+                     &[UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string()),
                        Text(" after".to_string())]);
     }
 
@@ -300,7 +300,7 @@ mod tests {
     fn test_compile_delimiters() {
         check_tokens(compile_str("before {{=<% %>=}}<%name%> after"),
                      &[Text("before ".to_string()),
-                       ETag(vec!["name".to_string()], "<%name%>".to_string()),
+                       EscapedTag(vec!["name".to_string()], "<%name%>".to_string()),
                        Text(" after".to_string())]);
     }
 }
