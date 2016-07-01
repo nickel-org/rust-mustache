@@ -45,7 +45,7 @@ pub enum Data {
 
 pub type Result<T = ()> = StdResult<T, Error>;
 
-impl<'a> PartialEq for Data {
+impl PartialEq for Data {
     #[inline]
     fn eq(&self, other: &Data) -> bool {
         match (self, other) {
@@ -60,7 +60,7 @@ impl<'a> PartialEq for Data {
     }
 }
 
-impl<'a> fmt::Debug for Data {
+impl fmt::Debug for Data {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             OptVal(ref v) => write!(f, "OptVal({:?})", v),

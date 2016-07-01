@@ -149,7 +149,7 @@ pub struct VecBuilder {
     data: Vec<Data>,
 }
 
-impl<'a> VecBuilder {
+impl VecBuilder {
     /// Create a `VecBuilder`
     #[inline]
     pub fn new() -> VecBuilder {

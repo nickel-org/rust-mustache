@@ -419,13 +419,13 @@ mod tests {
         ::compile_str(s).expect(&format!("Failed to compile: {}", s))
     }
 
-    fn assert_render<'a, 'b, T: Encodable + Debug>(template: &str, data: &T) -> String {
+    fn assert_render<T: Encodable + Debug>(template: &str, data: &T) -> String {
         render(template, data).expect(&format!("Failed to render: template: {:?}\ndata: {:?}",
                                                 template,
                                                 data))
     }
 
-    fn render<'a, 'b, T: Encodable>(template: &str, data: &T) -> Result<String, Error> {
+    fn render<T: Encodable>(template: &str, data: &T) -> Result<String, Error> {
         let template = compile_str(template);
 
         let mut bytes = vec![];
