@@ -390,7 +390,8 @@ mod tests {
     use rustc_serialize::{json, Encodable};
     use rustc_serialize::json::Json;
 
-    use encoder::{Encoder, Error};
+    use encoder::Encoder;
+    use Error;
 
     use super::super::{Data, StrVal, VecVal, Map, Fun};
     use super::super::{Context, Template};

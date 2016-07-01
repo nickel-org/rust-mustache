@@ -21,8 +21,9 @@ use std::result::Result as StdResult;
 
 pub use self::Data::*;
 pub use builder::{MapBuilder, VecBuilder};
-pub use encoder::{Error, IoError, InvalidStr, Encoder, EncoderResult};
+pub use encoder::{Encoder, EncoderResult};
 pub use template::Template;
+pub use error::Error;
 
 #[macro_use]
 mod macros;
@@ -33,6 +34,7 @@ pub mod encoder;
 mod compiler;
 mod parser;
 mod template;
+mod error;
 
 pub enum Data {
     OptVal(Option<Box<Data>>),

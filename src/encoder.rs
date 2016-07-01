@@ -1,14 +1,11 @@
 use std::collections::HashMap;
 use std::fmt;
-use std::io::Error as StdIoError;
 use std::error;
 use std::iter::repeat;
 use rustc_serialize;
 
 use super::{Data, StrVal, Bool, VecVal, Map, OptVal};
 pub use self::Error::*;
-
-use parser;
 
 #[derive(Default)]
 pub struct Encoder {
@@ -25,12 +22,8 @@ impl Encoder {
 pub enum Error {
     NestedOptions,
     UnsupportedType,
-    InvalidStr,
     MissingElements,
     KeyIsNotString,
-    NoFilename,
-    IoError(StdIoError),
-    ParseError(parser::Error),
     NoDataToEncode,
     MultipleRootsFound,
 }
@@ -44,33 +37,16 @@ impl fmt::Display for Error {
 
 impl error::Error for Error {
     fn description(&self) -> &str {
-        use std::error::Error;
         match *self {
             NestedOptions => "nested Option types are not supported",
             UnsupportedType => "unsupported type",
-            InvalidStr => "invalid str",
             MissingElements => "no elements in value",
             KeyIsNotString => "key is not a string",
-            NoFilename => "a filename must be provided",
-            IoError(ref err) => err.description(),
-            ParseError(ref err) => err.description(),
             NoDataToEncode => "the encodable type created no data",
             MultipleRootsFound => {
                 "the encodable type emitted data that was not tree-like in structure"
             }
         }
-    }
-}
-
-impl From<StdIoError> for Error {
-    fn from(err: StdIoError) -> Error {
-        IoError(err)
-    }
-}
-
-impl From<parser::Error> for Error {
-    fn from(err: parser::Error) -> Error {
-        ParseError(err)
     }
 }
 
