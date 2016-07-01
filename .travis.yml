@@ -24,7 +24,6 @@ script:
 
 after_success:
 - |
-    (echo "mustache.nickel.rs" > target/doc/CNAME) &&
     travis-cargo --only stable doc-upload
 
 env:
