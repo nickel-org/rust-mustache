@@ -3,8 +3,6 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
-#![allow(unused_attributes)]
-
 extern crate rustc_serialize;
 extern crate log;
 #[cfg(test)]
