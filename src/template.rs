@@ -572,11 +572,9 @@ mod tests {
         ctx.insert("name", "longerthansix");
 
         let mut writer: &mut [u8] = &mut buffer;
-        match template.render(&mut writer, &ctx) {
-            Err(e) => assert_eq!(e.description(), "failed to write whole buffer"),
-            _ => unreachable!()
-
-        }
+        assert_let!(Err(e) = template.render(&mut writer, &ctx) => {
+            assert_eq!(e.description(), "failed to write whole buffer")
+        })
     }
 
     #[test]
@@ -685,70 +683,47 @@ mod tests {
     fn parse_spec_tests(src: &str) -> Vec<json::Json> {
         let path = PathBuf::from(src);
         let mut file_contents = vec![];
-        match File::open(&path).and_then(|mut f| f.read_to_end(&mut file_contents)) {
-            Ok(_) => {}
-            Err(e) => panic!("Could not read file {}", e),
-        };
+        File::open(&path)
+            .and_then(|mut f| f.read_to_end(&mut file_contents))
+            .expect(&format!("Could not read file {}", path.display()));
 
-        let s = String::from_utf8(file_contents.to_vec()).ok().expect("File was not UTF8 encoded");
+        let s = String::from_utf8(file_contents.to_vec()).expect("File was not UTF8 encoded");
 
-        match Json::from_str(&s) {
-            Err(e) => panic!("{:?}", e),
-            Ok(json) => {
-                match json {
-                    Json::Object(d) => {
-                        let mut d = d;
-                        match d.remove(&"tests".to_string()) {
-                            Some(Json::Array(tests)) => tests.into_iter().collect(),
-                            _ => panic!("{}: tests key not a list", src),
-                        }
-                    }
-                    _ => panic!("{}: JSON value not a map", src),
-                }
-            }
-        }
+        assert_let!(Ok(Json::Object(mut d)) = Json::from_str(&s) => {
+            assert_let!(Some(Json::Array(tests)) = d.remove("tests") => {
+                tests.into_iter().collect()
+            })
+        })
     }
 
     fn write_partials(tmpdir: &Path, value: &json::Json) {
-        match value {
-            &Json::Object(ref d) => {
-                for (key, value) in d.iter() {
-                    match value {
-                        &Json::String(ref s) => {
-                            let path = tmpdir.join(&(key.clone() + ".mustache"));
-                            File::create(&path)
-                                .and_then(|mut f| f.write_all(s.as_bytes()))
-                                .expect("Failed to generate partial");
-                        }
-                        _ => panic!(),
-                    }
-                }
+        assert_let!(Json::Object(ref d) = *value => {
+            for (key, value) in d {
+                assert_let!(Json::String(ref s) = *value => {
+                    let path = tmpdir.join(&(key.clone() + ".mustache"));
+                    File::create(&path)
+                        .and_then(|mut f| f.write_all(s.as_bytes()))
+                        .expect("Failed to generate partial");
+                })
             }
-            _ => panic!(),
-        }
+        })
     }
 
     fn run_test(test: json::Object, data: Data) {
-        let template = match test.get(&"template".to_string()) {
-            Some(&Json::String(ref s)) => s.clone(),
-            _ => panic!(),
-        };
+        let template = assert_let!(Some(&Json::String(ref s)) = test.get("template") => {
+            s.clone()
+        });
 
-        let expected = match test.get(&"expected".to_string()) {
-            Some(&Json::String(ref s)) => s.clone(),
-            _ => panic!(),
-        };
+        let expected = assert_let!(Some(&Json::String(ref s)) = test.get("expected") => {
+            s.clone()
+        });
 
         // Make a temporary dir where we'll store our partials. This is to
         // avoid a race on filenames.
-        let tmpdir = match TempDir::new("") {
-            Ok(tmpdir) => tmpdir,
-            Err(_) => panic!(),
-        };
+        let tmpdir = TempDir::new("").expect("Failed to make tempdir");
 
-        match test.get(&"partials".to_string()) {
-            Some(value) => write_partials(tmpdir.path(), value),
-            None => {}
+        if let Some(value) = test.get("partials") {
+            write_partials(tmpdir.path(), value)
         }
 
         let ctx = Context::new(tmpdir.path().to_path_buf());
@@ -770,15 +745,9 @@ mod tests {
 
     fn run_tests(spec: &str) {
         for json in parse_spec_tests(spec).into_iter() {
-            let test = match json {
-                Json::Object(m) => m,
-                _ => panic!(),
-            };
+            let test = assert_let!(Json::Object(m) = json => m);
 
-            let data = match test.get(&"data".to_string()) {
-                Some(data) => data.clone(),
-                None => panic!(),
-            };
+            let data = test.get("data").expect("No test data").clone();
 
             let mut encoder = Encoder::new();
             data.encode(&mut encoder).expect("Failed to encode");
@@ -821,29 +790,17 @@ mod tests {
     #[test]
     fn test_spec_lambdas() {
         for json in parse_spec_tests("spec/specs/~lambdas.json").into_iter() {
-            let mut test = match json {
-                Json::Object(m) => m,
-                value => panic!("{}", value),
-            };
+            let mut test = assert_let!(Json::Object(m) = json => m);
 
-            let s = match test.remove(&"name".to_string()) {
-                Some(Json::String(s)) => s,
-                value => panic!("{:?}", value),
-            };
+            let s = assert_let!(Some(Json::String(s)) = test.remove("name") => s);
 
             // Replace the lambda with rust code.
-            let data = match test.remove(&"data".to_string()) {
-                Some(data) => data,
-                None => panic!(),
-            };
+            let data = test.remove("data").expect("No test data");
 
             let mut encoder = Encoder::new();
-            data.encode(&mut encoder).ok().expect("Failed to encode");
+            data.encode(&mut encoder).expect("Failed to encode");
 
-            let mut ctx = match encoder.data.pop() {
-                Some(Map(ctx)) => ctx,
-                _ => panic!(),
-            };
+            let mut ctx = assert_let!(Some(Map(ctx)) = encoder.data.pop() => ctx);
 
             // needed for the closure test.
             let mut calls = 0usize;
@@ -898,7 +855,7 @@ mod tests {
                     let f = |_text| "".to_string();
                     ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
                 }
-                value => panic!("{}", value),
+                spec_name => bug!("unimplemented lambda spec test: {}", spec_name),
             };
 
             run_test(test, Map(ctx));

@@ -339,20 +339,14 @@ mod tests {
             })
             .build();
 
-        match data {
-            Map(m) => {
-                match m.get("count") {
-                    Some(&Fun(ref f)) => {
-                        let f = &mut *f.borrow_mut();
-                        assert_eq!((*f)("count: ".to_string()), "count: 1".to_string());
-                        assert_eq!((*f)("count: ".to_string()), "count: 2".to_string());
-                        assert_eq!((*f)("count: ".to_string()), "count: 3".to_string());
-                    }
-                    _ => panic!(),
-                }
-            }
-            _ => panic!(),
-        }
+        assert_let!(Map(m) = data => {
+            assert_let!(Some(&Fun(ref f)) = m.get("count") => {
+                let f = &mut *f.borrow_mut();
+                assert_eq!((*f)("count: ".to_string()), "count: 1".to_string());
+                assert_eq!((*f)("count: ".to_string()), "count: 2".to_string());
+                assert_eq!((*f)("count: ".to_string()), "count: 3".to_string());
+            });
+        })
     }
 
     #[test]
@@ -368,24 +362,17 @@ mod tests {
             })
             .build();
 
-        match data {
-            VecVal(vs) => {
-                let mut iter = vs.iter();
+        assert_let!(VecVal(vs) = data => {
+            let mut iter = vs.iter();
 
-                if let Some(&Fun(ref f)) = iter.next() {
-                    let f = &mut *f.borrow_mut();
-                    assert_eq!((*f)("count: ".to_string()), "count: 1".to_string());
-                    assert_eq!((*f)("count: ".to_string()), "count: 2".to_string());
-                    assert_eq!((*f)("count: ".to_string()), "count: 3".to_string());
-                } else {
-                    panic!()
-                }
+            assert_let!(Some(&Fun(ref f)) = iter.next() => {
+                let f = &mut *f.borrow_mut();
+                assert_eq!((*f)("count: ".to_string()), "count: 1".to_string());
+                assert_eq!((*f)("count: ".to_string()), "count: 2".to_string());
+                assert_eq!((*f)("count: ".to_string()), "count: 3".to_string());
+            });
 
-                if let Some(..) = iter.next() {
-                    panic!()
-                }
-            }
-            _ => panic!(),
-        }
+            assert_eq!(iter.next(), None);
+        })
     }
 }
