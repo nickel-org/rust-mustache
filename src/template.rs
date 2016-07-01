@@ -88,7 +88,9 @@ impl<'a> RenderContext<'a> {
             Partial(ref name, ref indent, _) => {
                 self.render_partial(wr, stack, name, indent)
             }
-            _ => panic!(),
+            IncompleteSection(..) => {
+                bug!("render_token should not encounter IncompleteSections")
+            }
         }
     }
 
@@ -206,7 +208,7 @@ impl<'a> RenderContext<'a> {
                     }
 
                     ref value => {
-                        panic!("unexpected value {:?}", value);
+                        bug!("render_utag: unexpected value {:?}", value);
                     }
                 }
             }
@@ -273,7 +275,7 @@ impl<'a> RenderContext<'a> {
                             stack.pop();
                         }
                     }
-                    _ => panic!("unexpected value {:?}", value),
+                    _ => bug!("unexpected value {:?}", value),
                 }
             }
         };
@@ -342,7 +344,7 @@ impl<'a> RenderContext<'a> {
                         break;
                     }
                 }
-                _ => panic!("expect map: {:?}", path),
+                _ => bug!("expect map: {:?}", path),
             }
         }
 

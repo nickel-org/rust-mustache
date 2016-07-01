@@ -24,6 +24,9 @@ pub use builder::{MapBuilder, VecBuilder};
 pub use encoder::{Error, IoError, InvalidStr, Encoder, EncoderResult};
 pub use template::Template;
 
+#[macro_use]
+mod macros;
+
 pub mod builder;
 pub mod encoder;
 
@@ -51,7 +54,7 @@ impl<'a> PartialEq for Data {
             (&Bool(ref v0), &Bool(ref v1)) => v0 == v1,
             (&VecVal(ref v0), &VecVal(ref v1)) => v0 == v1,
             (&Map(ref v0), &Map(ref v1)) => v0 == v1,
-            (&Fun(_), &Fun(_)) => panic!("cannot compare closures"),
+            (&Fun(_), &Fun(_)) => bug!("Cannot compare closures"),
             (_, _) => false,
         }
     }

@@ -322,12 +322,12 @@ impl rustc_serialize::Encoder for Encoder {
         };
         let mut m = match self.data.pop() {
             Some(Map(m)) => m,
-            _ => panic!("Expected a map"),
+            _ => bug!("Expected a map"),
         };
         try!(f(self));
         let popped = match self.data.pop() {
             Some(p) => p,
-            None => panic!("Error: Nothing to pop!"),
+            None => bug!("Nothing to pop!"),
         };
         m.insert(k, popped);
         self.data.push(Map(m));
@@ -341,6 +341,6 @@ pub fn encode<T: rustc_serialize::Encodable>(data: &T) -> Result<Data, Error> {
     assert_eq!(encoder.data.len(), 1);
     match encoder.data.pop() {
         Some(data) => Ok(data),
-        None => panic!("Error: Nothing to pop!"),
+        None => bug!("Nothing to pop!"),
     }
 }

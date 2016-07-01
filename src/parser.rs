@@ -429,9 +429,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                                         srcs.push(src.clone());
                                         srcs.push(csection.clone());
                                     }
-                                    _ => unreachable!("bug: Incomplete sections should not be nested \
-                                                       Please report this issue on GitHub if you find \
-                                                       an input that triggers this case."),
+                                    _ => bug!("Incomplete sections should not be nested"),
                                 }
                             }
 
