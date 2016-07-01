@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::error;
-use std::iter::repeat;
 use rustc_serialize;
 
 use super::{Data, StrVal, Bool, VecVal, Map, OptVal};
@@ -52,6 +51,22 @@ impl error::Error for Error {
 
 pub type EncoderResult = Result<(), Error>;
 
+impl Encoder {
+    fn push(&mut self, data: Data) {
+        self.data.push(data);
+    }
+
+    fn push_ok(&mut self, data: Data) -> EncoderResult {
+        self.push(data);
+        Ok(())
+    }
+
+    fn push_str_ok<T: ToString>(&mut self, data: T) -> EncoderResult {
+        self.push(StrVal(data.to_string()));
+        Ok(())
+    }
+}
+
 impl rustc_serialize::Encoder for Encoder {
     type Error = Error;
 
@@ -60,68 +75,53 @@ impl rustc_serialize::Encoder for Encoder {
     }
 
     fn emit_isize(&mut self, v: isize) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
     fn emit_usize(&mut self, v: usize) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
     fn emit_u64(&mut self, v: u64) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
     fn emit_u32(&mut self, v: u32) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
     fn emit_u16(&mut self, v: u16) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
     fn emit_u8(&mut self, v: u8) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
 
     fn emit_i64(&mut self, v: i64) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
     fn emit_i32(&mut self, v: i32) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
     fn emit_i16(&mut self, v: i16) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
     fn emit_i8(&mut self, v: i8) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
 
     fn emit_bool(&mut self, v: bool) -> EncoderResult {
-        self.data.push(Bool(v));
-        Ok(())
+        self.push_ok(Bool(v))
     }
 
     fn emit_f64(&mut self, v: f64) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
     fn emit_f32(&mut self, v: f32) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
 
     fn emit_char(&mut self, v: char) -> EncoderResult {
-        self.data.push(StrVal(repeat(v).take(1).collect::<String>()));
-        Ok(())
+        self.push_str_ok(v)
     }
     fn emit_str(&mut self, v: &str) -> EncoderResult {
-        self.data.push(StrVal(v.to_string()));
-        Ok(())
+        self.push_str_ok(v)
     }
 
     fn emit_enum<F>(&mut self, _name: &str, _f: F) -> EncoderResult
@@ -166,7 +166,7 @@ impl rustc_serialize::Encoder for Encoder {
     fn emit_struct<F>(&mut self, _name: &str, _len: usize, f: F) -> EncoderResult
     where F: FnOnce(&mut Encoder) -> EncoderResult
     {
-        self.data.push(Map(HashMap::new()));
+        self.push(Map(HashMap::new()));
         f(self)
     }
 
@@ -187,8 +187,7 @@ impl rustc_serialize::Encoder for Encoder {
             }
         };
         m.insert(name.to_string(), data);
-        self.data.push(Map(m));
-        Ok(())
+        self.push_ok(Map(m))
     }
 
     fn emit_tuple<F>(&mut self, len: usize, f: F) -> EncoderResult
@@ -223,8 +222,7 @@ impl rustc_serialize::Encoder for Encoder {
     }
 
     fn emit_option_none(&mut self) -> EncoderResult {
-        self.data.push(OptVal(None));
-        Ok(())
+        self.push_ok(OptVal(None))
     }
 
     fn emit_option_some<F>(&mut self, f: F) -> EncoderResult
@@ -238,14 +236,13 @@ impl rustc_serialize::Encoder for Encoder {
                 return Err(UnsupportedType);
             }
         };
-        self.data.push(OptVal(Some(Box::new(val))));
-        Ok(())
+        self.push_ok(OptVal(Some(Box::new(val))))
     }
 
     fn emit_seq<F>(&mut self, _len: usize, f: F) -> EncoderResult
     where F: FnOnce(&mut Encoder) -> EncoderResult
     {
-        self.data.push(VecVal(Vec::new()));
+        self.push(VecVal(Vec::new()));
         f(self)
     }
 
@@ -266,14 +263,13 @@ impl rustc_serialize::Encoder for Encoder {
             }
         };
         v.push(data);
-        self.data.push(VecVal(v));
-        Ok(())
+        self.push_ok(VecVal(v))
     }
 
     fn emit_map<F>(&mut self, _len: usize, f: F) -> EncoderResult
     where F: FnOnce(&mut Encoder) -> EncoderResult
     {
-        self.data.push(Map(HashMap::new()));
+        self.push(Map(HashMap::new()));
         f(self)
     }
 
@@ -312,7 +308,7 @@ impl rustc_serialize::Encoder for Encoder {
             None => bug!("Nothing to pop!"),
         };
         m.insert(k, popped);
-        self.data.push(Map(m));
+        self.push(Map(m));
         Ok(())
     }
 }
