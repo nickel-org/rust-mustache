@@ -504,6 +504,50 @@ mod tests {
         assert_eq!(assert_render(template, &ctx), "Dennis, 42");
     }
 
+    fn test_implicit_render(tags: &str, expect_escaped: bool) {
+        let template = format!("{}{}{}", "{{#list}} (", tags, ") {{/list}}");
+        let mut ctx = HashMap::new();
+        ctx.insert("list", vec!["&", "\"", "<", ">"]);
+
+        let expected = if expect_escaped {
+            " (&amp;)  (&quot;)  (&lt;)  (&gt;) "
+        } else {
+            r#" (&)  (")  (<)  (>) "#
+        };
+
+        assert_eq!(&*render(&template, &ctx).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit_escaped() {
+        test_implicit_render("{{.}}", true);
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit_escaped_alternative_delimeters() {
+        test_implicit_render("{{=<% %>=}}<%.%><%={{ }}=%>", true);
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit_unescaped() {
+        test_implicit_render("{{{.}}}", false);
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit_ampersand() {
+        test_implicit_render("{{&.}}", false);
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit_unescaped_alternative_delimeters() {
+        test_implicit_render("{{=<% %>=}}<%{.}%><%={{ }}=%>", false);
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit_ampersand_alternative_delimeters() {
+        test_implicit_render("{{=<% %>=}}<%&.%><%={{ }}=%>", false);
+    }
+
     #[test]
     #[should_panic(message="nested Option types are not supported")]
     fn test_render_option_nested() {
