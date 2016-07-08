@@ -344,7 +344,7 @@ impl<'a> RenderContext<'a> {
                         break;
                     }
                 }
-                _ => bug!("expect map: {:?}", path),
+                _ => { /* continue searching the stack */ },
             }
         }
 
@@ -546,6 +546,57 @@ mod tests {
     #[test]
     fn test_render_option_sections_implicit_ampersand_alternative_delimeters() {
         test_implicit_render("{{=<% %>=}}<%&.%><%={{ }}=%>", false);
+    }
+
+    mod context_search {
+        use MapBuilder;
+        use super::{render_data, compile_str};
+
+        fn assert_render(template: &str, expected: &str) {
+            let ctx = MapBuilder::new().insert_map("payload", |map| {
+                map.insert_vec("list", |vec| {
+                    vec.push_str("<p>hello</p>")
+                       .push_str("<p>world</p>")
+                }).insert_str("test", "hello world")
+            }).build();
+
+            let template = compile_str(template);
+            let rendered = render_data(&template, &ctx);
+            println!("{}\n----\n{}", rendered, expected);
+            assert_eq!(rendered, expected);
+        }
+
+        #[test]
+        fn from_base() {
+            let template = "\
+{{#payload.list}}
+{{payload.test}}
+{{/payload.list}}";
+
+            assert_render(template, "hello world\nhello world\n")
+        }
+
+        #[test]
+        fn from_mid_stack() {
+            let template = "\
+{{#payload}}
+{{#list}}
+{{test}}
+{{/list}}
+{{/payload}}";
+
+            assert_render(template, "hello world\nhello world\n")
+        }
+
+        #[test]
+        fn render_nothing_when_not_found() {
+            let template = "\
+{{#payload.list}}
+{{test}}
+{{/payload.list}}";
+
+            assert_render(template, "\n\n")
+        }
     }
 
     #[test]
