@@ -1,0 +1,3 @@
+write_mode = "Overwrite"
+where_indent = "Inherit"
+take_source_hints = false

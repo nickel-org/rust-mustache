@@ -40,7 +40,7 @@ struct Planet {
 
 fn main() {
     // First the string needs to be compiled.
-    let template = mustache::compile_str("hello {{name}}");
+    let template = mustache::compile_str("hello {{name}}").unwrap();
 
     // You can either use an encodable type to print "hello Mercury".
     let planet = Planet { name: "Mercury".into() };
@@ -52,7 +52,7 @@ fn main() {
         .insert_str("name", "Venus")
         .build();
 
-    template.render_data(&mut io::stdout(), &data);
+    template.render_data(&mut io::stdout(), &data).unwrap();
     println!("");
 
     // ... you can even use closures.
@@ -65,15 +65,15 @@ fn main() {
         .build();
 
     // prints "hello Earth"
-    template.render_data(&mut io::stdout(), &data);
+    template.render_data(&mut io::stdout(), &data).unwrap();
     println!("");
 
     // prints "hello Mars"
-    template.render_data(&mut io::stdout(), &data);
+    template.render_data(&mut io::stdout(), &data).unwrap();
     println!("");
 
     // prints "hello Jupiter"
-    template.render_data(&mut io::stdout(), &data);
+    template.render_data(&mut io::stdout(), &data).unwrap();
     println!("");
 }
 ```

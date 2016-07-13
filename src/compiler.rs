@@ -2,21 +2,24 @@ use std::collections::HashMap;
 use std::io::ErrorKind::NotFound;
 use std::io::Read;
 use std::fs::File;
-use std::str;
 
-use parser::{Parser, Token};
+use parser_internals::{Parser, Token};
 use super::Context;
+
+use Result;
+
+pub type PartialsMap = HashMap<String, Vec<Token>>;
 
 /// `Compiler` is a object that compiles a string into a `Vec<Token>`.
 pub struct Compiler<T> {
     ctx: Context,
     reader: T,
-    partials: HashMap<String, Vec<Token>>,
+    partials: PartialsMap,
     otag: String,
     ctag: String,
 }
 
-impl<T: Iterator<Item=char>> Compiler<T> {
+impl<T: Iterator<Item = char>> Compiler<T> {
     /// Construct a default compiler.
     pub fn new(ctx: Context, reader: T) -> Compiler<T> {
         Compiler {
@@ -31,9 +34,10 @@ impl<T: Iterator<Item=char>> Compiler<T> {
     /// Construct a default compiler.
     pub fn new_with(ctx: Context,
                     reader: T,
-                    partials: HashMap<String, Vec<Token>>,
+                    partials: PartialsMap,
                     otag: String,
-                    ctag: String) -> Compiler<T> {
+                    ctag: String)
+                    -> Compiler<T> {
         Compiler {
             ctx: ctx,
             reader: reader,
@@ -44,16 +48,16 @@ impl<T: Iterator<Item=char>> Compiler<T> {
     }
 
     /// Compiles a template into a series of tokens.
-    pub fn compile(mut self) -> (Vec<Token>, HashMap<String, Vec<Token>>) {
+    pub fn compile(mut self) -> Result<(Vec<Token>, PartialsMap)> {
         let (tokens, partials) = {
             let parser = Parser::new(&mut self.reader, &self.otag, &self.ctag);
-            parser.parse()
+            try!(parser.parse())
         };
 
         // Compile the partials if we haven't done so already.
         for name in partials.into_iter() {
-            let path = self.ctx.template_path
-                               .join(&(name.clone() + "." + &self.ctx.template_extension));
+            let path =
+                self.ctx.template_path.join(&(name.clone() + "." + &self.ctx.template_extension));
 
             if !self.partials.contains_key(&name) {
                 // Insert a placeholder so we don't recurse off to infinity.
@@ -61,12 +65,8 @@ impl<T: Iterator<Item=char>> Compiler<T> {
 
                 match File::open(&path) {
                     Ok(mut file) => {
-                        let mut contents = vec![];
-                        file.read_to_end(&mut contents).unwrap();
-                        let string = match str::from_utf8(&contents) {
-                            Ok(string) => string.to_string(),
-                            Err(_) => { panic!("Failed to parse file as UTF-8"); }
-                        };
+                        let mut string = String::new();
+                        try!(file.read_to_string(&mut string));
 
                         let compiler = Compiler {
                             ctx: self.ctx.clone(),
@@ -76,40 +76,39 @@ impl<T: Iterator<Item=char>> Compiler<T> {
                             ctag: "}}".to_string(),
                         };
 
-                        let (tokens, subpartials) = compiler.compile();
+                        let (tokens, subpartials) = try!(compiler.compile());
 
                         // Include subpartials
                         self.partials.extend(subpartials.into_iter());
 
                         // Set final compiled tokens for *this* partial
                         self.partials.insert(name, tokens);
-                    },
-                    Err(e) => {
-                        // Ignore missing files.
-                        if e.kind() != NotFound {
-                            panic!("error reading file: {}", e);
-                        }
                     }
+                    // Ignore missing files.
+                    Err(ref e) if e.kind() == NotFound => {},
+                    Err(e) => return Err(e.into()),
                 }
             }
         }
 
         let Compiler { partials, .. } = self;
 
-        (tokens, partials)
+        Ok((tokens, partials))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use parser::{Token, Text, ETag, UTag, Section, IncompleteSection, Partial};
+    use parser_internals::{Token, Text, EscapedTag, UnescapedTag, Section, IncompleteSection, Partial};
     use super::Compiler;
     use super::super::Context;
     use std::path::PathBuf;
 
     fn compile_str(template: &str) -> Vec<Token> {
         let ctx = Context::new(PathBuf::from("."));
-        let (tokens, _) = Compiler::new(ctx, template.chars()).compile();
+        let (tokens, _) = Compiler::new(ctx, template.chars())
+                                   .compile()
+                                   .expect("Failed to compile");
         tokens
     }
 
@@ -136,13 +135,13 @@ mod tests {
                         tag,
                         ctag)
             }
-            ETag(ref name, ref tag) => {
+            EscapedTag(ref name, ref tag) => {
                 let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
-                format!("ETag(vec!({}), {})", name.join(", "), *tag)
+                format!("EscapedTag(vec!({}), {})", name.join(", "), *tag)
             }
-            UTag(ref name, ref tag) => {
+            UnescapedTag(ref name, ref tag) => {
                 let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
-                format!("UTag(vec!({}), {})", name.join(", "), *tag)
+                format!("UnescapedTag(vec!({}), {})", name.join(", "), *tag)
             }
             IncompleteSection(ref name, ref inverted, ref osection, ref newlined) => {
                 let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
@@ -152,199 +151,156 @@ mod tests {
                         *osection,
                         *newlined)
             }
-            _ => {
-                format!("{:?}", token)
-            }
+            _ => format!("{:?}", token),
         }
     }
 
-    fn check_tokens(_actual: Vec<Token>, _expected: &[Token]) {
-        // TODO: equality is currently broken for enums
-        //let actual: Vec<String> = actual.iter().map(token_to_str).collect();
-        //let expected = expected.iter().map(token_to_str).collect();
-
-        //assert_eq!(actual, expected);
+    fn check_tokens(actual: Vec<Token>, expected: &[Token]) {
+        assert_eq!(actual, expected);
     }
 
     #[test]
     fn test_compile_texts() {
-        check_tokens(compile_str("hello world"), &[
-            Text("hello world".to_string())
-        ]);
-        check_tokens(compile_str("hello {world"), &[
-            Text("hello {world".to_string())
-        ]);
-        check_tokens(compile_str("hello world}"), &[
-            Text("hello world}".to_string())
-        ]);
-        check_tokens(compile_str("hello world}}"), &[
-            Text("hello world}}".to_string())
-        ]);
+        check_tokens(compile_str("hello world"),
+                     &[Text("hello world".to_string())]);
+        check_tokens(compile_str("hello {world"),
+                     &[Text("hello {world".to_string())]);
+        check_tokens(compile_str("hello world}"),
+                     &[Text("hello world}".to_string())]);
+        check_tokens(compile_str("hello world}}"),
+                     &[Text("hello world}}".to_string())]);
     }
 
     #[test]
     fn test_compile_etags() {
-        check_tokens(compile_str("{{ name }}"), &[
-            ETag(vec!("name".to_string()), "{{ name }}".to_string())
-        ]);
+        check_tokens(compile_str("{{ name }}"),
+                     &[EscapedTag(vec!["name".to_string()], "{{ name }}".to_string())]);
 
-        check_tokens(compile_str("before {{name}} after"), &[
-            Text("before ".to_string()),
-            ETag(vec!("name".to_string()), "{{name}}".to_string()),
-            Text(" after".to_string())
-        ]);
+        check_tokens(compile_str("before {{name}} after"),
+                     &[Text("before ".to_string()),
+                       EscapedTag(vec!["name".to_string()], "{{name}}".to_string()),
+                       Text(" after".to_string())]);
 
-        check_tokens(compile_str("before {{name}}"), &[
-            Text("before ".to_string()),
-            ETag(vec!("name".to_string()), "{{name}}".to_string())
-        ]);
+        check_tokens(compile_str("before {{name}}"),
+                     &[Text("before ".to_string()),
+                       EscapedTag(vec!["name".to_string()], "{{name}}".to_string())]);
 
-        check_tokens(compile_str("{{name}} after"), &[
-            ETag(vec!("name".to_string()), "{{name}}".to_string()),
-            Text(" after".to_string())
-        ]);
+        check_tokens(compile_str("{{name}} after"),
+                     &[EscapedTag(vec!["name".to_string()], "{{name}}".to_string()),
+                       Text(" after".to_string())]);
     }
 
     #[test]
     fn test_compile_utags() {
-        check_tokens(compile_str("{{{name}}}"), &[
-            UTag(vec!("name".to_string()), "{{{name}}}".to_string())
-        ]);
+        check_tokens(compile_str("{{{name}}}"),
+                     &[UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string())]);
 
-        check_tokens(compile_str("before {{{name}}} after"), &[
-            Text("before ".to_string()),
-            UTag(vec!("name".to_string()), "{{{name}}}".to_string()),
-            Text(" after".to_string())
-        ]);
+        check_tokens(compile_str("before {{{name}}} after"),
+                     &[Text("before ".to_string()),
+                       UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string()),
+                       Text(" after".to_string())]);
 
-        check_tokens(compile_str("before {{{name}}}"), &[
-            Text("before ".to_string()),
-            UTag(vec!("name".to_string()), "{{{name}}}".to_string())
-        ]);
+        check_tokens(compile_str("before {{{name}}}"),
+                     &[Text("before ".to_string()),
+                       UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string())]);
 
-        check_tokens(compile_str("{{{name}}} after"), &[
-            UTag(vec!("name".to_string()), "{{{name}}}".to_string()),
-            Text(" after".to_string())
-        ]);
+        check_tokens(compile_str("{{{name}}} after"),
+                     &[UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string()),
+                       Text(" after".to_string())]);
     }
 
     #[test]
     fn test_compile_sections() {
-        check_tokens(compile_str("{{# name}}{{/name}}"), &[
-            Section(
-                vec!("name".to_string()),
-                false,
-                Vec::new(),
-                "{{".to_string(),
-                "{{# name}}".to_string(),
-                "".to_string(),
-                "{{/name}}".to_string(),
-                "}}".to_string()
-            )
-        ]);
+        check_tokens(compile_str("{{# name}}{{/name}}"),
+                     &[Section(vec!["name".to_string()],
+                               false,
+                               Vec::new(),
+                               "{{".to_string(),
+                               "{{# name}}".to_string(),
+                               "".to_string(),
+                               "{{/name}}".to_string(),
+                               "}}".to_string())]);
 
-        check_tokens(compile_str("before {{^name}}{{/name}} after"), &[
-            Text("before ".to_string()),
-            Section(
-                vec!("name".to_string()),
-                true,
-                Vec::new(),
-                "{{".to_string(),
-                "{{^name}}".to_string(),
-                "".to_string(),
-                "{{/name}}".to_string(),
-                "}}".to_string()
-            ),
-            Text(" after".to_string())
-        ]);
+        check_tokens(compile_str("before {{^name}}{{/name}} after"),
+                     &[Text("before ".to_string()),
+                       Section(vec!["name".to_string()],
+                               true,
+                               Vec::new(),
+                               "{{".to_string(),
+                               "{{^name}}".to_string(),
+                               "".to_string(),
+                               "{{/name}}".to_string(),
+                               "}}".to_string()),
+                       Text(" after".to_string())]);
 
-        check_tokens(compile_str("before {{#name}}{{/name}}"), &[
-            Text("before ".to_string()),
-            Section(
-                vec!("name".to_string()),
-                false,
-                Vec::new(),
-                "{{".to_string(),
-                "{{#name}}".to_string(),
-                "".to_string(),
-                "{{/name}}".to_string(),
-                "}}".to_string()
-            )
-        ]);
+        check_tokens(compile_str("before {{#name}}{{/name}}"),
+                     &[Text("before ".to_string()),
+                       Section(vec!["name".to_string()],
+                               false,
+                               Vec::new(),
+                               "{{".to_string(),
+                               "{{#name}}".to_string(),
+                               "".to_string(),
+                               "{{/name}}".to_string(),
+                               "}}".to_string())]);
 
-        check_tokens(compile_str("{{#name}}{{/name}} after"), &[
-            Section(
-                vec!("name".to_string()),
-                false,
-                Vec::new(),
-                "{{".to_string(),
-                "{{#name}}".to_string(),
-                "".to_string(),
-                "{{/name}}".to_string(),
-                "}}".to_string()
-            ),
-            Text(" after".to_string())
-        ]);
+        check_tokens(compile_str("{{#name}}{{/name}} after"),
+                     &[Section(vec!["name".to_string()],
+                               false,
+                               Vec::new(),
+                               "{{".to_string(),
+                               "{{#name}}".to_string(),
+                               "".to_string(),
+                               "{{/name}}".to_string(),
+                               "}}".to_string()),
+                       Text(" after".to_string())]);
 
-        check_tokens(compile_str(
-                "before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after"), &[
-            Text("before ".to_string()),
-            Section(
-                vec!("a".to_string()),
-                false,
-                vec!(
-                    Text(" 1 ".to_string()),
-                    Section(
-                        vec!("b".to_string()),
-                        true,
-                        vec!(Text(" 2 ".to_string())),
-                        "{{".to_string(),
-                        "{{^b}}".to_string(),
-                        " 2 ".to_string(),
-                        "{{/b}}".to_string(),
-                        "}}".to_string()
-                    ),
-                    Text(" ".to_string())
-                ),
-                "{{".to_string(),
-                "{{#a}}".to_string(),
-                " 1 {{^b}} 2 {{/b}} ".to_string(),
-                "{{/a}}".to_string(),
-                "}}".to_string()
-            ),
-            Text(" after".to_string())
-        ]);
+        check_tokens(compile_str("before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after"),
+                     &[Text("before ".to_string()),
+                       Section(vec!["a".to_string()],
+                               false,
+                               vec![Text(" 1 ".to_string()),
+                                    Section(vec!["b".to_string()],
+                                            true,
+                                            vec![Text(" 2 ".to_string())],
+                                            "{{".to_string(),
+                                            "{{^b}}".to_string(),
+                                            " 2 ".to_string(),
+                                            "{{/b}}".to_string(),
+                                            "}}".to_string()),
+                                    Text(" ".to_string())],
+                               "{{".to_string(),
+                               "{{#a}}".to_string(),
+                               " 1 {{^b}} 2 {{/b}} ".to_string(),
+                               "{{/a}}".to_string(),
+                               "}}".to_string()),
+                       Text(" after".to_string())]);
     }
 
     #[test]
     fn test_compile_partials() {
-        check_tokens(compile_str("{{> test}}"), &[
-            Partial("test".to_string(), "".to_string(), "{{> test}}".to_string())
-        ]);
+        check_tokens(compile_str("{{> test}}"),
+                     &[Partial("test".to_string(), "".to_string(), "{{> test}}".to_string())]);
 
-        check_tokens(compile_str("before {{>test}} after"), &[
-            Text("before ".to_string()),
-            Partial("test".to_string(), "".to_string(), "{{>test}}".to_string()),
-            Text(" after".to_string())
-        ]);
+        check_tokens(compile_str("before {{>test}} after"),
+                     &[Text("before ".to_string()),
+                       Partial("test".to_string(), "".to_string(), "{{>test}}".to_string()),
+                       Text(" after".to_string())]);
 
-        check_tokens(compile_str("before {{> test}}"), &[
-            Text("before ".to_string()),
-            Partial("test".to_string(), "".to_string(), "{{> test}}".to_string())
-        ]);
+        check_tokens(compile_str("before {{> test}}"),
+                     &[Text("before ".to_string()),
+                       Partial("test".to_string(), "".to_string(), "{{> test}}".to_string())]);
 
-        check_tokens(compile_str("{{>test}} after"), &[
-            Partial("test".to_string(), "".to_string(), "{{>test}}".to_string()),
-            Text(" after".to_string())
-        ]);
+        check_tokens(compile_str("{{>test}} after"),
+                     &[Partial("test".to_string(), "".to_string(), "{{>test}}".to_string()),
+                       Text(" after".to_string())]);
     }
 
     #[test]
     fn test_compile_delimiters() {
-        check_tokens(compile_str("before {{=<% %>=}}<%name%> after"), &[
-            Text("before ".to_string()),
-            ETag(vec!("name".to_string()), "<%name%>".to_string()),
-            Text(" after".to_string())
-        ]);
+        check_tokens(compile_str("before {{=<% %>=}}<%name%> after"),
+                     &[Text("before ".to_string()),
+                       EscapedTag(vec!["name".to_string()], "<%name%>".to_string()),
+                       Text(" after".to_string())]);
     }
 }
