@@ -4,7 +4,7 @@ use std::error;
 use rustc_serialize;
 
 use super::{Data, StrVal, Bool, VecVal, Map, OptVal};
-pub use self::Error::*;
+use self::Error::*;
 
 #[derive(Default)]
 pub struct Encoder {
