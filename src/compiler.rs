@@ -3,7 +3,7 @@ use std::io::ErrorKind::NotFound;
 use std::io::Read;
 use std::fs::File;
 
-use parser::{Parser, Token};
+use parser_internals::{Parser, Token};
 use super::Context;
 
 use Result;
@@ -99,7 +99,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
 
 #[cfg(test)]
 mod tests {
-    use parser::{Token, Text, EscapedTag, UnescapedTag, Section, IncompleteSection, Partial};
+    use parser_internals::{Token, Text, EscapedTag, UnescapedTag, Section, IncompleteSection, Partial};
     use super::Compiler;
     use super::super::Context;
     use std::path::PathBuf;

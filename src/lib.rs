@@ -29,8 +29,17 @@ mod macros;
 pub mod builder;
 pub mod encoder;
 
+
+// FIXME: When pub(crate) lands then this can be made a lot less awkward.
+// Alternatively, decide on a decent part of the parser api to consider stable.
+pub mod parser {
+    pub use parser_internals::Error;
+}
+
+#[path = "parser.rs"]
+mod parser_internals;
+
 mod compiler;
-mod parser;
 mod template;
 mod error;
 

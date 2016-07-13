@@ -6,8 +6,8 @@ use rustc_serialize::Encodable;
 
 use encoder;
 use compiler::Compiler;
-use parser::Token;
-use parser::Token::*;
+use parser_internals::Token;
+use parser_internals::Token::*;
 
 use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun, OptVal, Result};
 

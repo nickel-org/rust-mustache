@@ -5,7 +5,6 @@ use std::fmt;
 use parser;
 use encoder;
 
-
 /// Error type for any error within this library.
 ///
 /// This type is not intended to be matched exhaustively as new variants
