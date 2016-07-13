@@ -8,12 +8,16 @@ use self::Error::*;
 
 #[derive(Default)]
 pub struct Encoder {
-    pub data: Vec<Data>,
+     data: Vec<Data>,
 }
 
 impl Encoder {
     pub fn new() -> Encoder {
         Encoder::default()
+    }
+
+    pub fn stack(&self) -> &[Data] {
+        &self.data
     }
 }
 

@@ -390,7 +390,7 @@ mod tests {
     use rustc_serialize::{json, Encodable};
     use rustc_serialize::json::Json;
 
-    use encoder::Encoder;
+    use encoder;
     use Error;
 
     use super::super::{Data, StrVal, VecVal, Map, Fun};
@@ -749,12 +749,9 @@ mod tests {
             let test = assert_let!(Json::Object(m) = json => m);
 
             let data = test.get("data").expect("No test data").clone();
+            let data = encoder::encode(&data).expect("Failed to encode");
 
-            let mut encoder = Encoder::new();
-            data.encode(&mut encoder).expect("Failed to encode");
-            assert_eq!(encoder.data.len(), 1);
-
-            run_test(test, encoder.data.pop().expect("Failed to pop data"));
+            run_test(test, data);
         }
     }
 
@@ -798,10 +795,9 @@ mod tests {
             // Replace the lambda with rust code.
             let data = test.remove("data").expect("No test data");
 
-            let mut encoder = Encoder::new();
-            data.encode(&mut encoder).expect("Failed to encode");
+            let data = encoder::encode(&data).expect("Failed to encode");
 
-            let mut ctx = assert_let!(Some(Map(ctx)) = encoder.data.pop() => ctx);
+            let mut ctx = assert_let!(Map(ctx) = data => ctx);
 
             // needed for the closure test.
             let mut calls = 0usize;
