@@ -5,6 +5,11 @@ use std::fmt;
 use parser;
 use encoder;
 
+
+/// Error type for any error within this library.
+///
+/// This type is not intended to be matched exhaustively as new variants
+/// may be added in future without a version bump.
 #[derive(Debug)]
 pub enum Error {
     InvalidStr,
@@ -12,6 +17,9 @@ pub enum Error {
     Io(StdIoError),
     Parser(parser::Error),
     Encoder(encoder::Error),
+
+    #[doc(hidden)]
+    __Nonexhaustive,
 }
 
 impl fmt::Display for Error {
@@ -28,6 +36,7 @@ impl StdError for Error {
             Error::Io(ref err) => err.description(),
             Error::Parser(ref err) => err.description(),
             Error::Encoder(ref err) => err.description(),
+            Error::__Nonexhaustive => unreachable!(),
         }
     }
 }

@@ -17,6 +17,10 @@ impl Encoder {
     }
 }
 
+/// Error type to represent encoding failure.
+///
+/// This type is not intended to be matched exhaustively as new variants
+/// may be added in future without a version bump.
 #[derive(Debug)]
 pub enum Error {
     NestedOptions,
@@ -25,6 +29,9 @@ pub enum Error {
     KeyIsNotString,
     NoDataToEncode,
     MultipleRootsFound,
+
+    #[doc(hidden)]
+    __Nonexhaustive,
 }
 
 impl fmt::Display for Error {
@@ -45,6 +52,7 @@ impl error::Error for Error {
             MultipleRootsFound => {
                 "the encodable type emitted data that was not tree-like in structure"
             }
+            Error::__Nonexhaustive => unreachable!(),
         }
     }
 }

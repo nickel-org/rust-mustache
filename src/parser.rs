@@ -17,6 +17,10 @@ pub enum Token {
     Partial(String, String, String),
 }
 
+/// Error type to represent parsing failure.
+///
+/// This type is not intended to be matched exhaustively as new variants
+/// may be added in future without a version bump.
 #[derive(Debug, PartialEq)]
 pub enum Error {
     BadClosingTag(char, char),
@@ -27,6 +31,9 @@ pub enum Error {
     EarlySectionClose(String),
     MissingSetDelimeterClosingTag,
     InvalidSetDelimeterSyntax,
+
+    #[doc(hidden)]
+    __Nonexhaustive,
 }
 
 impl StdError for Error {
@@ -40,6 +47,7 @@ impl StdError for Error {
             Error::EarlySectionClose(..) => "found a closing tag for an unopened section",
             Error::MissingSetDelimeterClosingTag => "missing the new closing tag in set delimeter tag",
             Error::InvalidSetDelimeterSyntax => "invalid set delimeter tag syntax",
+            Error::__Nonexhaustive => unreachable!(),
         }
     }
 }
