@@ -1,0 +1,23 @@
+#[derive(Serialize, Debug)]
+pub struct Planet {
+    pub name: String,
+    pub info: Option<PlanetInfo>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct PlanetInfo {
+    pub moons: Vec<String>,
+    pub population: u64,
+    pub description: String,
+}
+
+#[derive(Serialize, Debug)]
+pub struct Person {
+    pub name: String,
+    pub age: Option<u32>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct NestedOptions {
+    pub opt: Option<Option<u32>>,
+}

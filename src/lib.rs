@@ -3,7 +3,13 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
+#[cfg(not(feature = "serde"))]
 extern crate rustc_serialize;
+#[cfg(feature = "serde")]
+extern crate serde;
+#[cfg(all(test, feature = "serde"))]
+extern crate serde_json;
+
 extern crate log;
 #[cfg(test)]
 extern crate tempdir;
