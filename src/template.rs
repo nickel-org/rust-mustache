@@ -344,7 +344,7 @@ impl<'a> RenderContext<'a> {
                         break;
                     }
                 }
-                _ => bug!("expect map: {:?}", path),
+                _ => { /* continue searching the stack */ },
             }
         }
 
@@ -502,6 +502,101 @@ mod tests {
             age: Some(42),
         };
         assert_eq!(assert_render(template, &ctx), "Dennis, 42");
+    }
+
+    fn test_implicit_render(tags: &str, expect_escaped: bool) {
+        let template = format!("{}{}{}", "{{#list}} (", tags, ") {{/list}}");
+        let mut ctx = HashMap::new();
+        ctx.insert("list", vec!["&", "\"", "<", ">"]);
+
+        let expected = if expect_escaped {
+            " (&amp;)  (&quot;)  (&lt;)  (&gt;) "
+        } else {
+            r#" (&)  (")  (<)  (>) "#
+        };
+
+        assert_eq!(&*render(&template, &ctx).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit_escaped() {
+        test_implicit_render("{{.}}", true);
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit_escaped_alternative_delimeters() {
+        test_implicit_render("{{=<% %>=}}<%.%><%={{ }}=%>", true);
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit_unescaped() {
+        test_implicit_render("{{{.}}}", false);
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit_ampersand() {
+        test_implicit_render("{{&.}}", false);
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit_unescaped_alternative_delimeters() {
+        test_implicit_render("{{=<% %>=}}<%{.}%><%={{ }}=%>", false);
+    }
+
+    #[test]
+    fn test_render_option_sections_implicit_ampersand_alternative_delimeters() {
+        test_implicit_render("{{=<% %>=}}<%&.%><%={{ }}=%>", false);
+    }
+
+    mod context_search {
+        use MapBuilder;
+        use super::{render_data, compile_str};
+
+        fn assert_render(template: &str, expected: &str) {
+            let ctx = MapBuilder::new().insert_map("payload", |map| {
+                map.insert_vec("list", |vec| {
+                    vec.push_str("<p>hello</p>")
+                       .push_str("<p>world</p>")
+                }).insert_str("test", "hello world")
+            }).build();
+
+            let template = compile_str(template);
+            let rendered = render_data(&template, &ctx);
+            println!("{}\n----\n{}", rendered, expected);
+            assert_eq!(rendered, expected);
+        }
+
+        #[test]
+        fn from_base() {
+            let template = "\
+{{#payload.list}}
+{{payload.test}}
+{{/payload.list}}";
+
+            assert_render(template, "hello world\nhello world\n")
+        }
+
+        #[test]
+        fn from_mid_stack() {
+            let template = "\
+{{#payload}}
+{{#list}}
+{{test}}
+{{/list}}
+{{/payload}}";
+
+            assert_render(template, "hello world\nhello world\n")
+        }
+
+        #[test]
+        fn render_nothing_when_not_found() {
+            let template = "\
+{{#payload.list}}
+{{test}}
+{{/payload.list}}";
+
+            assert_render(template, "\n\n")
+        }
     }
 
     #[test]

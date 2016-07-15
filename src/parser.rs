@@ -378,15 +378,13 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             }
             '&' => {
                 let name = &content[1..len];
-                let name = try!(deny_blank(name));
-                let name = name.split_terminator('.').map(|x| x.to_string()).collect();
+                let name = try!(get_name_or_implicit(name));
                 self.tokens.push(UnescapedTag(name, tag));
             }
             '{' => {
                 if content.ends_with('}') {
                     let name = &content[1..len - 1];
-                    let name = try!(deny_blank(name));
-                    let name = name.split_terminator('.').map(|x| x.to_string()).collect();
+                    let name = try!(get_name_or_implicit(name));
                     self.tokens.push(UnescapedTag(name, tag));
                 } else {
                     return Err(Error::UnbalancedUnescapeTag)
@@ -503,13 +501,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             _ => {
                 // If the name is "." then we want the top element, which we represent with
                 // an empty name.
-                let name = try!(deny_blank(&content));
-                let name = if name == "." {
-                    Vec::new()
-                } else {
-                    name.split_terminator('.').map(|x| x.to_string()).collect()
-                };
-
+                let name = try!(get_name_or_implicit(&content));
                 self.tokens.push(EscapedTag(name, tag));
             }
         };
@@ -573,6 +565,19 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             self.content.push(*ch);
         }
     }
+}
+
+fn get_name_or_implicit(name: &str) -> Result<Vec<String>, Error> {
+    // If the name is "." then we want the top element, which we represent with
+    // an empty name.
+    let name = try!(deny_blank(&name));
+    Ok(if name == "." {
+        Vec::new()
+    } else {
+        name.split_terminator('.')
+            .map(|x| x.to_string())
+            .collect()
+    })
 }
 
 fn deny_blank(content: &str) -> Result<&str, Error> {
