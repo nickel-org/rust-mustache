@@ -1,9 +1,11 @@
+#[cfg(feature = "test-serde")]
 extern crate serde_codegen;
 
-use std::env;
-use std::path::Path;
-
+#[cfg(feature = "test-serde")]
 pub fn main() {
+    use std::env;
+    use std::path::Path;
+
     let out_dir = env::var_os("OUT_DIR").unwrap();
 
     let src = Path::new("src/test_codegen.rs.in");
@@ -11,3 +13,6 @@ pub fn main() {
 
     serde_codegen::expand(&src, &dst).unwrap();
 }
+
+#[cfg(not(feature = "test-serde"))]
+fn main() {}

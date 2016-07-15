@@ -11,15 +11,16 @@ build = "build.rs"
 
 [features]
 unstable = []
+test-serde = ["serde", "serde_json", "serde_codegen"]
 
 [dependencies]
 rustc-serialize = "0.3.18"
 log = "0.3.5"
-serde = { optional = true, version = "0.7" }
+serde = { version = "0.7", optional = true }
+serde_json = { version = "0.7", optional = true }
 
 [dev-dependencies]
 tempdir = "0.3.4"
-serde_json = "0.7"
 
 [build-dependencies]
-serde_codegen = "0.7"
+serde_codegen = { version = "0.7", optional = true }

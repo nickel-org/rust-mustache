@@ -36,5 +36,5 @@ env:
   global:
     secure: dKGat/Zb9K7hjdKnQGeKIDlBkBPA+vGZsc9h43WC9SyCQM8srwg2+A0q/Bu59T35BuTXoT1J1mo4f5HztTK0cRS3eJX6nBflTy7g/mrkrsTT8wYNfcZUu0FyXV8xozOohBXW4xMSSLUmaz3VGrbWrHH31Wb8RexVBDmWWGyv810=
   matrix:
-    - FEATURES="--features serde"
+    - FEATURES="--features test-serde"
     - FEATURES=""
