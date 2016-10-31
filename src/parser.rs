@@ -393,22 +393,19 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             '#' => {
                 let newlined = self.eat_whitespace();
 
-                let name = try!(deny_blank(&content[1..len]));
-                let name = name.split_terminator('.').map(|x| x.to_string()).collect();
+                let name = try!(get_name_or_implicit(&content[1..len]));
                 self.tokens.push(IncompleteSection(name, false, tag, newlined));
             }
             '^' => {
                 let newlined = self.eat_whitespace();
 
-                let name = try!(deny_blank(&content[1..len]));
-                let name = name.split_terminator('.').map(|x| x.to_string()).collect();
+                let name = try!(get_name_or_implicit(&content[1..len]));
                 self.tokens.push(IncompleteSection(name, true, tag, newlined));
             }
             '/' => {
                 self.eat_whitespace();
 
-                let name = try!(deny_blank(&content[1..len]));
-                let name = name.split_terminator('.').map(|x| x.to_string()).collect::<Vec<String>>();
+                let name = try!(get_name_or_implicit(&content[1..len]));
                 let mut children: Vec<Token> = Vec::new();
 
                 loop {

@@ -504,6 +504,33 @@ mod tests {
         assert_eq!(assert_render(template, &ctx), "Dennis, 42");
     }
 
+    #[test]
+    fn test_implicit_section() {
+        let template = compile_str("{{#.}}{{.}}{{/.}}");
+        let data = vec!["val1", "val2"];
+        let mut r = Vec::new();
+        template.render(&mut r, &data).unwrap();
+        assert_eq!(r, b"val1val2");
+    }
+
+    #[test]
+    fn test_implicit_inverted_section() {
+        let template = compile_str("{{^.}}No values{{/.}}");
+        let data = Vec::<&str>::new();
+        let mut r = Vec::new();
+        template.render(&mut r, &data).unwrap();
+        assert_eq!(r, b"No values");
+    }
+
+    #[test]
+    fn test_nested_implicit_render() {
+        let template = compile_str("{{#.}}[{{#.}}{{.}}{{/.}}]{{/.}}");
+        let data = vec![vec!["val1", "val2"], vec!["val3"]];
+        let mut r = Vec::new();
+        template.render(&mut r, &data).unwrap();
+        assert_eq!(r, b"[val1val2][val3]");
+    }
+
     fn test_implicit_render(tags: &str, expect_escaped: bool) {
         let template = format!("{}{}{}", "{{#list}} (", tags, ") {{/list}}");
         let mut ctx = HashMap::new();
