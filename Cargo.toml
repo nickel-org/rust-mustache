@@ -16,11 +16,11 @@ test-serde = ["serde", "serde_json", "serde_codegen"]
 [dependencies]
 rustc-serialize = "0.3.18"
 log = "0.3.5"
-serde = { version = "0.7", optional = true }
-serde_json = { version = "0.7", optional = true }
+serde = { version = "0.8", optional = true }
+serde_json = { version = "0.8", optional = true }
 
 [dev-dependencies]
 tempdir = "0.3.4"
 
 [build-dependencies]
-serde_codegen = { version = "0.7", optional = true }
+serde_codegen = { version = "0.8", optional = true }
