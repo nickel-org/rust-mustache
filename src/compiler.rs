@@ -99,7 +99,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
 
 #[cfg(test)]
 mod tests {
-    use parser_internals::{Token, Text, EscapedTag, UnescapedTag, Section, IncompleteSection, Partial};
+    use parser_internals::{Token, Text, EscapedTag, UnescapedTag, Section, Partial};
     use super::Compiler;
     use super::super::Context;
     use std::path::PathBuf;
@@ -110,49 +110,6 @@ mod tests {
                                    .compile()
                                    .expect("Failed to compile");
         tokens
-    }
-
-    fn token_to_str(token: &Token) -> String {
-        match *token {
-            // recursive enums crash %?
-            Section(ref name,
-                    inverted,
-                    ref children,
-                    ref otag,
-                    ref osection,
-                    ref src,
-                    ref tag,
-                    ref ctag) => {
-                let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
-                let children = children.iter().map(|x| token_to_str(x)).collect::<Vec<String>>();
-                format!("Section(vec!({}), {}, vec!({}), {}, {}, {}, {}, {})",
-                        name.join(", "),
-                        inverted,
-                        children.join(", "),
-                        otag,
-                        osection,
-                        src,
-                        tag,
-                        ctag)
-            }
-            EscapedTag(ref name, ref tag) => {
-                let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
-                format!("EscapedTag(vec!({}), {})", name.join(", "), *tag)
-            }
-            UnescapedTag(ref name, ref tag) => {
-                let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
-                format!("UnescapedTag(vec!({}), {})", name.join(", "), *tag)
-            }
-            IncompleteSection(ref name, ref inverted, ref osection, ref newlined) => {
-                let name = name.iter().map(|e| format!("{}", *e)).collect::<Vec<String>>();
-                format!("IncompleteSection(vec!({}), {}, {}, {})",
-                        name.join(", "),
-                        *inverted,
-                        *osection,
-                        *newlined)
-            }
-            _ => format!("{:?}", token),
-        }
     }
 
     fn check_tokens(actual: Vec<Token>, expected: &[Token]) {

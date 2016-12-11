@@ -629,7 +629,6 @@ mod tests {
     }
 
     mod sections {
-        use super::super::*;
         use super::*;
 
         #[test]
@@ -673,7 +672,6 @@ mod tests {
     }
 
     mod inverted {
-        use super::super::*;
         use super::*;
 
         #[test]
@@ -717,7 +715,6 @@ mod tests {
     }
 
     mod set_delimeter {
-        use super::super::*;
         use super::*;
 
         #[test]
