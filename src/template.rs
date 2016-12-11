@@ -1,6 +1,7 @@
 use std::io::Write;
 use std::collections::HashMap;
 use std::mem;
+use std::result::Result as StdResult;
 use std::str;
 use rustc_serialize::Encodable;
 
@@ -9,7 +10,7 @@ use compiler::Compiler;
 use parser_internals::Token;
 use parser_internals::Token::*;
 
-use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun, OptVal, Result};
+use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun, OptVal, Result, Error};
 
 /// `Template` represents a compiled mustache file.
 #[derive(Debug, Clone)]
@@ -42,6 +43,20 @@ impl Template {
         let mut stack = vec![data];
 
         render_ctx.render(wr, &mut stack, &self.tokens)
+    }
+
+    /// Renders the template to a `String` with the `Encodable` data.
+    pub fn render_to_string<T: Encodable>(&self, data: &T) -> StdResult<String, Error> {
+        let mut output = Vec::new();
+        try!(self.render(&mut output, data));
+        Ok(String::from_utf8(output).expect("invalid utf-8 in template"))
+    }
+
+    /// Renders the template to a `String` with the `Data`.
+    pub fn render_data_to_string(&self, data: &Data) -> StdResult<String, Error> {
+        let mut output = Vec::new();
+        try!(self.render_data(&mut output, data));
+        Ok(String::from_utf8(output).expect("invalid utf-8 in template"))
     }
 }
 
@@ -432,12 +447,7 @@ mod tests {
     }
 
     fn render<T: Encodable>(template: &str, data: &T) -> Result<String, Error> {
-        let template = compile_str(template);
-
-        let mut bytes = vec![];
-        try!(template.render(&mut bytes, data));
-
-        Ok(String::from_utf8(bytes).expect("Failed to encode String"))
+        compile_str(template).render_to_string(data)
     }
 
     #[test]
