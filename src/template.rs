@@ -275,7 +275,13 @@ impl<'a> RenderContext<'a> {
                             stack.pop();
                         }
                     }
-                    _ => bug!("unexpected value {:?}", value),
+                    StrVal(ref val) => {
+                        if val != "" {
+                            stack.push(value);
+                            try!(self.render(wr, stack, children));
+                            stack.pop();
+                        }
+                    }
                 }
             }
         };
