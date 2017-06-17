@@ -6,21 +6,27 @@ cache:
     - target
 
 rust:
-- 1.4.0
 - stable
 - nightly
 - beta
+
+matrix:
+    include:
+          - rust: 1.4.0 # minimum supported rustc version
+            env: FEATURES="" # don't test serde on 1.4.0
 
 before_script:
 - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 
 script:
 - |
-    travis-cargo build &&
-    travis-cargo test &&
+    travis-cargo build -- $FEATURES &&
+    travis-cargo test -- $FEATURES &&
     travis-cargo doc &&
-    echo "Testing README" &&
-    rustdoc --test README.md -L dependency=./target/debug/deps --extern mustache=./target/debug/libmustache.rlib --extern rustc_serialize=./target/debug/deps/librustc_serialize
+    if [ -z $FEATURES ]; then
+        echo "Testing README" &&
+        rustdoc --test README.md -L dependency=./target/debug/deps --extern mustache=./target/debug/libmustache.rlib --extern rustc_serialize=./target/debug/deps/librustc_serialize
+    fi
 
 after_success:
 - |
@@ -29,3 +35,6 @@ after_success:
 env:
   global:
     secure: dKGat/Zb9K7hjdKnQGeKIDlBkBPA+vGZsc9h43WC9SyCQM8srwg2+A0q/Bu59T35BuTXoT1J1mo4f5HztTK0cRS3eJX6nBflTy7g/mrkrsTT8wYNfcZUu0FyXV8xozOohBXW4xMSSLUmaz3VGrbWrHH31Wb8RexVBDmWWGyv810=
+  matrix:
+    - FEATURES="--features test-serde"
+    - FEATURES=""

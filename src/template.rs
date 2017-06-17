@@ -2,9 +2,7 @@ use std::io::Write;
 use std::collections::HashMap;
 use std::mem;
 use std::str;
-use rustc_serialize::Encodable;
-
-use encoder;
+use encoder::{self, Encodable};
 use compiler::Compiler;
 use parser_internals::Token;
 use parser_internals::Token::*;
@@ -387,33 +385,52 @@ mod tests {
     use std::io::{Read, Write};
     use std::path::{PathBuf, Path};
     use std::collections::HashMap;
-    use rustc_serialize::{json, Encodable};
-    use rustc_serialize::json::Json;
+    use encoder::{self, Encodable};
+    use {Error, Data, StrVal, VecVal, Map, Fun, Context, Template};
 
-    use encoder;
-    use Error;
+    #[cfg(feature = "serde")]
+    mod serialization {
+        pub use serde_json::{Value as Json, Map as JsonMap};
+        pub use std::str::FromStr;
+        pub type JsonObject = JsonMap<String, Json>;
 
-    use super::super::{Data, StrVal, VecVal, Map, Fun};
-    use super::super::{Context, Template};
-
-    #[derive(RustcEncodable, Debug)]
-    struct Planet {
-        name: String,
-        info: Option<PlanetInfo>,
+        include!(concat!(env!("OUT_DIR"), "/test_codegen.rs"));
     }
 
-    #[derive(RustcEncodable, Debug)]
-    struct PlanetInfo {
-        moons: Vec<String>,
-        population: u64,
-        description: String,
+    // Serde's codegen doesn't seem to work with
+    // #[cfg_attr(not(feature = "serde"), derive(RustcEncodable))]
+    // so we just duplicate this and re-export.
+    // Related bug: https://github.com/serde-rs/syntex/issues/81
+    #[cfg(not(feature = "serde"))]
+    mod serialization {
+        pub use rustc_serialize::json::{Json, Object as JsonObject};
+
+        #[derive(RustcEncodable, Debug)]
+        pub struct Planet {
+            pub name: String,
+            pub info: Option<PlanetInfo>,
+        }
+
+        #[derive(RustcEncodable, Debug)]
+        pub struct PlanetInfo {
+            pub moons: Vec<String>,
+            pub population: u64,
+            pub description: String,
+        }
+
+        #[derive(RustcEncodable, Debug)]
+        pub struct Person {
+            pub name: String,
+            pub age: Option<u32>,
+        }
+
+        #[derive(RustcEncodable, Debug)]
+        pub struct NestedOptions {
+            pub opt: Option<Option<u32>>,
+        }
     }
 
-    #[derive(RustcEncodable, Debug)]
-    struct Person {
-        name: String,
-        age: Option<u32>,
-    }
+    use self::serialization::*;
 
     fn compile_str(s: &str) -> Template {
         ::compile_str(s).expect(&format!("Failed to compile: {}", s))
@@ -629,19 +646,14 @@ mod tests {
     #[test]
     #[should_panic(message="nested Option types are not supported")]
     fn test_render_option_nested() {
-        #[derive(RustcEncodable, Debug)]
-        struct Nested {
-            opt: Option<Option<u32>>,
-        }
-
         let template = "-{{opt}}+";
-        let ctx = Nested { opt: None };
+        let ctx = NestedOptions { opt: None };
         assert_eq!(assert_render(template, &ctx), "-+");
 
-        let ctx = Nested { opt: Some(None) };
+        let ctx = NestedOptions { opt: Some(None) };
         assert_eq!(assert_render(template, &ctx), "-+");
 
-        let ctx = Nested { opt: Some(Some(42)) };
+        let ctx = NestedOptions { opt: Some(Some(42)) };
         assert_eq!(assert_render(template, &ctx), "-42+");
     }
 
@@ -803,7 +815,7 @@ mod tests {
         assert_partials_data(template);
     }
 
-    fn parse_spec_tests(src: &str) -> Vec<json::Json> {
+    fn parse_spec_tests(src: &str) -> Vec<Json> {
         let path = PathBuf::from(src);
         let mut file_contents = vec![];
         File::open(&path)
@@ -819,7 +831,7 @@ mod tests {
         })
     }
 
-    fn write_partials(tmpdir: &Path, value: &json::Json) {
+    fn write_partials(tmpdir: &Path, value: &Json) {
         assert_let!(Json::Object(ref d) = *value => {
             for (key, value) in d {
                 assert_let!(Json::String(ref s) = *value => {
@@ -832,7 +844,7 @@ mod tests {
         })
     }
 
-    fn run_test(test: json::Object, data: Data) {
+    fn run_test(test: JsonObject, data: Data) {
         let template = assert_let!(Some(&Json::String(ref s)) = test.get("template") => {
             s.clone()
         });

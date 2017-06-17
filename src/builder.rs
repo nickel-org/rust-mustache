@@ -1,7 +1,8 @@
 use std::cell::RefCell;
 use std::string::ToString;
 use std::collections::HashMap;
-use rustc_serialize::Encodable;
+
+use encoder::Encodable;
 
 use encoder;
 use encoder::Error;
