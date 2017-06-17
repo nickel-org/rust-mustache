@@ -77,7 +77,6 @@ enum TokenClass {
     Normal,
     StandAlone,
     WhiteSpace(String, usize),
-    NewLineWhiteSpace(String, usize),
 }
 
 /// `Parser` parses a string into a series of `Token`s.
@@ -343,8 +342,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                 self.bump();
                 true
             }
-            WhiteSpace(s, pos) |
-            NewLineWhiteSpace(s, pos) => {
+            WhiteSpace(s, pos) => {
                 if self.ch_is('\r') {
                     self.bump();
                 }
@@ -516,8 +514,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                 self.bump();
                 "".to_string()
             }
-            WhiteSpace(s, pos) |
-            NewLineWhiteSpace(s, pos) => {
+            WhiteSpace(s, pos) => {
                 if self.ch_is('\r') {
                     self.bump();
                 }
