@@ -627,7 +627,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(message="nested Option types are not supported")]
+    #[should_panic]
     fn test_render_option_nested() {
         #[derive(RustcEncodable, Debug)]
         struct Nested {
