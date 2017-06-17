@@ -2,10 +2,6 @@ use std::error::Error as StdError;
 use std::mem;
 use std::fmt;
 
-pub use self::Token::*;
-
-use self::TokenClass::*;
-
 /// `Token` is a section of a compiled mustache string.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
@@ -261,7 +257,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
 
         // Check that we don't have any incomplete sections.
         for token in self.tokens.iter().rev() {
-            if let IncompleteSection(ref path, _, _, _) = *token {
+            if let Token::IncompleteSection(ref path, _, _, _) = *token {
                 return Err(Error::UnclosedSection(path.join(".")))
             }
         }
@@ -276,7 +272,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             let mut content = String::new();
             mem::swap(&mut content, &mut self.content);
 
-            self.tokens.push(Text(content));
+            self.tokens.push(Token::Text(content));
         }
     }
 
@@ -289,43 +285,43 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         // Exit early if the next character is not '\n' or '\r\n'.
         if let Some(ch) = self.ch {
             if !(ch == '\n' || (ch == '\r' && self.peek() == Some('\n'))) {
-                return Normal;
+                return TokenClass::Normal;
             }
         }
 
         match self.tokens.last() {
             // If the last token ends with a newline (or there is no previous
             // token), then this token is standalone.
-            None => StandAlone,
+            None => TokenClass::StandAlone,
 
-            Some(&IncompleteSection(_, _, _, true)) => StandAlone,
+            Some(&Token::IncompleteSection(_, _, _, true)) => TokenClass::StandAlone,
 
-            Some(&Text(ref s)) if !s.is_empty() => {
+            Some(&Token::Text(ref s)) if !s.is_empty() => {
                 // Look for the last newline character that may have whitespace
                 // following it.
                 match s.rfind(|c: char| c == '\n' || !c.is_whitespace()) {
                     // It's all whitespace.
                     None => {
                         if self.tokens.len() == 1 {
-                            WhiteSpace(s.clone(), 0)
+                            TokenClass::WhiteSpace(s.clone(), 0)
                         } else {
-                            Normal
+                            TokenClass::Normal
                         }
                     }
                     Some(pos) => {
                         if s.as_bytes()[pos] == b'\n' {
                             if pos == s.len() - 1 {
-                                StandAlone
+                                TokenClass::StandAlone
                             } else {
-                                WhiteSpace(s.clone(), pos + 1)
+                                TokenClass::WhiteSpace(s.clone(), pos + 1)
                             }
                         } else {
-                            Normal
+                            TokenClass::Normal
                         }
                     }
                 }
             }
-            Some(_) => Normal,
+            Some(_) => TokenClass::Normal,
         }
     }
 
@@ -334,15 +330,15 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         // newline and whitespace, clear out the whitespace.
 
         match self.classify_token() {
-            Normal => false,
-            StandAlone => {
+            TokenClass::Normal => false,
+            TokenClass::StandAlone => {
                 if self.ch_is('\r') {
                     self.bump();
                 }
                 self.bump();
                 true
             }
-            WhiteSpace(s, pos) => {
+            TokenClass::WhiteSpace(s, pos) => {
                 if self.ch_is('\r') {
                     self.bump();
                 }
@@ -350,7 +346,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
 
                 // Trim the whitespace from the last token.
                 self.tokens.pop();
-                self.tokens.push(Text(s[0..pos].to_string()));
+                self.tokens.push(Token::Text(s[0..pos].to_string()));
 
                 true
             }
@@ -377,13 +373,13 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             '&' => {
                 let name = &content[1..len];
                 let name = try!(get_name_or_implicit(name));
-                self.tokens.push(UnescapedTag(name, tag));
+                self.tokens.push(Token::UnescapedTag(name, tag));
             }
             '{' => {
                 if content.ends_with('}') {
                     let name = &content[1..len - 1];
                     let name = try!(get_name_or_implicit(name));
-                    self.tokens.push(UnescapedTag(name, tag));
+                    self.tokens.push(Token::UnescapedTag(name, tag));
                 } else {
                     return Err(Error::UnbalancedUnescapeTag)
                 }
@@ -392,13 +388,13 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                 let newlined = self.eat_whitespace();
 
                 let name = try!(get_name_or_implicit(&content[1..len]));
-                self.tokens.push(IncompleteSection(name, false, tag, newlined));
+                self.tokens.push(Token::IncompleteSection(name, false, tag, newlined));
             }
             '^' => {
                 let newlined = self.eat_whitespace();
 
                 let name = try!(get_name_or_implicit(&content[1..len]));
-                self.tokens.push(IncompleteSection(name, true, tag, newlined));
+                self.tokens.push(Token::IncompleteSection(name, true, tag, newlined));
             }
             '/' => {
                 self.eat_whitespace();
@@ -414,18 +410,18 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                     let last = self.tokens.pop();
 
                     match last {
-                        Some(IncompleteSection(section_name, inverted, osection, _)) => {
+                        Some(Token::IncompleteSection(section_name, inverted, osection, _)) => {
                             children.reverse();
 
                             // Collect all the children's sources.
                             let mut srcs = Vec::new();
                             for child in children.iter() {
                                 match *child {
-                                    Text(ref s) |
-                                    EscapedTag(_, ref s) |
-                                    UnescapedTag(_, ref s) |
-                                    Partial(_, _, ref s) => srcs.push(s.clone()),
-                                    Section(_, _, _, _, ref osection, ref src, ref csection, _) => {
+                                    Token::Text(ref s) |
+                                    Token::EscapedTag(_, ref s) |
+                                    Token::UnescapedTag(_, ref s) |
+                                    Token::Partial(_, _, ref s) => srcs.push(s.clone()),
+                                    Token::Section(_, _, _, _, ref osection, ref src, ref csection, _) => {
                                         srcs.push(osection.clone());
                                         srcs.push(src.clone());
                                         srcs.push(csection.clone());
@@ -444,7 +440,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                                     src.push_str(s);
                                 }
 
-                                self.tokens.push(Section(name,
+                                self.tokens.push(Token::Section(name,
                                                          inverted,
                                                          children,
                                                          self.opening_tag.clone(),
@@ -497,7 +493,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                 // If the name is "." then we want the top element, which we represent with
                 // an empty name.
                 let name = try!(get_name_or_implicit(&content));
-                self.tokens.push(EscapedTag(name, tag));
+                self.tokens.push(Token::EscapedTag(name, tag));
             }
         };
 
@@ -506,15 +502,15 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
 
     fn add_partial(&mut self, content: &str, tag: String) -> Result<(), Error> {
         let indent = match self.classify_token() {
-            Normal => "".to_string(),
-            StandAlone => {
+            TokenClass::Normal => "".to_string(),
+            TokenClass::StandAlone => {
                 if self.ch_is('\r') {
                     self.bump();
                 }
                 self.bump();
                 "".to_string()
             }
-            WhiteSpace(s, pos) => {
+            TokenClass::WhiteSpace(s, pos) => {
                 if self.ch_is('\r') {
                     self.bump();
                 }
@@ -524,7 +520,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
 
                 // Trim the whitespace from the last token.
                 self.tokens.pop();
-                self.tokens.push(Text(s[0..pos].to_string()));
+                self.tokens.push(Token::Text(s[0..pos].to_string()));
 
                 ws.to_string()
             }
@@ -536,7 +532,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         let name = &content[1..content.len()];
         let name = try!(deny_blank(name));
 
-        self.tokens.push(Partial(name.into(), indent, tag));
+        self.tokens.push(Token::Partial(name.into(), indent, tag));
         self.partials.push(name.into());
 
         Ok(())

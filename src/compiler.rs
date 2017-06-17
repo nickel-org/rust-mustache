@@ -99,7 +99,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
 
 #[cfg(test)]
 mod tests {
-    use parser_internals::{Token, Text, EscapedTag, UnescapedTag, Section, Partial};
+    use parser_internals::Token;
     use super::Compiler;
     use super::super::Context;
     use std::path::PathBuf;
@@ -119,57 +119,57 @@ mod tests {
     #[test]
     fn test_compile_texts() {
         check_tokens(compile_str("hello world"),
-                     &[Text("hello world".to_string())]);
+                     &[Token::Text("hello world".to_string())]);
         check_tokens(compile_str("hello {world"),
-                     &[Text("hello {world".to_string())]);
+                     &[Token::Text("hello {world".to_string())]);
         check_tokens(compile_str("hello world}"),
-                     &[Text("hello world}".to_string())]);
+                     &[Token::Text("hello world}".to_string())]);
         check_tokens(compile_str("hello world}}"),
-                     &[Text("hello world}}".to_string())]);
+                     &[Token::Text("hello world}}".to_string())]);
     }
 
     #[test]
     fn test_compile_etags() {
         check_tokens(compile_str("{{ name }}"),
-                     &[EscapedTag(vec!["name".to_string()], "{{ name }}".to_string())]);
+                     &[Token::EscapedTag(vec!["name".to_string()], "{{ name }}".to_string())]);
 
         check_tokens(compile_str("before {{name}} after"),
-                     &[Text("before ".to_string()),
-                       EscapedTag(vec!["name".to_string()], "{{name}}".to_string()),
-                       Text(" after".to_string())]);
+                     &[Token::Text("before ".to_string()),
+                       Token::EscapedTag(vec!["name".to_string()], "{{name}}".to_string()),
+                       Token::Text(" after".to_string())]);
 
         check_tokens(compile_str("before {{name}}"),
-                     &[Text("before ".to_string()),
-                       EscapedTag(vec!["name".to_string()], "{{name}}".to_string())]);
+                     &[Token::Text("before ".to_string()),
+                       Token::EscapedTag(vec!["name".to_string()], "{{name}}".to_string())]);
 
         check_tokens(compile_str("{{name}} after"),
-                     &[EscapedTag(vec!["name".to_string()], "{{name}}".to_string()),
-                       Text(" after".to_string())]);
+                     &[Token::EscapedTag(vec!["name".to_string()], "{{name}}".to_string()),
+                       Token::Text(" after".to_string())]);
     }
 
     #[test]
     fn test_compile_utags() {
         check_tokens(compile_str("{{{name}}}"),
-                     &[UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string())]);
+                     &[Token::UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string())]);
 
         check_tokens(compile_str("before {{{name}}} after"),
-                     &[Text("before ".to_string()),
-                       UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string()),
-                       Text(" after".to_string())]);
+                     &[Token::Text("before ".to_string()),
+                       Token::UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string()),
+                       Token::Text(" after".to_string())]);
 
         check_tokens(compile_str("before {{{name}}}"),
-                     &[Text("before ".to_string()),
-                       UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string())]);
+                     &[Token::Text("before ".to_string()),
+                       Token::UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string())]);
 
         check_tokens(compile_str("{{{name}}} after"),
-                     &[UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string()),
-                       Text(" after".to_string())]);
+                     &[Token::UnescapedTag(vec!["name".to_string()], "{{{name}}}".to_string()),
+                       Token::Text(" after".to_string())]);
     }
 
     #[test]
     fn test_compile_sections() {
         check_tokens(compile_str("{{# name}}{{/name}}"),
-                     &[Section(vec!["name".to_string()],
+                     &[Token::Section(vec!["name".to_string()],
                                false,
                                Vec::new(),
                                "{{".to_string(),
@@ -179,8 +179,8 @@ mod tests {
                                "}}".to_string())]);
 
         check_tokens(compile_str("before {{^name}}{{/name}} after"),
-                     &[Text("before ".to_string()),
-                       Section(vec!["name".to_string()],
+                     &[Token::Text("before ".to_string()),
+                       Token::Section(vec!["name".to_string()],
                                true,
                                Vec::new(),
                                "{{".to_string(),
@@ -188,76 +188,83 @@ mod tests {
                                "".to_string(),
                                "{{/name}}".to_string(),
                                "}}".to_string()),
-                       Text(" after".to_string())]);
+                       Token::Text(" after".to_string())]);
 
         check_tokens(compile_str("before {{#name}}{{/name}}"),
-                     &[Text("before ".to_string()),
-                       Section(vec!["name".to_string()],
-                               false,
-                               Vec::new(),
-                               "{{".to_string(),
-                               "{{#name}}".to_string(),
-                               "".to_string(),
-                               "{{/name}}".to_string(),
-                               "}}".to_string())]);
+                     &[Token::Text("before ".to_string()),
+                       Token::Section(
+                           vec!["name".to_string()],
+                           false,
+                           Vec::new(),
+                           "{{".to_string(),
+                           "{{#name}}".to_string(),
+                           "".to_string(),
+                           "{{/name}}".to_string(),
+                           "}}".to_string())]);
 
         check_tokens(compile_str("{{#name}}{{/name}} after"),
-                     &[Section(vec!["name".to_string()],
-                               false,
-                               Vec::new(),
-                               "{{".to_string(),
-                               "{{#name}}".to_string(),
-                               "".to_string(),
-                               "{{/name}}".to_string(),
-                               "}}".to_string()),
-                       Text(" after".to_string())]);
+                     &[Token::Section(
+                         vec!["name".to_string()],
+                         false,
+                         Vec::new(),
+                         "{{".to_string(),
+                         "{{#name}}".to_string(),
+                         "".to_string(),
+                         "{{/name}}".to_string(),
+                         "}}".to_string()),
+                       Token::Text(" after".to_string())]);
 
         check_tokens(compile_str("before {{#a}} 1 {{^b}} 2 {{/b}} {{/a}} after"),
-                     &[Text("before ".to_string()),
-                       Section(vec!["a".to_string()],
-                               false,
-                               vec![Text(" 1 ".to_string()),
-                                    Section(vec!["b".to_string()],
-                                            true,
-                                            vec![Text(" 2 ".to_string())],
-                                            "{{".to_string(),
-                                            "{{^b}}".to_string(),
-                                            " 2 ".to_string(),
-                                            "{{/b}}".to_string(),
-                                            "}}".to_string()),
-                                    Text(" ".to_string())],
-                               "{{".to_string(),
-                               "{{#a}}".to_string(),
-                               " 1 {{^b}} 2 {{/b}} ".to_string(),
-                               "{{/a}}".to_string(),
-                               "}}".to_string()),
-                       Text(" after".to_string())]);
+                     &[Token::Text("before ".to_string()),
+                       Token::Section(
+                           vec!["a".to_string()],
+                           false,
+                           vec![
+                               Token::Text(" 1 ".to_string()),
+                               Token::Section(
+                                   vec!["b".to_string()],
+                                   true,
+                                   vec![Token::Text(" 2 ".to_string())],
+                                   "{{".to_string(),
+                                   "{{^b}}".to_string(),
+                                   " 2 ".to_string(),
+                                   "{{/b}}".to_string(),
+                                   "}}".to_string(),
+                                ),
+                                Token::Text(" ".to_string())
+                            ],
+                            "{{".to_string(),
+                            "{{#a}}".to_string(),
+                            " 1 {{^b}} 2 {{/b}} ".to_string(),
+                            "{{/a}}".to_string(),
+                            "}}".to_string()),
+                       Token::Text(" after".to_string())]);
     }
 
     #[test]
     fn test_compile_partials() {
         check_tokens(compile_str("{{> test}}"),
-                     &[Partial("test".to_string(), "".to_string(), "{{> test}}".to_string())]);
+                     &[Token::Partial("test".to_string(), "".to_string(), "{{> test}}".to_string())]);
 
         check_tokens(compile_str("before {{>test}} after"),
-                     &[Text("before ".to_string()),
-                       Partial("test".to_string(), "".to_string(), "{{>test}}".to_string()),
-                       Text(" after".to_string())]);
+                     &[Token::Text("before ".to_string()),
+                       Token::Partial("test".to_string(), "".to_string(), "{{>test}}".to_string()),
+                       Token::Text(" after".to_string())]);
 
         check_tokens(compile_str("before {{> test}}"),
-                     &[Text("before ".to_string()),
-                       Partial("test".to_string(), "".to_string(), "{{> test}}".to_string())]);
+                     &[Token::Text("before ".to_string()),
+                       Token::Partial("test".to_string(), "".to_string(), "{{> test}}".to_string())]);
 
         check_tokens(compile_str("{{>test}} after"),
-                     &[Partial("test".to_string(), "".to_string(), "{{>test}}".to_string()),
-                       Text(" after".to_string())]);
+                     &[Token::Partial("test".to_string(), "".to_string(), "{{>test}}".to_string()),
+                       Token::Text(" after".to_string())]);
     }
 
     #[test]
     fn test_compile_delimiters() {
         check_tokens(compile_str("before {{=<% %>=}}<%name%> after"),
-                     &[Text("before ".to_string()),
-                       EscapedTag(vec!["name".to_string()], "<%name%>".to_string()),
-                       Text(" after".to_string())]);
+                     &[Token::Text("before ".to_string()),
+                       Token::EscapedTag(vec!["name".to_string()], "<%name%>".to_string()),
+                       Token::Text(" after".to_string())]);
     }
 }
