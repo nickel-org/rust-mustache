@@ -4,7 +4,6 @@ use std::error;
 use rustc_serialize;
 
 use super::{Data, StrVal, Bool, VecVal, Map, OptVal};
-use self::Error::*;
 
 #[derive(Default)]
 pub struct Encoder {
@@ -48,12 +47,12 @@ impl fmt::Display for Error {
 impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            NestedOptions => "nested Option types are not supported",
-            UnsupportedType => "unsupported type",
-            MissingElements => "no elements in value",
-            KeyIsNotString => "key is not a string",
-            NoDataToEncode => "the encodable type created no data",
-            MultipleRootsFound => {
+            Error::NestedOptions => "nested Option types are not supported",
+            Error::UnsupportedType => "unsupported type",
+            Error::MissingElements => "no elements in value",
+            Error::KeyIsNotString => "key is not a string",
+            Error::NoDataToEncode => "the encodable type created no data",
+            Error::MultipleRootsFound => {
                 "the encodable type emitted data that was not tree-like in structure"
             }
             Error::__Nonexhaustive => unreachable!(),
@@ -83,7 +82,7 @@ impl rustc_serialize::Encoder for Encoder {
     type Error = Error;
 
     fn emit_nil(&mut self) -> EncoderResult {
-        Err(UnsupportedType)
+        Err(Error::UnsupportedType)
     }
 
     fn emit_isize(&mut self, v: isize) -> EncoderResult {
@@ -139,19 +138,19 @@ impl rustc_serialize::Encoder for Encoder {
     fn emit_enum<F>(&mut self, _name: &str, _f: F) -> EncoderResult
     where F: FnOnce(&mut Encoder) -> EncoderResult
     {
-        Err(UnsupportedType)
+        Err(Error::UnsupportedType)
     }
 
     fn emit_enum_variant<F>(&mut self, _name: &str, _id: usize, _len: usize, _f: F) -> EncoderResult
     where F: FnOnce(&mut Encoder) -> EncoderResult
     {
-        Err(UnsupportedType)
+        Err(Error::UnsupportedType)
     }
 
     fn emit_enum_variant_arg<F>(&mut self, _a_idx: usize, _f: F) -> EncoderResult
     where F: FnOnce(&mut Encoder) -> EncoderResult
     {
-        Err(UnsupportedType)
+        Err(Error::UnsupportedType)
     }
 
     fn emit_enum_struct_variant<F>(&mut self,
@@ -162,7 +161,7 @@ impl rustc_serialize::Encoder for Encoder {
                                    -> EncoderResult
     where F: FnOnce(&mut Encoder) -> EncoderResult
     {
-        Err(UnsupportedType)
+        Err(Error::UnsupportedType)
     }
 
     fn emit_enum_struct_variant_field<F>(&mut self,
@@ -172,7 +171,7 @@ impl rustc_serialize::Encoder for Encoder {
                                          -> EncoderResult
     where F: FnOnce(&mut Encoder) -> EncoderResult
     {
-        Err(UnsupportedType)
+        Err(Error::UnsupportedType)
     }
 
     fn emit_struct<F>(&mut self, _name: &str, _len: usize, f: F) -> EncoderResult
@@ -188,14 +187,14 @@ impl rustc_serialize::Encoder for Encoder {
         let mut m = match self.data.pop() {
             Some(Map(m)) => m,
             _ => {
-                return Err(UnsupportedType);
+                return Err(Error::UnsupportedType);
             }
         };
         try!(f(self));
         let data = match self.data.pop() {
             Some(d) => d,
             _ => {
-                return Err(UnsupportedType);
+                return Err(Error::UnsupportedType);
             }
         };
         m.insert(name.to_string(), data);
@@ -242,10 +241,10 @@ impl rustc_serialize::Encoder for Encoder {
     {
         try!(f(self));
         let val = match self.data.pop() {
-            Some(OptVal(_)) => return Err(NestedOptions),
+            Some(OptVal(_)) => return Err(Error::NestedOptions),
             Some(d) => d,
             _ => {
-                return Err(UnsupportedType);
+                return Err(Error::UnsupportedType);
             }
         };
         self.push_ok(OptVal(Some(Box::new(val))))
@@ -264,14 +263,14 @@ impl rustc_serialize::Encoder for Encoder {
         let mut v = match self.data.pop() {
             Some(VecVal(v)) => v,
             _ => {
-                return Err(UnsupportedType);
+                return Err(Error::UnsupportedType);
             }
         };
         try!(f(self));
         let data = match self.data.pop() {
             Some(d) => d,
             _ => {
-                return Err(UnsupportedType);
+                return Err(Error::UnsupportedType);
             }
         };
         v.push(data);
@@ -292,12 +291,12 @@ impl rustc_serialize::Encoder for Encoder {
         let last = match self.data.last() {
             Some(d) => d,
             None => {
-                return Err(MissingElements);
+                return Err(Error::MissingElements);
             }
         };
         match *last {
             StrVal(_) => Ok(()),
-            _ => Err(KeyIsNotString),
+            _ => Err(Error::KeyIsNotString),
         }
     }
 
@@ -307,7 +306,7 @@ impl rustc_serialize::Encoder for Encoder {
         let k = match self.data.pop() {
             Some(StrVal(s)) => s,
             _ => {
-                return Err(KeyIsNotString);
+                return Err(Error::KeyIsNotString);
             }
         };
         let mut m = match self.data.pop() {
@@ -334,8 +333,8 @@ pub fn encode<T: rustc_serialize::Encodable>(data: &T) -> Result<Data, Error> {
         // or using some data which is incompatible with the way mustache *currently* works.
         // It does feel like `bug!` more than Error but maybe it covers some usecases so
         // lets not panic here.
-        0 => Err(NoDataToEncode),
-        _ => Err(MultipleRootsFound),
+        0 => Err(Error::NoDataToEncode),
+        _ => Err(Error::MultipleRootsFound),
     }
 }
 
