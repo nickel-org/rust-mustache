@@ -1,12 +1,5 @@
-#![crate_name = "mustache"]
-
-#![crate_type = "dylib"]
-#![crate_type = "rlib"]
-
 extern crate rustc_serialize;
 extern crate log;
-#[cfg(test)]
-extern crate tempdir;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -17,11 +10,13 @@ use std::str;
 use std::path::{PathBuf, Path};
 use std::result::Result as StdResult;
 
-pub use self::Data::*;
 pub use builder::{MapBuilder, VecBuilder};
+pub use encoder::Error as EncoderError;
 pub use encoder::{Encoder, EncoderResult};
-pub use template::Template;
 pub use error::Error;
+pub use parser::Error as ParserError;
+pub use self::Data::*;
+pub use template::Template;
 
 #[macro_use]
 mod macros;

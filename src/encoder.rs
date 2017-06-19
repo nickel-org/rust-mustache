@@ -18,6 +18,18 @@ impl Encoder {
     pub fn stack(&self) -> &[Data] {
         &self.data
     }
+
+    pub fn finish(mut self) -> Result<Data, Error> {
+        match self.data.len() {
+            1 => Ok(self.data.pop().unwrap()),
+            // These two errors are really down to either the type implementing Encodable wrong
+            // or using some data which is incompatible with the way mustache *currently* works.
+            // It does feel like `bug!` more than Error but maybe it covers some usecases so
+            // lets not panic here.
+            0 => Err(Error::NoDataToEncode),
+            _ => Err(Error::MultipleRootsFound),
+        }
+    }
 }
 
 /// Error type to represent encoding failure.
@@ -327,46 +339,5 @@ impl rustc_serialize::Encoder for Encoder {
 pub fn encode<T: rustc_serialize::Encodable>(data: &T) -> Result<Data, Error> {
     let mut encoder = Encoder::new();
     try!(data.encode(&mut encoder));
-    match encoder.data.len() {
-        1 => Ok(encoder.data.pop().unwrap()),
-        // These two errors are really down to either the type implementing Encodable wrong
-        // or using some data which is incompatible with the way mustache *currently* works.
-        // It does feel like `bug!` more than Error but maybe it covers some usecases so
-        // lets not panic here.
-        0 => Err(Error::NoDataToEncode),
-        _ => Err(Error::MultipleRootsFound),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{encode, Error};
-    use rustc_serialize::{Encodable, Encoder};
-
-    struct NoData;
-
-    impl Encodable for NoData {
-        fn encode<S: Encoder>(&self, _: &mut S) -> Result<(), S::Error> {
-            Ok(())
-        }
-    }
-
-    struct Multiroot;
-
-    impl Encodable for Multiroot {
-        fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
-            try!(s.emit_u32(4));
-            s.emit_u32(1)
-        }
-    }
-
-    #[test]
-    fn encodable_with_no_data() {
-        assert_let!(Err(Error::NoDataToEncode) = encode(&NoData));
-    }
-
-    #[test]
-    fn encodable_with_multiple_roots() {
-        assert_let!(Err(Error::MultipleRootsFound) = encode(&Multiroot));
-    }
+    encoder.finish()
 }
