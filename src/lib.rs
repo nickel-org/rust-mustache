@@ -1,5 +1,5 @@
-extern crate rustc_serialize;
 extern crate log;
+extern crate serde;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -8,11 +8,11 @@ use std::fs::File;
 use std::io::Read;
 use std::str;
 use std::path::{PathBuf, Path};
-use std::result::Result as StdResult;
+use std::result;
 
 pub use builder::{MapBuilder, VecBuilder};
 pub use encoder::Error as EncoderError;
-pub use encoder::{Encoder, EncoderResult};
+pub use encoder::Encoder;
 pub use error::Error;
 pub use parser::Error as ParserError;
 pub use self::Data::*;
@@ -47,7 +47,14 @@ pub enum Data {
     Fun(RefCell<Box<FnMut(String) -> String + Send>>),
 }
 
-pub type Result<T = ()> = StdResult<T, Error>;
+pub fn to_data<T>(value: T) -> result::Result<Data, encoder::Error>
+where
+    T: serde::Serialize,
+{
+    value.serialize(Encoder)
+}
+
+pub type Result<T> = result::Result<T, Error>;
 
 impl PartialEq for Data {
     #[inline]

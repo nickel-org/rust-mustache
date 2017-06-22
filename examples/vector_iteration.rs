@@ -1,10 +1,13 @@
-extern crate rustc_serialize;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+
 extern crate mustache;
 
 use std::str;
 use std::collections::HashMap;
 
-#[derive(RustcEncodable)]
+#[derive(Serialize)]
 struct User {
     name: String
 }
