@@ -1,11 +1,10 @@
 use std::cell::RefCell;
 use std::string::ToString;
 use std::collections::HashMap;
-use rustc_serialize::Encodable;
+use serde::Serialize;
 
-use encoder;
 use encoder::Error;
-use super::{Data, StrVal, Bool, VecVal, Map, Fun};
+use super::{Data, to_data};
 
 /// `MapBuilder` is a helper type that construct `Data` types.
 #[derive(Default)]
@@ -30,10 +29,14 @@ impl MapBuilder {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert<K: ToString, T: Encodable>(self, key: K, value: &T) -> Result<MapBuilder, Error> {
+    pub fn insert<K, T>(self, key: K, value: &T) -> Result<MapBuilder, Error>
+    where
+        K: Into<String>,
+        T: Serialize,
+    {
         let MapBuilder { mut data } = self;
-        let value = try!(encoder::encode(value));
-        data.insert(key.to_string(), value);
+        let value = to_data(value)?;
+        data.insert(key.into(), value);
         Ok(MapBuilder { data: data })
     }
 
@@ -46,9 +49,13 @@ impl MapBuilder {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_str<K: ToString, V: ToString>(self, key: K, value: V) -> MapBuilder {
+    pub fn insert_str<K, V>(self, key: K, value: V) -> MapBuilder
+    where
+        K: Into<String>,
+        V: Into<String>,
+    {
         let MapBuilder { mut data } = self;
-        data.insert(key.to_string(), StrVal(value.to_string()));
+        data.insert(key.into(), Data::StrVal(value.into()));
         MapBuilder { data: data }
     }
 
@@ -61,9 +68,12 @@ impl MapBuilder {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_bool<K: ToString>(self, key: K, value: bool) -> MapBuilder {
+    pub fn insert_bool<K>(self, key: K, value: bool) -> MapBuilder
+    where
+        K: Into<String>,
+    {
         let MapBuilder { mut data } = self;
-        data.insert(key.to_string(), Bool(value));
+        data.insert(key.into(), Data::Bool(value));
         MapBuilder { data: data }
     }
 
@@ -80,12 +90,13 @@ impl MapBuilder {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_vec<K: ToString, F>(self, key: K, mut f: F) -> MapBuilder
-    where F: FnMut(VecBuilder) -> VecBuilder
+    pub fn insert_vec<K, F>(self, key: K, mut f: F) -> MapBuilder
+    where K: Into<String>,
+          F: FnMut(VecBuilder) -> VecBuilder
     {
         let MapBuilder { mut data } = self;
         let builder = f(VecBuilder::new());
-        data.insert(key.to_string(), builder.build());
+        data.insert(key.into(), builder.build());
         MapBuilder { data: data }
     }
 
@@ -107,12 +118,14 @@ impl MapBuilder {
     ///     .build();
     /// ```
     #[inline]
-    pub fn insert_map<K: ToString, F>(self, key: K, mut f: F) -> MapBuilder
-    where F: FnMut(MapBuilder) -> MapBuilder
+    pub fn insert_map<K, F>(self, key: K, mut f: F) -> MapBuilder
+    where
+        K: Into<String>,
+        F: FnMut(MapBuilder) -> MapBuilder,
     {
         let MapBuilder { mut data } = self;
         let builder = f(MapBuilder::new());
-        data.insert(key.to_string(), builder.build());
+        data.insert(key.into(), builder.build());
         MapBuilder { data: data }
     }
 
@@ -133,14 +146,14 @@ impl MapBuilder {
     where F: FnMut(String) -> String + Send + 'static
     {
         let MapBuilder { mut data } = self;
-        data.insert(key.to_string(), Fun(RefCell::new(Box::new(f))));
+        data.insert(key.to_string(), Data::Fun(RefCell::new(Box::new(f))));
         MapBuilder { data: data }
     }
 
     /// Return the built `Data`.
     #[inline]
     pub fn build(self) -> Data {
-        Map(self.data)
+        Data::Map(self.data)
     }
 }
 
@@ -166,9 +179,9 @@ impl VecBuilder {
     ///     .build();
     /// ```
     #[inline]
-    pub fn push<T: Encodable>(self, value: &T) -> Result<VecBuilder, Error> {
+    pub fn push<T: Serialize>(self, value: &T) -> Result<VecBuilder, Error> {
         let VecBuilder { mut data } = self;
-        let value = try!(encoder::encode(value));
+        let value = to_data(value)?;
         data.push(value);
         Ok(VecBuilder { data: data })
     }
@@ -185,7 +198,7 @@ impl VecBuilder {
     #[inline]
     pub fn push_str<T: ToString>(self, value: T) -> VecBuilder {
         let VecBuilder { mut data } = self;
-        data.push(StrVal(value.to_string()));
+        data.push(Data::StrVal(value.to_string()));
         VecBuilder { data: data }
     }
 
@@ -201,7 +214,7 @@ impl VecBuilder {
     #[inline]
     pub fn push_bool(self, value: bool) -> VecBuilder {
         let VecBuilder { mut data } = self;
-        data.push(Bool(value));
+        data.push(Data::Bool(value));
         VecBuilder { data: data }
     }
 
@@ -271,12 +284,12 @@ impl VecBuilder {
     where F: FnMut(String) -> String + Send + 'static
     {
         let VecBuilder { mut data } = self;
-        data.push(Fun(RefCell::new(Box::new(f))));
+        data.push(Data::Fun(RefCell::new(Box::new(f))));
         VecBuilder { data: data }
     }
 
     #[inline]
     pub fn build(self) -> Data {
-        VecVal(self.data)
+        Data::VecVal(self.data)
     }
 }

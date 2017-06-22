@@ -2,32 +2,32 @@ use std::cell::RefCell;
 use tempdir::TempDir;
 use std::fmt::Debug;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{PathBuf, Path};
 use std::collections::HashMap;
-use rustc_serialize::{json, Encodable};
-use rustc_serialize::json::Json;
 
-use super::encode;
-
-use mustache::{self, Error};
+use mustache::{self, Error, to_data};
 use mustache::{Data, StrVal, VecVal, Map, Fun};
 use mustache::{Context, Template};
 
-#[derive(RustcEncodable, Debug)]
+use serde::Serialize;
+use serde_json;
+use serde_json::Value as Json;
+
+#[derive(Debug, Serialize)]
 struct Planet {
     name: String,
     info: Option<PlanetInfo>,
 }
 
-#[derive(RustcEncodable, Debug)]
+#[derive(Debug, Serialize)]
 struct PlanetInfo {
     moons: Vec<String>,
     population: u64,
     description: String,
 }
 
-#[derive(RustcEncodable, Debug)]
+#[derive(Debug, Serialize)]
 struct Person {
     name: String,
     age: Option<u32>,
@@ -37,13 +37,19 @@ fn compile_str(s: &str) -> Template {
     mustache::compile_str(s).expect(&format!("Failed to compile: {}", s))
 }
 
-fn assert_render<T: Encodable + Debug>(template: &str, data: &T) -> String {
-    render(template, data).expect(&format!("Failed to render: template: {:?}\ndata: {:?}",
-                                            template,
-                                            data))
+fn assert_render<T>(template: &str, data: &T) -> String
+where T: Serialize + Debug
+{
+    if let Ok(s) = render(template, data) {
+        s
+    } else {
+        panic!("Failed to render: template: {:?}\ndata: {:?}", template, data);
+    }
 }
 
-fn render<T: Encodable>(template: &str, data: &T) -> Result<String, Error> {
+fn render<T>(template: &str, data: &T) -> Result<String, Error>
+where T: Serialize
+{
     let template = compile_str(template);
 
     let mut bytes = vec![];
@@ -245,9 +251,8 @@ mod context_search {
 }
 
 #[test]
-#[should_panic]
 fn test_render_option_nested() {
-    #[derive(RustcEncodable, Debug)]
+    #[derive(Debug, Serialize)]
     struct Nested {
         opt: Option<Option<u32>>,
     }
@@ -421,23 +426,21 @@ fn test_render_partial() {
     assert_partials_data(template);
 }
 
-fn parse_spec_tests(src: &str) -> Vec<json::Json> {
+fn parse_spec_tests(src: &str) -> Vec<Json> {
     let path = PathBuf::from(src);
-    let mut file_contents = vec![];
-    File::open(&path)
-        .and_then(|mut f| f.read_to_end(&mut file_contents))
+    let file = File::open(&path)
         .expect(&format!("Could not read file {}", path.display()));
+    let json = serde_json::from_reader(file)
+        .expect(&format!("Invalid json in file {}", path.display()));
 
-    let s = String::from_utf8(file_contents.to_vec()).expect("File was not UTF8 encoded");
-
-    assert_let!(Ok(Json::Object(mut d)) = Json::from_str(&s) => {
+    assert_let!(Json::Object(mut d) = json => {
         assert_let!(Some(Json::Array(tests)) = d.remove("tests") => {
             tests.into_iter().collect()
         })
     })
 }
 
-fn write_partials(tmpdir: &Path, value: &json::Json) {
+fn write_partials(tmpdir: &Path, value: &Json) {
     assert_let!(Json::Object(ref d) = *value => {
         for (key, value) in d {
             assert_let!(Json::String(ref s) = *value => {
@@ -450,7 +453,7 @@ fn write_partials(tmpdir: &Path, value: &json::Json) {
     })
 }
 
-fn run_test(test: json::Object, data: Data) {
+fn run_test(test: serde_json::Map<String, Json>, data: Data) {
     let template = assert_let!(Some(&Json::String(ref s)) = test.get("template") => {
         s.clone()
     });
@@ -489,7 +492,7 @@ fn run_tests(spec: &str) {
         let test = assert_let!(Json::Object(m) = json => m);
 
         let data = test.get("data").expect("No test data").clone();
-        let data = encode(&data).expect("Failed to encode");
+        let data = to_data(&data).expect("Failed to encode");
 
         run_test(test, data);
     }
@@ -535,7 +538,7 @@ fn test_spec_lambdas() {
         // Replace the lambda with rust code.
         let data = test.remove("data").expect("No test data");
 
-        let data = encode(&data).expect("Failed to encode");
+        let data = to_data(&data).expect("Failed to encode");
 
         let mut ctx = assert_let!(Map(ctx) = data => ctx);
 

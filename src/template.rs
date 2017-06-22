@@ -2,14 +2,13 @@ use std::io::Write;
 use std::collections::HashMap;
 use std::mem;
 use std::str;
-use rustc_serialize::Encodable;
+use serde::Serialize;
 
-use encoder;
 use compiler::Compiler;
 use parser_internals::Token;
 use parser_internals::Token::*;
 
-use super::{Context, Data, Bool, StrVal, VecVal, Map, Fun, OptVal, Result};
+use super::{Context, Data, Result, to_data};
 
 /// `Template` represents a compiled mustache file.
 #[derive(Debug, Clone)]
@@ -31,13 +30,16 @@ pub fn new(ctx: Context, tokens: Vec<Token>, partials: HashMap<String, Vec<Token
 
 impl Template {
     /// Renders the template with the `Encodable` data.
-    pub fn render<W: Write, T: Encodable>(&self, wr: &mut W, data: &T) -> Result {
-        let data = try!(encoder::encode(data));
+    pub fn render<W, T>(&self, wr: &mut W, data: &T) -> Result<()>
+    where W: Write,
+          T: Serialize,
+    {
+        let data = to_data(data)?;
         self.render_data(wr, &data)
     }
 
     /// Renders the template with the `Data`.
-    pub fn render_data<W: Write>(&self, wr: &mut W, data: &Data) -> Result {
+    pub fn render_data<W: Write>(&self, wr: &mut W, data: &Data) -> Result<()> {
         let mut render_ctx = RenderContext::new(self);
         let mut stack = vec![data];
 
@@ -60,7 +62,7 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn render<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, tokens: &[Token]) -> Result {
+    fn render<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, tokens: &[Token]) -> Result<()> {
         for token in tokens.iter() {
             try!(self.render_token(wr, stack, token));
         }
@@ -68,7 +70,7 @@ impl<'a> RenderContext<'a> {
         Ok(())
     }
 
-    fn render_token<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, token: &Token) -> Result {
+    fn render_token<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, token: &Token) -> Result<()> {
         match *token {
             Text(ref value) => {
                 self.render_text(wr, value)
@@ -94,7 +96,7 @@ impl<'a> RenderContext<'a> {
         }
     }
 
-    fn write_tracking_newlines<W: Write>(&mut self, wr: &mut W, value: &str) -> Result {
+    fn write_tracking_newlines<W: Write>(&mut self, wr: &mut W, value: &str) -> Result<()> {
         try!(wr.write_all(value.as_bytes()));
         self.line_start = match value.chars().last() {
             None => self.line_start, // None == ""
@@ -105,7 +107,7 @@ impl<'a> RenderContext<'a> {
         Ok(())
     }
 
-    fn write_indent<W: Write>(&mut self, wr: &mut W) -> Result {
+    fn write_indent<W: Write>(&mut self, wr: &mut W) -> Result<()> {
         if self.line_start {
             try!(wr.write_all(self.indent.as_bytes()));
         }
@@ -113,7 +115,7 @@ impl<'a> RenderContext<'a> {
         Ok(())
     }
 
-    fn render_text<W: Write>(&mut self, wr: &mut W, value: &str) -> Result {
+    fn render_text<W: Write>(&mut self, wr: &mut W, value: &str) -> Result<()> {
         // Indent the lines.
         if self.indent.is_empty() {
             return self.write_tracking_newlines(wr, value);
@@ -147,7 +149,7 @@ impl<'a> RenderContext<'a> {
         Ok(())
     }
 
-    fn render_etag<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, path: &[String]) -> Result {
+    fn render_etag<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, path: &[String]) -> Result<()> {
         let mut bytes = vec![];
 
         try!(self.render_utag(&mut bytes, stack, path));
@@ -178,7 +180,7 @@ impl<'a> RenderContext<'a> {
         Ok(())
     }
 
-    fn render_utag<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, path: &[String]) -> Result {
+    fn render_utag<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, path: &[String]) -> Result<()> {
         match self.find(path, stack) {
             None => {}
             Some(mut value) => {
@@ -188,7 +190,7 @@ impl<'a> RenderContext<'a> {
                 // would be un-nameable in the view anyway, so I'm unsure if it's
                 // a real problem. Having {{foo}} render only when `foo = Some(Some(val))`
                 // seems unintuitive and may be surprising in practice.
-                if let OptVal(ref inner) = *value {
+                if let Data::OptVal(ref inner) = *value {
                     match *inner {
                         Some(ref inner) => value = inner,
                         None => return Ok(()),
@@ -196,12 +198,12 @@ impl<'a> RenderContext<'a> {
                 }
 
                 match *value {
-                    StrVal(ref value) => {
+                    Data::StrVal(ref value) => {
                         try!(self.write_tracking_newlines(wr, value));
                     }
 
                     // etags and utags use the default delimiter.
-                    Fun(ref fcell) => {
+                    Data::Fun(ref fcell) => {
                         let f = &mut *fcell.borrow_mut();
                         let tokens = try!(self.render_fun("", "{{", "}}", f));
                         try!(self.render(wr, stack, &tokens));
@@ -221,12 +223,12 @@ impl<'a> RenderContext<'a> {
                                          wr: &mut W,
                                          stack: &mut Vec<&Data>,
                                          path: &[String],
-                                         children: &[Token]) -> Result {
+                                         children: &[Token]) -> Result<()> {
         match self.find(path, stack) {
             None => {}
-            Some(&Bool(false)) => {}
-            Some(&VecVal(ref xs)) if xs.is_empty() => {}
-            Some(&OptVal(ref val)) if val.is_none() => {}
+            Some(&Data::Bool(false)) => {}
+            Some(&Data::VecVal(ref xs)) if xs.is_empty() => {}
+            Some(&Data::OptVal(ref val)) if val.is_none() => {}
             Some(_) => {
                 return Ok(());
             }
@@ -242,41 +244,41 @@ impl<'a> RenderContext<'a> {
                                 children: &[Token],
                                 src: &str,
                                 otag: &str,
-                                ctag: &str) -> Result {
+                                ctag: &str) -> Result<()> {
         match self.find(path, stack) {
             None => {}
             Some(value) => {
                 match *value {
-                    Bool(true) => {
+                    Data::Bool(true) => {
                         try!(self.render(wr, stack, children));
                     }
-                    Bool(false) => {}
-                    VecVal(ref vs) => {
+                    Data::Bool(false) => {}
+                    Data::VecVal(ref vs) => {
                         for v in vs.iter() {
                             stack.push(v);
                             try!(self.render(wr, stack, children));
                             stack.pop();
                         }
                     }
-                    Map(_) => {
+                    Data::Map(_) => {
                         stack.push(value);
                         try!(self.render(wr, stack, children));
                         stack.pop();
                     }
-                    Fun(ref fcell) => {
+                    Data::Fun(ref fcell) => {
                         let f = &mut *fcell.borrow_mut();
                         let tokens = try!(self.render_fun(src, otag, ctag, f));
                         try!(self.render(wr, stack, &tokens));
                     }
-                    OptVal(ref val) => {
+                    Data::OptVal(ref val) => {
                         if let Some(ref val) = *val {
                             stack.push(val);
                             try!(self.render(wr, stack, children));
                             stack.pop();
                         }
                     }
-                    StrVal(ref val) => {
-                        if val != "" {
+                    Data::StrVal(ref val) => {
+                        if !val.is_empty() {
                             stack.push(value);
                             try!(self.render(wr, stack, children));
                             stack.pop();
@@ -293,7 +295,7 @@ impl<'a> RenderContext<'a> {
                                 wr: &mut W,
                                 stack: &mut Vec<&Data>,
                                 name: &str,
-                                indent: &str) -> Result {
+                                indent: &str) -> Result<()> {
         match self.template.partials.get(name) {
             None => {}
             Some(ref tokens) => {
@@ -344,7 +346,7 @@ impl<'a> RenderContext<'a> {
 
         for data in stack.iter().rev() {
             match **data {
-                Map(ref m) => {
+                Data::Map(ref m) => {
                     if let Some(v) = m.get(&path[0]) {
                         value = Some(v);
                         break;
@@ -364,7 +366,7 @@ impl<'a> RenderContext<'a> {
 
         for part in path[1..].iter() {
             match *value {
-                Map(ref m) => {
+                Data::Map(ref m) => {
                     match m.get(part) {
                         Some(v) => {
                             value = v;

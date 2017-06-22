@@ -28,12 +28,12 @@ mustache = "*"
 
 ```rust
 extern crate mustache;
-extern crate rustc_serialize;
+extern crate serde;
 
 use std::io;
 use mustache::MapBuilder;
 
-#[derive(RustcEncodable)]
+#[derive(Serde)]
 struct Planet {
     name: String,
 }
