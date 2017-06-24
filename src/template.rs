@@ -183,22 +183,19 @@ impl<'a> RenderContext<'a> {
     fn render_utag<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, path: &[String]) -> Result<()> {
         match self.find(path, stack) {
             None => {}
-            Some(mut value) => {
+            Some(value) => {
                 try!(self.write_indent(wr));
 
                 // Currently this doesn't allow Option<Option<Foo>>, which
                 // would be un-nameable in the view anyway, so I'm unsure if it's
                 // a real problem. Having {{foo}} render only when `foo = Some(Some(val))`
                 // seems unintuitive and may be surprising in practice.
-                if let Data::OptVal(ref inner) = *value {
-                    match *inner {
-                        Some(ref inner) => value = inner,
-                        None => return Ok(()),
-                    }
+                if let Data::Null = *value {
+                    return Ok(());
                 }
 
                 match *value {
-                    Data::StrVal(ref value) => {
+                    Data::String(ref value) => {
                         try!(self.write_tracking_newlines(wr, value));
                     }
 
@@ -226,9 +223,9 @@ impl<'a> RenderContext<'a> {
                                          children: &[Token]) -> Result<()> {
         match self.find(path, stack) {
             None => {}
+            Some(&Data::Null) => {}
             Some(&Data::Bool(false)) => {}
-            Some(&Data::VecVal(ref xs)) if xs.is_empty() => {}
-            Some(&Data::OptVal(ref val)) if val.is_none() => {}
+            Some(&Data::Vec(ref xs)) if xs.is_empty() => {}
             Some(_) => {
                 return Ok(());
             }
@@ -249,11 +246,21 @@ impl<'a> RenderContext<'a> {
             None => {}
             Some(value) => {
                 match *value {
+                    Data::Null => {
+                        // do nothing
+                    }
                     Data::Bool(true) => {
                         try!(self.render(wr, stack, children));
                     }
                     Data::Bool(false) => {}
-                    Data::VecVal(ref vs) => {
+                    Data::String(ref val) => {
+                        if !val.is_empty() {
+                            stack.push(value);
+                            try!(self.render(wr, stack, children));
+                            stack.pop();
+                        }
+                    }
+                    Data::Vec(ref vs) => {
                         for v in vs.iter() {
                             stack.push(v);
                             try!(self.render(wr, stack, children));
@@ -269,20 +276,6 @@ impl<'a> RenderContext<'a> {
                         let f = &mut *fcell.borrow_mut();
                         let tokens = try!(self.render_fun(src, otag, ctag, f));
                         try!(self.render(wr, stack, &tokens));
-                    }
-                    Data::OptVal(ref val) => {
-                        if let Some(ref val) = *val {
-                            stack.push(val);
-                            try!(self.render(wr, stack, children));
-                            stack.pop();
-                        }
-                    }
-                    Data::StrVal(ref val) => {
-                        if !val.is_empty() {
-                            stack.push(value);
-                            try!(self.render(wr, stack, children));
-                            stack.pop();
-                        }
                     }
                 }
             }
