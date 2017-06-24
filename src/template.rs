@@ -5,8 +5,7 @@ use std::str;
 use serde::Serialize;
 
 use compiler::Compiler;
-use parser_internals::Token;
-use parser_internals::Token::*;
+use parser::Token;
 
 use super::{Context, Data, Result, to_data};
 
@@ -72,25 +71,25 @@ impl<'a> RenderContext<'a> {
 
     fn render_token<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, token: &Token) -> Result<()> {
         match *token {
-            Text(ref value) => {
+            Token::Text(ref value) => {
                 self.render_text(wr, value)
             }
-            EscapedTag(ref path, _) => {
+            Token::EscapedTag(ref path, _) => {
                 self.render_etag(wr, stack, path)
             }
-            UnescapedTag(ref path, _) => {
+            Token::UnescapedTag(ref path, _) => {
                 self.render_utag(wr, stack, path)
             }
-            Section(ref path, true, ref children, _, _, _, _, _) => {
+            Token::Section(ref path, true, ref children, _, _, _, _, _) => {
                 self.render_inverted_section(wr, stack, path, children)
             }
-            Section(ref path, false, ref children, ref otag, _, ref src, _, ref ctag) => {
+            Token::Section(ref path, false, ref children, ref otag, _, ref src, _, ref ctag) => {
                 self.render_section(wr, stack, path, children, src, otag, ctag)
             }
-            Partial(ref name, ref indent, _) => {
+            Token::Partial(ref name, ref indent, _) => {
                 self.render_partial(wr, stack, name, indent)
             }
-            IncompleteSection(..) => {
+            Token::IncompleteSection(..) => {
                 bug!("render_token should not encounter IncompleteSections")
             }
         }
