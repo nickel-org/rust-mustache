@@ -136,11 +136,11 @@ impl serde::Serializer for Encoder {
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
     ) -> Result<Data>
     {
         // FIXME: Perhaps this could be relaxed to just 'do nothing'
-        Err(Error::UnsupportedType)
+        Ok(Data::StrVal(variant.to_string()))
     }
 
     fn serialize_unit(self) -> Result<Data> {
