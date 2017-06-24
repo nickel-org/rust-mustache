@@ -6,8 +6,7 @@ use std::io::Write;
 use std::path::{PathBuf, Path};
 use std::collections::HashMap;
 
-use mustache::{self, Error, to_data};
-use mustache::{Data, StrVal, VecVal, Map, Fun};
+use mustache::{self, Data, Error, to_data};
 use mustache::{Context, Template};
 
 use serde::Serialize;
@@ -328,33 +327,33 @@ fn test_render_sections() {
     let ctx = HashMap::new();
     let template = compile_str("0{{#a}}1 {{n}} 3{{/a}}5");
 
-    assert_eq!(render_data(&template, &Map(ctx)), "05".to_string());
+    assert_eq!(render_data(&template, &Data::Map(ctx)), "05".to_string());
 
     let mut ctx = HashMap::new();
-    ctx.insert("a".to_string(), VecVal(Vec::new()));
+    ctx.insert("a".to_string(), Data::Vec(Vec::new()));
 
-    assert_eq!(render_data(&template, &Map(ctx)), "05".to_string());
+    assert_eq!(render_data(&template, &Data::Map(ctx)), "05".to_string());
 
     let mut ctx = HashMap::new();
-    ctx.insert("a".to_string(), VecVal(Vec::new()));
-    assert_eq!(render_data(&template, &Map(ctx)), "05".to_string());
+    ctx.insert("a".to_string(), Data::Vec(Vec::new()));
+    assert_eq!(render_data(&template, &Data::Map(ctx)), "05".to_string());
 
     let mut ctx0 = HashMap::new();
     let ctx1 = HashMap::new();
-    ctx0.insert("a".to_string(), VecVal(vec![Map(ctx1)]));
+    ctx0.insert("a".to_string(), Data::Vec(vec![Data::Map(ctx1)]));
 
-    assert_eq!(render_data(&template, &Map(ctx0)), "01  35".to_string());
+    assert_eq!(render_data(&template, &Data::Map(ctx0)), "01  35".to_string());
 
     let mut ctx0 = HashMap::new();
     let mut ctx1 = HashMap::new();
-    ctx1.insert("n".to_string(), StrVal("a".to_string()));
-    ctx0.insert("a".to_string(), VecVal(vec![Map(ctx1)]));
-    assert_eq!(render_data(&template, &Map(ctx0)), "01 a 35".to_string());
+    ctx1.insert("n".to_string(), Data::String("a".to_string()));
+    ctx0.insert("a".to_string(), Data::Vec(vec![Data::Map(ctx1)]));
+    assert_eq!(render_data(&template, &Data::Map(ctx0)), "01 a 35".to_string());
 
     let mut ctx = HashMap::new();
     ctx.insert("a".to_string(),
-               Fun(RefCell::new(Box::new(|_text| "foo".to_string()))));
-    assert_eq!(render_data(&template, &Map(ctx)), "0foo5".to_string());
+               Data::Fun(RefCell::new(Box::new(|_text| "foo".to_string()))));
+    assert_eq!(render_data(&template, &Data::Map(ctx)), "0foo5".to_string());
 }
 
 #[test]
@@ -362,54 +361,54 @@ fn test_render_inverted_sections() {
     let template = compile_str("0{{^a}}1 3{{/a}}5");
 
     let ctx = HashMap::new();
-    assert_eq!(render_data(&template, &Map(ctx)), "01 35".to_string());
+    assert_eq!(render_data(&template, &Data::Map(ctx)), "01 35".to_string());
 
     let mut ctx = HashMap::new();
-    ctx.insert("a".to_string(), VecVal(vec![]));
-    assert_eq!(render_data(&template, &Map(ctx)), "01 35".to_string());
+    ctx.insert("a".to_string(), Data::Vec(vec![]));
+    assert_eq!(render_data(&template, &Data::Map(ctx)), "01 35".to_string());
 
     let mut ctx0 = HashMap::new();
     let ctx1 = HashMap::new();
-    ctx0.insert("a".to_string(), VecVal(vec![Map(ctx1)]));
-    assert_eq!(render_data(&template, &Map(ctx0)), "05".to_string());
+    ctx0.insert("a".to_string(), Data::Vec(vec![Data::Map(ctx1)]));
+    assert_eq!(render_data(&template, &Data::Map(ctx0)), "05".to_string());
 
     let mut ctx0 = HashMap::new();
     let mut ctx1 = HashMap::new();
-    ctx1.insert("n".to_string(), StrVal("a".to_string()));
-    ctx0.insert("a".to_string(), VecVal(vec![Map(ctx1)]));
-    assert_eq!(render_data(&template, &Map(ctx0)), "05".to_string());
+    ctx1.insert("n".to_string(), Data::String("a".to_string()));
+    ctx0.insert("a".to_string(), Data::Vec(vec![Data::Map(ctx1)]));
+    assert_eq!(render_data(&template, &Data::Map(ctx0)), "05".to_string());
 }
 
 fn assert_partials_data(template: Template) {
     let ctx = HashMap::new();
-    assert_eq!(render_data(&template, &Map(ctx)),
+    assert_eq!(render_data(&template, &Data::Map(ctx)),
                "<h2>Names</h2>\n".to_string());
 
     let mut ctx = HashMap::new();
-    ctx.insert("names".to_string(), VecVal(vec![]));
-    assert_eq!(render_data(&template, &Map(ctx)),
+    ctx.insert("names".to_string(), Data::Vec(vec![]));
+    assert_eq!(render_data(&template, &Data::Map(ctx)),
                "<h2>Names</h2>\n".to_string());
 
     let mut ctx0 = HashMap::new();
     let ctx1 = HashMap::new();
-    ctx0.insert("names".to_string(), VecVal(vec![Map(ctx1)]));
-    assert_eq!(render_data(&template, &Map(ctx0)),
+    ctx0.insert("names".to_string(), Data::Vec(vec![Data::Map(ctx1)]));
+    assert_eq!(render_data(&template, &Data::Map(ctx0)),
                "<h2>Names</h2>\n  <strong></strong>\n\n".to_string());
 
     let mut ctx0 = HashMap::new();
     let mut ctx1 = HashMap::new();
-    ctx1.insert("name".to_string(), StrVal("a".to_string()));
-    ctx0.insert("names".to_string(), VecVal(vec![Map(ctx1)]));
-    assert_eq!(render_data(&template, &Map(ctx0)),
+    ctx1.insert("name".to_string(), Data::String("a".to_string()));
+    ctx0.insert("names".to_string(), Data::Vec(vec![Data::Map(ctx1)]));
+    assert_eq!(render_data(&template, &Data::Map(ctx0)),
                "<h2>Names</h2>\n  <strong>a</strong>\n\n".to_string());
 
     let mut ctx0 = HashMap::new();
     let mut ctx1 = HashMap::new();
-    ctx1.insert("name".to_string(), StrVal("a".to_string()));
+    ctx1.insert("name".to_string(), Data::String("a".to_string()));
     let mut ctx2 = HashMap::new();
-    ctx2.insert("name".to_string(), StrVal("<b>".to_string()));
-    ctx0.insert("names".to_string(), VecVal(vec![Map(ctx1), Map(ctx2)]));
-    assert_eq!(render_data(&template, &Map(ctx0)),
+    ctx2.insert("name".to_string(), Data::String("<b>".to_string()));
+    ctx0.insert("names".to_string(), Data::Vec(vec![Data::Map(ctx1), Data::Map(ctx2)]));
+    assert_eq!(render_data(&template, &Data::Map(ctx0)),
                "<h2>Names</h2>\n  <strong>a</strong>\n\n  <strong>&lt;b&gt;</strong>\n\n"
                    .to_string());
 }
@@ -540,7 +539,7 @@ fn test_spec_lambdas() {
 
         let data = to_data(&data).expect("Failed to encode");
 
-        let mut ctx = assert_let!(Map(ctx) = data => ctx);
+        let mut ctx = assert_let!(Data::Map(ctx) = data => ctx);
 
         // needed for the closure test.
         let mut calls = 0usize;
@@ -548,26 +547,26 @@ fn test_spec_lambdas() {
         match &*s {
             "Interpolation" => {
                 let f = |_text| "world".to_string();
-                ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }
             "Interpolation - Expansion" => {
                 let f = |_text| "{{planet}}".to_string();
-                ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }
             "Interpolation - Alternate Delimiters" => {
                 let f = |_text| "|planet| => {{planet}}".to_string();
-                ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }
             "Interpolation - Multiple Calls" => {
                 let f = move |_text: String| {
                     calls += 1;
                     calls.to_string()
                 };
-                ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }
             "Escaping" => {
                 let f = |_text| ">".to_string();
-                ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }
             "Section" => {
                 let f = |text: String| {
@@ -577,27 +576,27 @@ fn test_spec_lambdas() {
                         "no".to_string()
                     }
                 };
-                ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }
             "Section - Expansion" => {
                 let f = |text: String| text.clone() + "{{planet}}" + &text;
-                ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }
             "Section - Alternate Delimiters" => {
                 let f = |text: String| text.clone() + "{{planet}} => |planet|" + &text;
-                ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }
             "Section - Multiple Calls" => {
                 let f = |text: String| "__".to_string() + &text + "__";
-                ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }
             "Inverted Section" => {
                 let f = |_text| "".to_string();
-                ctx.insert("lambda".to_string(), Fun(RefCell::new(Box::new(f))));
+                ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }
             spec_name => unimplemented!("unimplemented lambda spec test: {}", spec_name),
         };
 
-        run_test(test, Map(ctx));
+        run_test(test, Data::Map(ctx));
     }
 }

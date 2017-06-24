@@ -1,30 +1,30 @@
 use std::collections::HashMap;
 
-use mustache::{StrVal, Bool, VecVal, Map, Fun};
+use mustache::Data;
 use mustache::{MapBuilder, VecBuilder};
 
 #[test]
 fn test_empty_builders() {
-    assert_eq!(MapBuilder::new().build(), Map(HashMap::new()));
+    assert_eq!(MapBuilder::new().build(), Data::Map(HashMap::new()));
 
-    assert_eq!(VecBuilder::new().build(), VecVal(Vec::new()));
+    assert_eq!(VecBuilder::new().build(), Data::Vec(Vec::new()));
 }
 
 #[test]
 fn test_builders() {
     let mut pride_and_prejudice = HashMap::new();
     pride_and_prejudice.insert("title".to_string(),
-                               StrVal("Pride and Prejudice".to_string()));
-    pride_and_prejudice.insert("publish_date".to_string(), StrVal("1813".to_string()));
+                               Data::String("Pride and Prejudice".to_string()));
+    pride_and_prejudice.insert("publish_date".to_string(), Data::String("1813".to_string()));
 
     let mut m = HashMap::new();
-    m.insert("first_name".to_string(), StrVal("Jane".to_string()));
-    m.insert("last_name".to_string(), StrVal("Austen".to_string()));
-    m.insert("age".to_string(), StrVal("41".to_string()));
-    m.insert("died".to_string(), Bool(true));
+    m.insert("first_name".to_string(), Data::String("Jane".to_string()));
+    m.insert("last_name".to_string(), Data::String("Austen".to_string()));
+    m.insert("age".to_string(), Data::String("41".to_string()));
+    m.insert("died".to_string(), Data::Bool(true));
     m.insert("works".to_string(),
-             VecVal(vec![StrVal("Sense and Sensibility".to_string()),
-                         Map(pride_and_prejudice)]));
+             Data::Vec(vec![Data::String("Sense and Sensibility".to_string()),
+                            Data::Map(pride_and_prejudice)]));
 
     assert_eq!(MapBuilder::new()
                    .insert_str("first_name", "Jane")
@@ -38,7 +38,7 @@ fn test_builders() {
             })
         })
                    .build(),
-               Map(m));
+               Data::Map(m));
 }
 
 #[test]
@@ -54,8 +54,8 @@ fn test_map_fn_builder() {
         })
         .build();
 
-    assert_let!(Map(m) = data => {
-        assert_let!(Some(&Fun(ref f)) = m.get("count") => {
+    assert_let!(Data::Map(m) = data => {
+        assert_let!(Some(&Data::Fun(ref f)) = m.get("count") => {
             let f = &mut *f.borrow_mut();
             assert_eq!((*f)("count: ".to_string()), "count: 1".to_string());
             assert_eq!((*f)("count: ".to_string()), "count: 2".to_string());
@@ -77,10 +77,10 @@ fn test_vec_fn_builder() {
         })
         .build();
 
-    assert_let!(VecVal(vs) = data => {
+    assert_let!(Data::Vec(vs) = data => {
         let mut iter = vs.iter();
 
-        assert_let!(Some(&Fun(ref f)) = iter.next() => {
+        assert_let!(Some(&Data::Fun(ref f)) = iter.next() => {
             let f = &mut *f.borrow_mut();
             assert_eq!((*f)("count: ".to_string()), "count: 1".to_string());
             assert_eq!((*f)("count: ".to_string()), "count: 2".to_string());

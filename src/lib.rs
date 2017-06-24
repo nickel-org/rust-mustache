@@ -11,11 +11,10 @@ use std::path::{PathBuf, Path};
 use std::result;
 
 pub use builder::{MapBuilder, VecBuilder};
-pub use encoder::Error as EncoderError;
 pub use encoder::Encoder;
+pub use encoder::Error as EncoderError;
 pub use error::Error;
 pub use parser::Error as ParserError;
-pub use self::Data::*;
 pub use template::Template;
 
 #[macro_use]
@@ -39,10 +38,10 @@ mod template;
 mod error;
 
 pub enum Data {
-    OptVal(Option<Box<Data>>),
-    StrVal(String),
+    Null,
+    String(String),
     Bool(bool),
-    VecVal(Vec<Data>),
+    Vec(Vec<Data>),
     Map(HashMap<String, Data>),
     Fun(RefCell<Box<FnMut(String) -> String + Send>>),
 }
@@ -60,12 +59,12 @@ impl PartialEq for Data {
     #[inline]
     fn eq(&self, other: &Data) -> bool {
         match (self, other) {
-            (&OptVal(ref v0), &OptVal(ref v1)) => v0 == v1,
-            (&StrVal(ref v0), &StrVal(ref v1)) => v0 == v1,
-            (&Bool(ref v0), &Bool(ref v1)) => v0 == v1,
-            (&VecVal(ref v0), &VecVal(ref v1)) => v0 == v1,
-            (&Map(ref v0), &Map(ref v1)) => v0 == v1,
-            (&Fun(_), &Fun(_)) => bug!("Cannot compare closures"),
+            (&Data::Null, &Data::Null) => true,
+            (&Data::String(ref v0), &Data::String(ref v1)) => v0 == v1,
+            (&Data::Bool(ref v0), &Data::Bool(ref v1)) => v0 == v1,
+            (&Data::Vec(ref v0), &Data::Vec(ref v1)) => v0 == v1,
+            (&Data::Map(ref v0), &Data::Map(ref v1)) => v0 == v1,
+            (&Data::Fun(_), &Data::Fun(_)) => bug!("Cannot compare closures"),
             (_, _) => false,
         }
     }
@@ -74,12 +73,12 @@ impl PartialEq for Data {
 impl fmt::Debug for Data {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            OptVal(ref v) => write!(f, "OptVal({:?})", v),
-            StrVal(ref v) => write!(f, "StrVal({})", v),
-            Bool(v) => write!(f, "Bool({:?})", v),
-            VecVal(ref v) => write!(f, "VecVal({:?})", v),
-            Map(ref v) => write!(f, "Map({:?})", v),
-            Fun(_) => write!(f, "Fun(...)"),
+            Data::Null => write!(f, "Null"),
+            Data::String(ref v) => write!(f, "StrVal({})", v),
+            Data::Bool(v) => write!(f, "Bool({:?})", v),
+            Data::Vec(ref v) => write!(f, "VecVal({:?})", v),
+            Data::Map(ref v) => write!(f, "Map({:?})", v),
+            Data::Fun(_) => write!(f, "Fun(...)"),
         }
     }
 }
