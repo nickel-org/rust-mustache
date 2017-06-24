@@ -3,7 +3,7 @@ use std::io::ErrorKind::NotFound;
 use std::io::Read;
 use std::fs::File;
 
-use parser_internals::{Parser, Token};
+use parser::{Parser, Token};
 use super::Context;
 
 use Result;
@@ -99,10 +99,11 @@ impl<T: Iterator<Item = char>> Compiler<T> {
 
 #[cfg(test)]
 mod tests {
-    use parser_internals::Token;
-    use super::Compiler;
-    use super::super::Context;
     use std::path::PathBuf;
+
+    use parser::Token;
+    use compiler::Compiler;
+    use context::Context;
 
     fn compile_str(template: &str) -> Vec<Token> {
         let ctx = Context::new(PathBuf::from("."));

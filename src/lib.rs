@@ -1,141 +1,37 @@
-#![crate_name = "mustache"]
-
-#![crate_type = "dylib"]
-#![crate_type = "rlib"]
-
-extern crate rustc_serialize;
 extern crate log;
-#[cfg(test)]
-extern crate tempdir;
+extern crate serde;
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::fmt;
-use std::fs::File;
-use std::io::Read;
 use std::str;
 use std::path::{PathBuf, Path};
-use std::result::Result as StdResult;
-
-pub use self::Data::*;
-pub use builder::{MapBuilder, VecBuilder};
-pub use encoder::{Encoder, EncoderResult};
-pub use template::Template;
-pub use error::Error;
+use std::result;
 
 #[macro_use]
 mod macros;
 
-pub mod builder;
-pub mod encoder;
-
-
-// FIXME: When pub(crate) lands then this can be made a lot less awkward.
-// Alternatively, decide on a decent part of the parser api to consider stable.
-pub mod parser {
-    pub use parser_internals::Error;
-}
-
-#[path = "parser.rs"]
-mod parser_internals;
-
+mod builder;
 mod compiler;
-mod template;
+mod context;
+mod data;
+mod encoder;
 mod error;
+mod parser;
+mod template;
 
-pub enum Data {
-    OptVal(Option<Box<Data>>),
-    StrVal(String),
-    Bool(bool),
-    VecVal(Vec<Data>),
-    Map(HashMap<String, Data>),
-    Fun(RefCell<Box<FnMut(String) -> String + Send>>),
-}
+pub use builder::{MapBuilder, VecBuilder};
+pub use context::Context;
+pub use data::Data;
+pub use encoder::Encoder;
+pub use encoder::Error as EncoderError;
+pub use encoder::{SerializeVec, SerializeTupleVariant, SerializeMap, SerializeStructVariant};
+pub use error::{Error, Result};
+pub use parser::Error as ParserError;
+pub use template::Template;
 
-pub type Result<T = ()> = StdResult<T, Error>;
-
-impl PartialEq for Data {
-    #[inline]
-    fn eq(&self, other: &Data) -> bool {
-        match (self, other) {
-            (&OptVal(ref v0), &OptVal(ref v1)) => v0 == v1,
-            (&StrVal(ref v0), &StrVal(ref v1)) => v0 == v1,
-            (&Bool(ref v0), &Bool(ref v1)) => v0 == v1,
-            (&VecVal(ref v0), &VecVal(ref v1)) => v0 == v1,
-            (&Map(ref v0), &Map(ref v1)) => v0 == v1,
-            (&Fun(_), &Fun(_)) => bug!("Cannot compare closures"),
-            (_, _) => false,
-        }
-    }
-}
-
-impl fmt::Debug for Data {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            OptVal(ref v) => write!(f, "OptVal({:?})", v),
-            StrVal(ref v) => write!(f, "StrVal({})", v),
-            Bool(v) => write!(f, "Bool({:?})", v),
-            VecVal(ref v) => write!(f, "VecVal({:?})", v),
-            Map(ref v) => write!(f, "Map({:?})", v),
-            Fun(_) => write!(f, "Fun(...)"),
-        }
-    }
-}
-
-/// Represents the shared metadata needed to compile and render a mustache
-/// template.
-#[derive(Clone)]
-pub struct Context {
-    pub template_path: PathBuf,
-    pub template_extension: String,
-}
-
-impl fmt::Debug for Context {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "Context {{ template_path: {:?}, template_extension: {} }}",
-               &*self.template_path,
-               self.template_extension)
-    }
-}
-
-impl Context {
-    /// Configures a mustache context the specified path to the templates.
-    pub fn new(path: PathBuf) -> Context {
-        Context {
-            template_path: path,
-            template_extension: "mustache".to_string(),
-        }
-    }
-
-    /// Compiles a template from a string
-    pub fn compile<IT: Iterator<Item = char>>(&self, reader: IT) -> Result<Template> {
-        let compiler = compiler::Compiler::new(self.clone(), reader);
-        let (tokens, partials) = try!(compiler.compile());
-
-        Ok(template::new(self.clone(), tokens, partials))
-    }
-
-    /// Compiles a template from a path.
-    pub fn compile_path<U: AsRef<Path>>(&self, path: U) -> Result<Template> {
-        // FIXME(#6164): This should use the file decoding tools when they are
-        // written. For now we'll just read the file and treat it as UTF-8file.
-        let mut path = self.template_path.join(path.as_ref());
-        path.set_extension(&self.template_extension);
-        let mut s = vec![];
-        let mut file = try!(File::open(&path));
-        try!(file.read_to_end(&mut s));
-
-        // TODO: maybe allow UTF-16 as well?
-        let template = match str::from_utf8(&*s) {
-            Ok(string) => string,
-            _ => {
-                return Err(Error::InvalidStr);
-            }
-        };
-
-        self.compile(template.chars())
-    }
+pub fn to_data<T>(value: T) -> result::Result<Data, encoder::Error>
+where
+    T: serde::Serialize,
+{
+    value.serialize(Encoder)
 }
 
 /// Compiles a template from an `Iterator<char>`.

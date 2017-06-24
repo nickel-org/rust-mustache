@@ -1,25 +1,11 @@
 use std::collections::HashMap;
-use std::fmt;
 use std::error;
-use rustc_serialize;
+use std::fmt::{self, Display};
+use std::result;
 
-use super::{Data, StrVal, Bool, VecVal, Map, OptVal};
-use self::Error::*;
+use serde::{self, Serialize, ser};
 
-#[derive(Default)]
-pub struct Encoder {
-     data: Vec<Data>,
-}
-
-impl Encoder {
-    pub fn new() -> Encoder {
-        Encoder::default()
-    }
-
-    pub fn stack(&self) -> &[Data] {
-        &self.data
-    }
-}
+use super::{Data, to_data};
 
 /// Error type to represent encoding failure.
 ///
@@ -32,11 +18,20 @@ pub enum Error {
     MissingElements,
     KeyIsNotString,
     NoDataToEncode,
-    MultipleRootsFound,
+    Message(String),
 
     #[doc(hidden)]
     __Nonexhaustive,
 }
+
+impl serde::ser::Error for Error {
+    fn custom<T: Display>(msg: T) -> Self {
+        Error::Message(msg.to_string())
+    }
+}
+
+/// Alias for a `Result` with the error type `mustache::encoder::Error`.
+pub type Result<T> = result::Result<T, Error>;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -48,326 +43,372 @@ impl fmt::Display for Error {
 impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            NestedOptions => "nested Option types are not supported",
-            UnsupportedType => "unsupported type",
-            MissingElements => "no elements in value",
-            KeyIsNotString => "key is not a string",
-            NoDataToEncode => "the encodable type created no data",
-            MultipleRootsFound => {
-                "the encodable type emitted data that was not tree-like in structure"
-            }
+            Error::NestedOptions => "nested Option types are not supported",
+            Error::UnsupportedType => "unsupported type",
+            Error::MissingElements => "no elements in value",
+            Error::KeyIsNotString => "key is not a string",
+            Error::NoDataToEncode => "the encodable type created no data",
+            Error::Message(ref s) => s,
             Error::__Nonexhaustive => unreachable!(),
         }
     }
 }
 
-pub type EncoderResult = Result<(), Error>;
+#[derive(Default)]
+pub struct Encoder;
 
 impl Encoder {
-    fn push(&mut self, data: Data) {
-        self.data.push(data);
-    }
-
-    fn push_ok(&mut self, data: Data) -> EncoderResult {
-        self.push(data);
-        Ok(())
-    }
-
-    fn push_str_ok<T: ToString>(&mut self, data: T) -> EncoderResult {
-        self.push(StrVal(data.to_string()));
-        Ok(())
+    pub fn new() -> Encoder {
+        Encoder::default()
     }
 }
 
-impl rustc_serialize::Encoder for Encoder {
+impl serde::Serializer for Encoder {
+    type Ok = Data;
     type Error = Error;
 
-    fn emit_nil(&mut self) -> EncoderResult {
-        Err(UnsupportedType)
+    type SerializeSeq = SerializeVec;
+    type SerializeTuple = SerializeVec;
+    type SerializeTupleStruct = SerializeVec;
+    type SerializeTupleVariant = SerializeTupleVariant;
+    type SerializeMap = SerializeMap;
+    type SerializeStruct = SerializeMap;
+    type SerializeStructVariant = SerializeStructVariant;
+
+    fn serialize_bool(self, v: bool) -> Result<Data> {
+        Ok(Data::Bool(v))
     }
 
-    fn emit_isize(&mut self, v: isize) -> EncoderResult {
-        self.push_str_ok(v)
-    }
-    fn emit_usize(&mut self, v: usize) -> EncoderResult {
-        self.push_str_ok(v)
-    }
-    fn emit_u64(&mut self, v: u64) -> EncoderResult {
-        self.push_str_ok(v)
-    }
-    fn emit_u32(&mut self, v: u32) -> EncoderResult {
-        self.push_str_ok(v)
-    }
-    fn emit_u16(&mut self, v: u16) -> EncoderResult {
-        self.push_str_ok(v)
-    }
-    fn emit_u8(&mut self, v: u8) -> EncoderResult {
-        self.push_str_ok(v)
+    fn serialize_char(self, v: char) -> Result<Data> {
+        Ok(Data::String(v.to_string()))
     }
 
-    fn emit_i64(&mut self, v: i64) -> EncoderResult {
-        self.push_str_ok(v)
-    }
-    fn emit_i32(&mut self, v: i32) -> EncoderResult {
-        self.push_str_ok(v)
-    }
-    fn emit_i16(&mut self, v: i16) -> EncoderResult {
-        self.push_str_ok(v)
-    }
-    fn emit_i8(&mut self, v: i8) -> EncoderResult {
-        self.push_str_ok(v)
+    fn serialize_u8(self, v: u8) -> Result<Data> {
+        Ok(Data::String(v.to_string()))
     }
 
-    fn emit_bool(&mut self, v: bool) -> EncoderResult {
-        self.push_ok(Bool(v))
+    fn serialize_i8(self, v: i8) -> Result<Data> {
+        Ok(Data::String(v.to_string()))
     }
 
-    fn emit_f64(&mut self, v: f64) -> EncoderResult {
-        self.push_str_ok(v)
-    }
-    fn emit_f32(&mut self, v: f32) -> EncoderResult {
-        self.push_str_ok(v)
+    fn serialize_u16(self, v: u16) -> Result<Data> {
+        Ok(Data::String(v.to_string()))
     }
 
-    fn emit_char(&mut self, v: char) -> EncoderResult {
-        self.push_str_ok(v)
-    }
-    fn emit_str(&mut self, v: &str) -> EncoderResult {
-        self.push_str_ok(v)
+    fn serialize_i16(self, v: i16) -> Result<Data> {
+        Ok(Data::String(v.to_string()))
     }
 
-    fn emit_enum<F>(&mut self, _name: &str, _f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
+    fn serialize_u32(self, v: u32) -> Result<Data> {
+        Ok(Data::String(v.to_string()))
+    }
+
+    fn serialize_i32(self, v: i32) -> Result<Data> {
+        Ok(Data::String(v.to_string()))
+    }
+
+    fn serialize_i64(self, v: i64) -> Result<Data> {
+        Ok(Data::String(v.to_string()))
+    }
+
+    fn serialize_u64(self, v: u64) -> Result<Data> {
+        Ok(Data::String(v.to_string()))
+    }
+
+    fn serialize_f32(self, v: f32) -> Result<Data> {
+        Ok(Data::String(v.to_string()))
+    }
+
+    fn serialize_f64(self, v: f64) -> Result<Data> {
+        Ok(Data::String(v.to_string()))
+    }
+
+    fn serialize_str(self, v: &str) -> Result<Data> {
+        Ok(Data::String(v.to_string()))
+    }
+
+    fn serialize_unit_struct(self, _name: &'static str) -> Result<Data> {
+        // FIXME: Perhaps this could be relaxed to just 'do nothing'
+        Err(Error::UnsupportedType)
+    }
+
+    fn serialize_unit_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
+    ) -> Result<Data>
     {
-        Err(UnsupportedType)
+        // FIXME: Perhaps this could be relaxed to just 'do nothing'
+        Ok(Data::String(variant.to_string()))
     }
 
-    fn emit_enum_variant<F>(&mut self, _name: &str, _id: usize, _len: usize, _f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
+    fn serialize_unit(self) -> Result<Data> {
+        Ok(Data::Null)
+    }
+
+    fn serialize_none(self) -> Result<Data> {
+        Ok(Data::Null)
+    }
+
+    fn serialize_some<T: ? Sized>(self, value: &T) -> Result<Data>
+    where
+        T: Serialize
     {
-        Err(UnsupportedType)
+        value.serialize(self)
     }
 
-    fn emit_enum_variant_arg<F>(&mut self, _a_idx: usize, _f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
+    fn serialize_struct(
+        self,
+        _name: &'static str,
+        len: usize,
+    ) -> Result<Self::SerializeStruct> {
+        self.serialize_map(Some(len))
+    }
+
+    fn serialize_struct_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
+        len: usize,
+    ) -> Result<Self::SerializeStructVariant> {
+        Ok(SerializeStructVariant {
+            name: String::from(variant),
+            map: HashMap::with_capacity(len),
+        })
+    }
+
+    fn serialize_newtype_struct<T: ?Sized>(
+        self,
+        _name: &'static str,
+        value: &T,
+    ) -> Result<Data>
+    where
+        T: Serialize,
     {
-        Err(UnsupportedType)
+        // Ignore newtype name
+        value.serialize(self)
     }
 
-    fn emit_enum_struct_variant<F>(&mut self,
-                                   _v_name: &str,
-                                   _v_id: usize,
-                                   _len: usize,
-                                   _f: F)
-                                   -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
+    fn serialize_newtype_variant<T: ?Sized>(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        value: &T,
+    ) -> Result<Data>
+    where
+        T: Serialize,
     {
-        Err(UnsupportedType)
+        // Ignore newtype name
+        value.serialize(self)
     }
 
-    fn emit_enum_struct_variant_field<F>(&mut self,
-                                         _f_name: &str,
-                                         _f_idx: usize,
-                                         _f: F)
-                                         -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
+    fn serialize_bytes(self, value: &[u8]) -> Result<Data> {
+        let vec = value.iter()
+            .map(|&b| Data::String(b.to_string()))
+            .collect();
+
+        Ok(Data::Vec(vec))
+    }
+
+    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
+        Ok(SerializeVec {
+            vec: Vec::with_capacity(len.unwrap_or(0)),
+        })
+    }
+
+    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
+        self.serialize_seq(Some(len))
+    }
+
+    fn serialize_tuple_struct(
+        self,
+        _name: &'static str,
+        len: usize,
+    ) -> Result<Self::SerializeTupleStruct> {
+        self.serialize_seq(Some(len))
+    }
+
+    fn serialize_tuple_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
+        len: usize,
+    ) -> Result<Self::SerializeTupleVariant> {
+        Ok(SerializeTupleVariant {
+            name: String::from(variant),
+            vec: Vec::with_capacity(len),
+        })
+    }
+
+    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
+        Ok(SerializeMap {
+            map: HashMap::with_capacity(len.unwrap_or(0)),
+            next_key: None,
+        })
+    }
+}
+
+#[doc(hidden)]
+pub struct SerializeVec {
+    vec: Vec<Data>,
+}
+
+#[doc(hidden)]
+pub struct SerializeTupleVariant {
+    name: String,
+    vec: Vec<Data>,
+}
+
+#[doc(hidden)]
+pub struct SerializeMap {
+    map: HashMap<String, Data>,
+    next_key: Option<String>,
+}
+
+#[doc(hidden)]
+pub struct SerializeStructVariant {
+    name: String,
+    map: HashMap<String, Data>,
+}
+
+impl ser::SerializeSeq for SerializeVec {
+    type Ok = Data;
+    type Error = Error;
+
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<()>
+        where T: Serialize
     {
-        Err(UnsupportedType)
-    }
-
-    fn emit_struct<F>(&mut self, _name: &str, _len: usize, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        self.push(Map(HashMap::new()));
-        f(self)
-    }
-
-    fn emit_struct_field<F>(&mut self, name: &str, _idx: usize, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        let mut m = match self.data.pop() {
-            Some(Map(m)) => m,
-            _ => {
-                return Err(UnsupportedType);
-            }
-        };
-        try!(f(self));
-        let data = match self.data.pop() {
-            Some(d) => d,
-            _ => {
-                return Err(UnsupportedType);
-            }
-        };
-        m.insert(name.to_string(), data);
-        self.push_ok(Map(m))
-    }
-
-    fn emit_tuple<F>(&mut self, len: usize, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        self.emit_seq(len, f)
-    }
-
-    fn emit_tuple_arg<F>(&mut self, idx: usize, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        self.emit_seq_elt(idx, f)
-    }
-
-    fn emit_tuple_struct<F>(&mut self, _name: &str, len: usize, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        self.emit_seq(len, f)
-    }
-
-    fn emit_tuple_struct_arg<F>(&mut self, idx: usize, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        self.emit_seq_elt(idx, f)
-    }
-
-    // Specialized types:
-    fn emit_option<F>(&mut self, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        f(self)
-    }
-
-    fn emit_option_none(&mut self) -> EncoderResult {
-        self.push_ok(OptVal(None))
-    }
-
-    fn emit_option_some<F>(&mut self, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        try!(f(self));
-        let val = match self.data.pop() {
-            Some(OptVal(_)) => return Err(NestedOptions),
-            Some(d) => d,
-            _ => {
-                return Err(UnsupportedType);
-            }
-        };
-        self.push_ok(OptVal(Some(Box::new(val))))
-    }
-
-    fn emit_seq<F>(&mut self, _len: usize, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        self.push(VecVal(Vec::new()));
-        f(self)
-    }
-
-    fn emit_seq_elt<F>(&mut self, _idx: usize, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        let mut v = match self.data.pop() {
-            Some(VecVal(v)) => v,
-            _ => {
-                return Err(UnsupportedType);
-            }
-        };
-        try!(f(self));
-        let data = match self.data.pop() {
-            Some(d) => d,
-            _ => {
-                return Err(UnsupportedType);
-            }
-        };
-        v.push(data);
-        self.push_ok(VecVal(v))
-    }
-
-    fn emit_map<F>(&mut self, _len: usize, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        self.push(Map(HashMap::new()));
-        f(self)
-    }
-
-    fn emit_map_elt_key<F>(&mut self, _idx: usize, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        try!(f(self));
-        let last = match self.data.last() {
-            Some(d) => d,
-            None => {
-                return Err(MissingElements);
-            }
-        };
-        match *last {
-            StrVal(_) => Ok(()),
-            _ => Err(KeyIsNotString),
-        }
-    }
-
-    fn emit_map_elt_val<F>(&mut self, _idx: usize, f: F) -> EncoderResult
-    where F: FnOnce(&mut Encoder) -> EncoderResult
-    {
-        let k = match self.data.pop() {
-            Some(StrVal(s)) => s,
-            _ => {
-                return Err(KeyIsNotString);
-            }
-        };
-        let mut m = match self.data.pop() {
-            Some(Map(m)) => m,
-            _ => bug!("Expected a map"),
-        };
-        try!(f(self));
-        let popped = match self.data.pop() {
-            Some(p) => p,
-            None => bug!("Nothing to pop!"),
-        };
-        m.insert(k, popped);
-        self.push(Map(m));
+        self.vec.push(to_data(&value)?);
         Ok(())
     }
-}
 
-pub fn encode<T: rustc_serialize::Encodable>(data: &T) -> Result<Data, Error> {
-    let mut encoder = Encoder::new();
-    try!(data.encode(&mut encoder));
-    match encoder.data.len() {
-        1 => Ok(encoder.data.pop().unwrap()),
-        // These two errors are really down to either the type implementing Encodable wrong
-        // or using some data which is incompatible with the way mustache *currently* works.
-        // It does feel like `bug!` more than Error but maybe it covers some usecases so
-        // lets not panic here.
-        0 => Err(NoDataToEncode),
-        _ => Err(MultipleRootsFound),
+    fn end(self) -> Result<Data> {
+        Ok(Data::Vec(self.vec))
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{encode, Error};
-    use rustc_serialize::{Encodable, Encoder};
+impl ser::SerializeTuple for SerializeVec {
+    type Ok = Data;
+    type Error = Error;
 
-    struct NoData;
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<()>
+        where T: Serialize
+    {
+        ser::SerializeSeq::serialize_element(self, value)
+    }
 
-    impl Encodable for NoData {
-        fn encode<S: Encoder>(&self, _: &mut S) -> Result<(), S::Error> {
-            Ok(())
+    fn end(self) -> Result<Data> {
+        ser::SerializeSeq::end(self)
+    }
+}
+
+impl ser::SerializeTupleStruct for SerializeVec {
+    type Ok = Data;
+    type Error = Error;
+
+    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
+        where T: Serialize
+    {
+        ser::SerializeSeq::serialize_element(self, value)
+    }
+
+    fn end(self) -> Result<Data> {
+        ser::SerializeSeq::end(self)
+    }
+}
+
+impl ser::SerializeTupleVariant for SerializeTupleVariant {
+    type Ok = Data;
+    type Error = Error;
+
+    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
+        where T: Serialize
+    {
+        self.vec.push(try!(to_data(&value)));
+        Ok(())
+    }
+
+    fn end(self) -> Result<Data> {
+        let mut object = HashMap::new();
+
+        object.insert(self.name, Data::Vec(self.vec));
+
+        Ok(Data::Map(object))
+    }
+}
+
+impl ser::SerializeMap for SerializeMap {
+    type Ok = Data;
+    type Error = Error;
+
+    fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<()>
+    where
+        T: Serialize
+    {
+        match to_data(key)? {
+            Data::String(s) => {
+                self.next_key = Some(s);
+                Ok(())
+            }
+            _ => Err(Error::KeyIsNotString),
         }
     }
 
-    struct Multiroot;
-
-    impl Encodable for Multiroot {
-        fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
-            try!(s.emit_u32(4));
-            s.emit_u32(1)
-        }
+    fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<()>
+    where
+        T: Serialize
+    {
+        let key = self.next_key.take();
+        // Panic because this indicates a bug in the program rather than an
+        // expected failure.
+        let key = key.expect("serialize_value called before serialize_key");
+        self.map.insert(key, try!(to_data(&value)));
+        Ok(())
     }
 
-    #[test]
-    fn encodable_with_no_data() {
-        assert_let!(Err(Error::NoDataToEncode) = encode(&NoData));
+    fn end(self) -> Result<Data> {
+        Ok(Data::Map(self.map))
+    }
+}
+
+impl ser::SerializeStruct for SerializeMap {
+    type Ok = Data;
+    type Error = Error;
+
+    fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<()>
+    where
+        T: Serialize
+    {
+        ser::SerializeMap::serialize_key(self, key)?;
+        ser::SerializeMap::serialize_value(self, value)
     }
 
-    #[test]
-    fn encodable_with_multiple_roots() {
-        assert_let!(Err(Error::MultipleRootsFound) = encode(&Multiroot));
+    fn end(self) -> Result<Data> {
+        ser::SerializeMap::end(self)
+    }
+}
+
+impl ser::SerializeStructVariant for SerializeStructVariant {
+    type Ok = Data;
+    type Error = Error;
+
+    fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<()>
+    where
+        T: Serialize,
+    {
+        self.map.insert(String::from(key), to_data(&value)?);
+        Ok(())
+    }
+
+    fn end(self) -> Result<Data> {
+        let mut object = HashMap::new();
+
+        object.insert(self.name, Data::Map(self.map));
+
+        Ok(Data::Map(object))
     }
 }
