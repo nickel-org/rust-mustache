@@ -373,6 +373,15 @@ impl<'a> RenderContext<'a> {
                             return None;
                         }
                     }
+                },
+                VecVal(ref v) => {
+                    match part.parse::<usize>() {
+                        Ok(i) => match v.get(i) {
+                            Some(v1) => value = v1,
+                            None => return None,
+                        },
+                        Err(_) => return None,
+                    }
                 }
                 _ => {
                     return None;
@@ -508,6 +517,16 @@ mod tests {
             age: Some(42),
         };
         assert_eq!(assert_render(template, &ctx), "Dennis, 42");
+    }
+
+    #[test]
+    fn test_render_vec_section() {
+        let template = compile_str("{{#list.0}}Here's a list: {{#list}}{{.}}{{/list}}{{/list.0}}");
+        let mut ctx = HashMap::new();
+        ctx.insert("list", vec!["val1", "val2"]);
+        let mut r = Vec::new();
+        template.render(&mut r, &ctx).unwrap();
+        assert_eq!(r, b"Here's a list: val1val2");
     }
 
     #[test]
