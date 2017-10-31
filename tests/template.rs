@@ -323,6 +323,36 @@ fn test_write_failure() {
 }
 
 #[test]
+fn test_render_to_string() {
+    let mut ctx = HashMap::new();
+    ctx.insert("name", "foobar");
+
+    let template = compile_str("{{name}}");
+    let result = template.render_to_string(&ctx).expect("Failed to render");
+
+    assert_eq!(&result, "foobar");
+}
+
+#[test]
+fn test_render_data_to_string() {
+    let ctx = HashMap::new();
+    let template = compile_str("0{{#a}}1 {{n}} 3{{/a}}5");
+
+    let result = template.render_data_to_string(&Data::Map(ctx)).expect("Failed to render");
+
+    assert_eq!(&result, "05");
+
+    let mut ctx0 = HashMap::new();
+    let mut ctx1 = HashMap::new();
+    ctx1.insert("n".to_string(), Data::String("a".to_string()));
+    ctx0.insert("a".to_string(), Data::Vec(vec![Data::Map(ctx1)]));
+
+    let result = template.render_data_to_string(&Data::Map(ctx0)).expect("Failed to render");
+
+    assert_eq!(&result, "01 a 35");
+}
+
+#[test]
 fn test_render_sections() {
     let ctx = HashMap::new();
     let template = compile_str("0{{#a}}1 {{n}} 3{{/a}}5");
