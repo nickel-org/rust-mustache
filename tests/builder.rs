@@ -13,8 +13,10 @@ fn test_empty_builders() {
 #[test]
 fn test_builders() {
     let mut pride_and_prejudice = HashMap::new();
-    pride_and_prejudice.insert("title".to_string(),
-                               Data::String("Pride and Prejudice".to_string()));
+    pride_and_prejudice.insert(
+        "title".to_string(),
+        Data::String("Pride and Prejudice".to_string()),
+    );
     pride_and_prejudice.insert("publish_date".to_string(), Data::String("1813".to_string()));
 
     let mut m = HashMap::new();
@@ -22,23 +24,34 @@ fn test_builders() {
     m.insert("last_name".to_string(), Data::String("Austen".to_string()));
     m.insert("age".to_string(), Data::String("41".to_string()));
     m.insert("died".to_string(), Data::Bool(true));
-    m.insert("works".to_string(),
-             Data::Vec(vec![Data::String("Sense and Sensibility".to_string()),
-                            Data::Map(pride_and_prejudice)]));
+    m.insert(
+        "works".to_string(),
+        Data::Vec(vec![
+            Data::String("Sense and Sensibility".to_string()),
+            Data::Map(pride_and_prejudice),
+        ]),
+    );
 
-    assert_eq!(MapBuilder::new()
-                   .insert_str("first_name", "Jane")
-                   .insert_str("last_name", "Austen")
-                   .insert("age", &41usize).expect("age")
-                   .insert_bool("died", true)
-                   .insert_vec("works", |builder| {
-            builder.push_str("Sense and Sensibility").push_map(|builder| {
-                builder.insert_str("title", "Pride and Prejudice")
-                    .insert("publish_date", &1813usize).expect("publish_date")
+    assert_eq!(
+        MapBuilder::new()
+            .insert_str("first_name", "Jane")
+            .insert_str("last_name", "Austen")
+            .insert("age", &41usize)
+            .expect("age")
+            .insert_bool("died", true)
+            .insert_vec("works", |builder| {
+                builder.push_str("Sense and Sensibility").push_map(
+                    |builder| {
+                        builder
+                            .insert_str("title", "Pride and Prejudice")
+                            .insert("publish_date", &1813usize)
+                            .expect("publish_date")
+                    },
+                )
             })
-        })
-                   .build(),
-               Data::Map(m));
+            .build(),
+        Data::Map(m)
+    );
 }
 
 #[test]

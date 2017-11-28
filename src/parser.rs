@@ -41,7 +41,9 @@ impl StdError for Error {
             Error::UnbalancedUnescapeTag => "found an unbalanced unescape tag",
             Error::EmptyTag => "found an empty tag",
             Error::EarlySectionClose(..) => "found a closing tag for an unopened section",
-            Error::MissingSetDelimeterClosingTag => "missing the new closing tag in set delimeter tag",
+            Error::MissingSetDelimeterClosingTag => {
+                "missing the new closing tag in set delimeter tag"
+            }
             Error::InvalidSetDelimeterSyntax => "invalid set delimeter tag syntax",
             Error::__Nonexhaustive => unreachable!(),
         }
@@ -53,17 +55,17 @@ impl fmt::Display for Error {
         // Provide more information where possible
         match *self {
             Error::BadClosingTag(actual, expected) => {
-                write!(f,
-                       "character {:?} was unexpected in the closing tag, expected {:?}",
-                       actual,
-                       expected)
+                write!(
+                    f,
+                    "character {:?} was unexpected in the closing tag, expected {:?}",
+                    actual,
+                    expected
+                )
             }
-            Error::UnclosedSection(ref name) => {
-                write!(f, "found an unclosed section: {:?}", name)
-            },
+            Error::UnclosedSection(ref name) => write!(f, "found an unclosed section: {:?}", name),
             Error::EarlySectionClose(ref name) => {
                 write!(f, "found a closing tag for an unopened section {:?}", name)
-            },
+            }
             _ => write!(f, "{}", self.description()),
         }
     }
@@ -258,7 +260,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         // Check that we don't have any incomplete sections.
         for token in self.tokens.iter().rev() {
             if let Token::IncompleteSection(ref path, _, _, _) = *token {
-                return Err(Error::UnclosedSection(path.join(".")))
+                return Err(Error::UnclosedSection(path.join(".")));
             }
         }
 
@@ -381,20 +383,30 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                     let name = try!(get_name_or_implicit(name));
                     self.tokens.push(Token::UnescapedTag(name, tag));
                 } else {
-                    return Err(Error::UnbalancedUnescapeTag)
+                    return Err(Error::UnbalancedUnescapeTag);
                 }
             }
             '#' => {
                 let newlined = self.eat_whitespace();
 
                 let name = try!(get_name_or_implicit(&content[1..len]));
-                self.tokens.push(Token::IncompleteSection(name, false, tag, newlined));
+                self.tokens.push(Token::IncompleteSection(
+                    name,
+                    false,
+                    tag,
+                    newlined,
+                ));
             }
             '^' => {
                 let newlined = self.eat_whitespace();
 
                 let name = try!(get_name_or_implicit(&content[1..len]));
-                self.tokens.push(Token::IncompleteSection(name, true, tag, newlined));
+                self.tokens.push(Token::IncompleteSection(
+                    name,
+                    true,
+                    tag,
+                    newlined,
+                ));
             }
             '/' => {
                 self.eat_whitespace();
@@ -404,7 +416,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
 
                 loop {
                     if self.tokens.is_empty() {
-                        return Err(Error::EarlySectionClose(name.join(".")))
+                        return Err(Error::EarlySectionClose(name.join(".")));
                     }
 
                     let last = self.tokens.pop();
@@ -421,7 +433,14 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                                     Token::EscapedTag(_, ref s) |
                                     Token::UnescapedTag(_, ref s) |
                                     Token::Partial(_, _, ref s) => srcs.push(s.clone()),
-                                    Token::Section(_, _, _, _, ref osection, ref src, ref csection, _) => {
+                                    Token::Section(_,
+                                                   _,
+                                                   _,
+                                                   _,
+                                                   ref osection,
+                                                   ref src,
+                                                   ref csection,
+                                                   _) => {
                                         srcs.push(osection.clone());
                                         srcs.push(src.clone());
                                         srcs.push(csection.clone());
@@ -440,17 +459,19 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                                     src.push_str(s);
                                 }
 
-                                self.tokens.push(Token::Section(name,
-                                                         inverted,
-                                                         children,
-                                                         self.opening_tag.clone(),
-                                                         osection,
-                                                         src,
-                                                         tag,
-                                                         self.closing_tag.clone()));
+                                self.tokens.push(Token::Section(
+                                    name,
+                                    inverted,
+                                    children,
+                                    self.opening_tag.clone(),
+                                    osection,
+                                    src,
+                                    tag,
+                                    self.closing_tag.clone(),
+                                ));
                                 break;
                             } else {
-                                return Err(Error::UnclosedSection(section_name.join(".")))
+                                return Err(Error::UnclosedSection(section_name.join(".")));
                             }
                         }
                         Some(last_token) => children.push(last_token),
@@ -486,7 +507,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                     self.closing_tag = s2[pos..].to_string();
                     self.closing_tag_chars = self.closing_tag.chars().collect();
                 } else {
-                    return Err(Error::InvalidSetDelimeterSyntax)
+                    return Err(Error::InvalidSetDelimeterSyntax);
                 }
             }
             _ => {
@@ -564,9 +585,7 @@ fn get_name_or_implicit(name: &str) -> Result<Vec<String>, Error> {
     Ok(if name == "." {
         Vec::new()
     } else {
-        name.split_terminator('.')
-            .map(|x| x.to_string())
-            .collect()
+        name.split_terminator('.').map(|x| x.to_string()).collect()
     })
 }
 
@@ -631,7 +650,10 @@ mod tests {
 
         #[test]
         fn unclosed() {
-            assert_eq!(parse("{{#world}}hi"), Err(Error::UnclosedSection("world".into())))
+            assert_eq!(
+                parse("{{#world}}hi"),
+                Err(Error::UnclosedSection("world".into()))
+            )
         }
 
         #[test]
@@ -660,7 +682,10 @@ mod tests {
 
         #[test]
         fn early_close() {
-            assert_eq!(parse("{{/world}}"), Err(Error::EarlySectionClose("world".into())))
+            assert_eq!(
+                parse("{{/world}}"),
+                Err(Error::EarlySectionClose("world".into()))
+            )
         }
     }
 
@@ -674,7 +699,10 @@ mod tests {
 
         #[test]
         fn unclosed() {
-            assert_eq!(parse("{{^world}}hi"), Err(Error::UnclosedSection("world".into())))
+            assert_eq!(
+                parse("{{^world}}hi"),
+                Err(Error::UnclosedSection("world".into()))
+            )
         }
 
         #[test]
@@ -717,7 +745,10 @@ mod tests {
 
         #[test]
         fn closing_tag_is_whitespace() {
-            assert_eq!(parse("{{=<% =}}"), Err(Error::MissingSetDelimeterClosingTag))
+            assert_eq!(
+                parse("{{=<% =}}"),
+                Err(Error::MissingSetDelimeterClosingTag)
+            )
         }
 
         #[test]

@@ -91,8 +91,9 @@ impl MapBuilder {
     /// ```
     #[inline]
     pub fn insert_vec<K, F>(self, key: K, mut f: F) -> MapBuilder
-    where K: Into<String>,
-          F: FnMut(VecBuilder) -> VecBuilder
+    where
+        K: Into<String>,
+        F: FnMut(VecBuilder) -> VecBuilder,
     {
         let MapBuilder { mut data } = self;
         let builder = f(VecBuilder::new());
@@ -143,7 +144,8 @@ impl MapBuilder {
     /// ```
     #[inline]
     pub fn insert_fn<K: ToString, F>(self, key: K, f: F) -> MapBuilder
-    where F: FnMut(String) -> String + Send + 'static
+    where
+        F: FnMut(String) -> String + Send + 'static,
     {
         let MapBuilder { mut data } = self;
         data.insert(key.to_string(), Data::Fun(RefCell::new(Box::new(f))));
@@ -232,7 +234,8 @@ impl VecBuilder {
     /// ```
     #[inline]
     pub fn push_vec<F>(self, mut f: F) -> VecBuilder
-    where F: FnMut(VecBuilder) -> VecBuilder
+    where
+        F: FnMut(VecBuilder) -> VecBuilder,
     {
         let VecBuilder { mut data } = self;
         let builder = f(VecBuilder::new());
@@ -259,7 +262,8 @@ impl VecBuilder {
     /// ```
     #[inline]
     pub fn push_map<F>(self, mut f: F) -> VecBuilder
-    where F: FnMut(MapBuilder) -> MapBuilder
+    where
+        F: FnMut(MapBuilder) -> MapBuilder,
     {
         let VecBuilder { mut data } = self;
         let builder = f(MapBuilder::new());
@@ -281,7 +285,8 @@ impl VecBuilder {
     /// ```
     #[inline]
     pub fn push_fn<F>(self, f: F) -> VecBuilder
-    where F: FnMut(String) -> String + Send + 'static
+    where
+        F: FnMut(String) -> String + Send + 'static,
     {
         let VecBuilder { mut data } = self;
         data.push(Data::Fun(RefCell::new(Box::new(f))));

@@ -137,8 +137,7 @@ impl serde::Serializer for Encoder {
         _name: &'static str,
         _variant_index: u32,
         variant: &'static str,
-    ) -> Result<Data>
-    {
+    ) -> Result<Data> {
         // FIXME: Perhaps this could be relaxed to just 'do nothing'
         Ok(Data::String(variant.to_string()))
     }
@@ -151,18 +150,14 @@ impl serde::Serializer for Encoder {
         Ok(Data::Null)
     }
 
-    fn serialize_some<T: ? Sized>(self, value: &T) -> Result<Data>
+    fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Data>
     where
-        T: Serialize
+        T: Serialize,
     {
         value.serialize(self)
     }
 
-    fn serialize_struct(
-        self,
-        _name: &'static str,
-        len: usize,
-    ) -> Result<Self::SerializeStruct> {
+    fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
         self.serialize_map(Some(len))
     }
 
@@ -179,11 +174,7 @@ impl serde::Serializer for Encoder {
         })
     }
 
-    fn serialize_newtype_struct<T: ?Sized>(
-        self,
-        _name: &'static str,
-        value: &T,
-    ) -> Result<Data>
+    fn serialize_newtype_struct<T: ?Sized>(self, _name: &'static str, value: &T) -> Result<Data>
     where
         T: Serialize,
     {
@@ -206,17 +197,13 @@ impl serde::Serializer for Encoder {
     }
 
     fn serialize_bytes(self, value: &[u8]) -> Result<Data> {
-        let vec = value.iter()
-            .map(|&b| Data::String(b.to_string()))
-            .collect();
+        let vec = value.iter().map(|&b| Data::String(b.to_string())).collect();
 
         Ok(Data::Vec(vec))
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
-        Ok(SerializeVec {
-            vec: Vec::with_capacity(len.unwrap_or(0)),
-        })
+        Ok(SerializeVec { vec: Vec::with_capacity(len.unwrap_or(0)) })
     }
 
     fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
@@ -280,7 +267,8 @@ impl ser::SerializeSeq for SerializeVec {
     type Error = Error;
 
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<()>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         self.vec.push(to_data(&value)?);
         Ok(())
@@ -296,7 +284,8 @@ impl ser::SerializeTuple for SerializeVec {
     type Error = Error;
 
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<()>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         ser::SerializeSeq::serialize_element(self, value)
     }
@@ -311,7 +300,8 @@ impl ser::SerializeTupleStruct for SerializeVec {
     type Error = Error;
 
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         ser::SerializeSeq::serialize_element(self, value)
     }
@@ -326,7 +316,8 @@ impl ser::SerializeTupleVariant for SerializeTupleVariant {
     type Error = Error;
 
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         self.vec.push(try!(to_data(&value)));
         Ok(())
@@ -347,7 +338,7 @@ impl ser::SerializeMap for SerializeMap {
 
     fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<()>
     where
-        T: Serialize
+        T: Serialize,
     {
         match to_data(key)? {
             Data::String(s) => {
@@ -360,7 +351,7 @@ impl ser::SerializeMap for SerializeMap {
 
     fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<()>
     where
-        T: Serialize
+        T: Serialize,
     {
         let key = self.next_key.take();
         // Panic because this indicates a bug in the program rather than an
@@ -381,7 +372,7 @@ impl ser::SerializeStruct for SerializeMap {
 
     fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<()>
     where
-        T: Serialize
+        T: Serialize,
     {
         ser::SerializeMap::serialize_key(self, key)?;
         ser::SerializeMap::serialize_value(self, value)

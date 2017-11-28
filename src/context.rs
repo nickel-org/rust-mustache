@@ -20,10 +20,12 @@ pub struct Context {
 
 impl fmt::Debug for Context {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "Context {{ template_path: {:?}, template_extension: {} }}",
-               &*self.template_path,
-               self.template_extension)
+        write!(
+            f,
+            "Context {{ template_path: {:?}, template_extension: {} }}",
+            &*self.template_path,
+            self.template_extension
+        )
     }
 }
 
@@ -65,5 +67,3 @@ impl Context {
         self.compile(template.chars())
     }
 }
-
-

@@ -38,4 +38,3 @@ impl fmt::Debug for Data {
         }
     }
 }
-

@@ -37,17 +37,23 @@ fn compile_str(s: &str) -> Template {
 }
 
 fn assert_render<T>(template: &str, data: &T) -> String
-where T: Serialize + Debug
+where
+    T: Serialize + Debug,
 {
     if let Ok(s) = render(template, data) {
         s
     } else {
-        panic!("Failed to render: template: {:?}\ndata: {:?}", template, data);
+        panic!(
+            "Failed to render: template: {:?}\ndata: {:?}",
+            template,
+            data
+        );
     }
 }
 
 fn render<T>(template: &str, data: &T) -> Result<String, Error>
-where T: Serialize
+where
+    T: Serialize,
 {
     let template = compile_str(template);
 
@@ -203,12 +209,13 @@ mod context_search {
     use mustache::MapBuilder;
 
     fn assert_render(template: &str, expected: &str) {
-        let ctx = MapBuilder::new().insert_map("payload", |map| {
-            map.insert_vec("list", |vec| {
-                vec.push_str("<p>hello</p>")
-                   .push_str("<p>world</p>")
-            }).insert_str("test", "hello world")
-        }).build();
+        let ctx = MapBuilder::new()
+            .insert_map("payload", |map| {
+                map.insert_vec("list", |vec| {
+                    vec.push_str("<p>hello</p>").push_str("<p>world</p>")
+                }).insert_str("test", "hello world")
+            })
+            .build();
 
         let template = compile_str(template);
         let rendered = render_data(&template, &ctx);
@@ -276,7 +283,10 @@ fn test_render_option_complex() {
         name: "Jupiter".to_string(),
         info: None,
     };
-    assert_eq!(assert_render(template, &ctx), "Jupiter - No additional info");
+    assert_eq!(
+        assert_render(template, &ctx),
+        "Jupiter - No additional info"
+    );
 
     let address = PlanetInfo {
         moons: vec!["Luna".to_string()],
@@ -287,14 +297,19 @@ fn test_render_option_complex() {
         name: "Earth".to_string(),
         info: Some(address),
     };
-    assert_eq!(assert_render(template, &ctx), "Earth - Birthplace of rust-lang; \
+    assert_eq!(
+        assert_render(template, &ctx),
+        "Earth - Birthplace of rust-lang; \
                                                It's moons are [Luna] and has a \
-                                               population of 7300000000");
+                                               population of 7300000000"
+    );
 }
 
 fn render_data(template: &Template, data: &Data) -> String {
     let mut bytes = vec![];
-    template.render_data(&mut bytes, data).expect("Failed to render data");
+    template.render_data(&mut bytes, data).expect(
+        "Failed to render data",
+    );
     String::from_utf8(bytes).expect("Failed ot encode as String")
 }
 
@@ -309,7 +324,9 @@ fn test_write_failure() {
     let mut buffer = [0u8; 6];
     {
         let mut writer: &mut [u8] = &mut buffer;
-        template.render(&mut writer, &ctx).expect("Failed to render");
+        template.render(&mut writer, &ctx).expect(
+            "Failed to render",
+        );
     }
 
     assert_eq!(&buffer, b"foobar");
@@ -342,17 +359,25 @@ fn test_render_sections() {
     let ctx1 = HashMap::new();
     ctx0.insert("a".to_string(), Data::Vec(vec![Data::Map(ctx1)]));
 
-    assert_eq!(render_data(&template, &Data::Map(ctx0)), "01  35".to_string());
+    assert_eq!(
+        render_data(&template, &Data::Map(ctx0)),
+        "01  35".to_string()
+    );
 
     let mut ctx0 = HashMap::new();
     let mut ctx1 = HashMap::new();
     ctx1.insert("n".to_string(), Data::String("a".to_string()));
     ctx0.insert("a".to_string(), Data::Vec(vec![Data::Map(ctx1)]));
-    assert_eq!(render_data(&template, &Data::Map(ctx0)), "01 a 35".to_string());
+    assert_eq!(
+        render_data(&template, &Data::Map(ctx0)),
+        "01 a 35".to_string()
+    );
 
     let mut ctx = HashMap::new();
-    ctx.insert("a".to_string(),
-               Data::Fun(RefCell::new(Box::new(|_text| "foo".to_string()))));
+    ctx.insert(
+        "a".to_string(),
+        Data::Fun(RefCell::new(Box::new(|_text| "foo".to_string()))),
+    );
     assert_eq!(render_data(&template, &Data::Map(ctx)), "0foo5".to_string());
 }
 
@@ -381,41 +406,54 @@ fn test_render_inverted_sections() {
 
 fn assert_partials_data(template: Template) {
     let ctx = HashMap::new();
-    assert_eq!(render_data(&template, &Data::Map(ctx)),
-               "<h2>Names</h2>\n".to_string());
+    assert_eq!(
+        render_data(&template, &Data::Map(ctx)),
+        "<h2>Names</h2>\n".to_string()
+    );
 
     let mut ctx = HashMap::new();
     ctx.insert("names".to_string(), Data::Vec(vec![]));
-    assert_eq!(render_data(&template, &Data::Map(ctx)),
-               "<h2>Names</h2>\n".to_string());
+    assert_eq!(
+        render_data(&template, &Data::Map(ctx)),
+        "<h2>Names</h2>\n".to_string()
+    );
 
     let mut ctx0 = HashMap::new();
     let ctx1 = HashMap::new();
     ctx0.insert("names".to_string(), Data::Vec(vec![Data::Map(ctx1)]));
-    assert_eq!(render_data(&template, &Data::Map(ctx0)),
-               "<h2>Names</h2>\n  <strong></strong>\n\n".to_string());
+    assert_eq!(
+        render_data(&template, &Data::Map(ctx0)),
+        "<h2>Names</h2>\n  <strong></strong>\n\n".to_string()
+    );
 
     let mut ctx0 = HashMap::new();
     let mut ctx1 = HashMap::new();
     ctx1.insert("name".to_string(), Data::String("a".to_string()));
     ctx0.insert("names".to_string(), Data::Vec(vec![Data::Map(ctx1)]));
-    assert_eq!(render_data(&template, &Data::Map(ctx0)),
-               "<h2>Names</h2>\n  <strong>a</strong>\n\n".to_string());
+    assert_eq!(
+        render_data(&template, &Data::Map(ctx0)),
+        "<h2>Names</h2>\n  <strong>a</strong>\n\n".to_string()
+    );
 
     let mut ctx0 = HashMap::new();
     let mut ctx1 = HashMap::new();
     ctx1.insert("name".to_string(), Data::String("a".to_string()));
     let mut ctx2 = HashMap::new();
     ctx2.insert("name".to_string(), Data::String("<b>".to_string()));
-    ctx0.insert("names".to_string(), Data::Vec(vec![Data::Map(ctx1), Data::Map(ctx2)]));
-    assert_eq!(render_data(&template, &Data::Map(ctx0)),
-               "<h2>Names</h2>\n  <strong>a</strong>\n\n  <strong>&lt;b&gt;</strong>\n\n"
-                   .to_string());
+    ctx0.insert(
+        "names".to_string(),
+        Data::Vec(vec![Data::Map(ctx1), Data::Map(ctx2)]),
+    );
+    assert_eq!(
+        render_data(&template, &Data::Map(ctx0)),
+        "<h2>Names</h2>\n  <strong>a</strong>\n\n  <strong>&lt;b&gt;</strong>\n\n".to_string()
+    );
 }
 
 #[test]
 fn test_render_partial_dot_filename() {
-    let template = mustache::compile_path("tests/test-data/base.foo.mustache").expect("Failed to compile");
+    let template = mustache::compile_path("tests/test-data/base.foo.mustache")
+        .expect("Failed to compile");
     assert_partials_data(template);
 }
 
@@ -427,10 +465,9 @@ fn test_render_partial() {
 
 fn parse_spec_tests(src: &str) -> Vec<Json> {
     let path = PathBuf::from(src);
-    let file = File::open(&path)
-        .expect(&format!("Could not read file {}", path.display()));
-    let json = serde_json::from_reader(file)
-        .expect(&format!("Invalid json in file {}", path.display()));
+    let file = File::open(&path).expect(&format!("Could not read file {}", path.display()));
+    let json =
+        serde_json::from_reader(file).expect(&format!("Invalid json in file {}", path.display()));
 
     assert_let!(Json::Object(mut d) = json => {
         assert_let!(Some(Json::Array(tests)) = d.remove("tests") => {
@@ -470,8 +507,9 @@ fn run_test(test: serde_json::Map<String, Json>, data: Data) {
     }
 
     let ctx = Context::new(tmpdir.path().to_path_buf());
-    let template = ctx.compile(template.chars())
-                      .expect(&format!("Failed to compile: {}", template));
+    let template = ctx.compile(template.chars()).expect(
+        &format!("Failed to compile: {}", template),
+    );
     let result = render_data(&template, &data);
 
     if result != expected {
@@ -569,12 +607,10 @@ fn test_spec_lambdas() {
                 ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }
             "Section" => {
-                let f = |text: String| {
-                    if text == "{{x}}" {
-                        "yes".to_string()
-                    } else {
-                        "no".to_string()
-                    }
+                let f = |text: String| if text == "{{x}}" {
+                    "yes".to_string()
+                } else {
+                    "no".to_string()
                 };
                 ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }

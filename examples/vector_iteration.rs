@@ -9,11 +9,11 @@ use std::collections::HashMap;
 
 #[derive(Serialize)]
 struct User {
-    name: String
+    name: String,
 }
 
 fn main() {
-    let template ="{{#users}}\
+    let template = "{{#users}}\
                    Hello {{name}}!
                    {{/users}}";
 
@@ -21,14 +21,19 @@ fn main() {
 
     let users = vec![
         User { name: "Harry".into() },
-        User { name: "Samantha".into() }
+        User { name: "Samantha".into() },
     ];
 
     let mut data = HashMap::new();
     data.insert("users", users);
 
     let mut bytes = vec![];
-    template.render(&mut bytes, &data).expect("Failed to render");
+    template.render(&mut bytes, &data).expect(
+        "Failed to render",
+    );
 
-    assert_eq!(str::from_utf8(&bytes), Ok("Hello Harry!\nHello Samantha!\n"))
+    assert_eq!(
+        str::from_utf8(&bytes),
+        Ok("Hello Harry!\nHello Samantha!\n")
+    )
 }

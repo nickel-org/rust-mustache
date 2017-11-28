@@ -49,7 +49,9 @@ pub fn compile_path<U: AsRef<Path>>(path: U) -> Result<Template> {
             let template_dir = path.parent().unwrap_or(Path::new("."));
             // FIXME: Should work with OsStrings, this will not use provided extension if
             // the extension is not utf8 :(
-            let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("mustache");
+            let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or(
+                "mustache",
+            );
 
             let context = Context {
                 template_path: template_dir.to_path_buf(),
