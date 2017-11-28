@@ -1,3 +1,7 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fmt;
+
 pub enum Data {
     Null,
     String(String),
@@ -34,13 +38,4 @@ impl fmt::Debug for Data {
         }
     }
 }
-
-pub fn to_data<T>(value: T) -> result::Result<Data, encoder::Error>
-where
-    T: serde::Serialize,
-{
-    value.serialize(Encoder)
-}
-
-
 

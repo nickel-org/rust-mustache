@@ -1,3 +1,12 @@
+use std::fmt;
+use std::path::{Path, PathBuf};
+use std::str;
+use std::fs::File;
+use std::io::Read;
+use super::{Error, Result};
+use compiler;
+use template::{self, Template};
+
 /// Represents the shared metadata needed to compile and render a mustache
 /// template.
 #[derive(Clone)]
@@ -35,14 +44,14 @@ impl Context {
     /// Compiles a template from a path.
     pub fn compile_path<U: AsRef<Path>>(&self, path: U) -> Result<Template> {
         // FIXME(#6164): This should use the file decoding tools when they are
-        // written. For now we'll just read the file and treat it as UTF-8file.
+        // written. For now we'll just read the file and treat it as an UTF-8 file.
         let mut path = self.template_path.join(path.as_ref());
         path.set_extension(&self.template_extension);
         let mut s = vec![];
         let mut file = try!(File::open(&path));
         try!(file.read_to_end(&mut s));
 
-        // TODO: maybe allow UTF-16 as well?
+        // TODO: Maybe allow UTF-16 as well?
         let template = match str::from_utf8(&*s) {
             Ok(string) => string,
             _ => {
