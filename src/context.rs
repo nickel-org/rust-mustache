@@ -1,11 +1,14 @@
 use std::fmt;
-use std::path::{Path, PathBuf};
-use std::str;
 use std::fs::File;
 use std::io::Read;
-use super::{Error, Result};
+use std::path::{Path, PathBuf};
+use std::str;
+
 use compiler;
 use template::{self, Template};
+
+use Error;
+use Result;
 
 /// Represents the shared metadata needed to compile and render a mustache
 /// template.
