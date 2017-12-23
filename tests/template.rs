@@ -624,7 +624,7 @@ fn test_spec_lambdas() {
                 let f = |_text| "".to_string();
                 ctx.insert("lambda".to_string(), Data::Fun(RefCell::new(Box::new(f))));
             }
-            spec_name => unimplemented!("unimplemented lambda spec test: {}", spec_name),
+            spec_name => panic!("unimplemented lambda spec test: {}", spec_name),
         };
 
         run_test(test, Data::Map(ctx));
