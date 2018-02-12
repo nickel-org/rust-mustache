@@ -94,6 +94,26 @@ cargo test
 cargo +nightly test --features unstable
 ```
 
+## Releasing
+
+If cutting a new release, please follow something along the lines of the below:
+
+```bash
+# Assuming master is the current release commit, ideally it will be a commit
+# announcing the release and the only change would be the version number.
+
+# Ensure everything looks good
+cargo publish --dry-run
+
+# Actually publish
+cargo publish
+
+# Tag the release, prefix it with 'v' for easy tag searching, i.e. git tag --list 'v*'
+git tag vX.Y.Z
+
+git push --tags origin master
+```
+
 [1]: http://code.google.com/p/google-ctemplate/
 [2]: http://www.ivan.fomichev.name/2008/05/erlang-template-engine-prototype.html
 [3]: https://mustache.github.io/
