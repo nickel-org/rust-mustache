@@ -27,13 +27,14 @@ mustache = "*"
 # Basic example
 
 ```rust
+#[macro_use]
+extern crate serde_derive;
 extern crate mustache;
-extern crate serde;
 
 use std::io;
 use mustache::MapBuilder;
 
-#[derive(Serde)]
+#[derive(Serialize)]
 struct Planet {
     name: String,
 }
@@ -83,15 +84,14 @@ fn main() {
 Simply clone and run:
 
 ```bash
-cargo test
-```
-
-If you want to run the test cases, you'll need the spec as well.
-
-```bash
+# If you want to run the test cases, you'll need the spec as well.
 git submodule init
 git submodule update
+
 cargo test
+
+# If you want to test the readme example, we're currently using the unstable feature to do so.
+cargo +nightly test --features unstable
 ```
 
 [1]: http://code.google.com/p/google-ctemplate/

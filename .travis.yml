@@ -20,8 +20,7 @@ script:
     travis-cargo build &&
     travis-cargo test &&
     travis-cargo doc &&
-    echo "Testing README" &&
-    rustdoc --test README.md -L dependency=./target/debug/deps --extern mustache=./target/debug/libmustache.rlib --extern rustc_serialize=./target/debug/deps/librustc_serialize
+    travis-cargo doc
 
 after_success:
 - |
