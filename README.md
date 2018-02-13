@@ -118,7 +118,7 @@ git push --tags origin master
 [2]: http://www.ivan.fomichev.name/2008/05/erlang-template-engine-prototype.html
 [3]: https://mustache.github.io/
 [4]: http://mustache.github.com/mustache.5.html
-[5]: http://nickel.rs/rust-mustache/mustache/index.html
+[5]: https://docs.rs/mustache
 
 # License
 
