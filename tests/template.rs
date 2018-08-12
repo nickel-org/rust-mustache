@@ -217,6 +217,51 @@ mod context_search {
     }
 
     #[test]
+    fn renders_bool() {
+        let template = compile_str(
+"{{bool}}
+#map{{#outer}}
+    {{#bool}}
+        #bool
+        #vec{{#inner}}{{{.}}}{{/inner}}/vec
+    {{/bool}}\n\
+    {{^not_ok}}
+        ^not_ok
+        #vec{{#inner}}{{{.}}}{{/inner}}/vec
+    {{/not_ok}}\n\
+{{/outer}}
+/map
+{{ok}}");
+        let ctx = MapBuilder::new()
+            .insert_bool("bool", false)
+            .insert_bool("not_ok", false)
+            .insert_map("outer", |map| {
+                map.insert_bool("bool", true)
+                    .insert_vec("inner", |vec| {
+                        vec.push_bool(false)
+                            .push_bool(true)
+                            .push_bool(false)
+                    })
+            })
+            .insert_bool("ok", true)
+            .build();
+
+        let expected = "false
+#map
+        #bool
+        #vecfalsetruefalse/vec
+
+        ^not_ok
+        #vecfalsetruefalse/vec
+
+/map
+true";
+        let rendered = render_data(&template, &ctx);
+        println!("{}\n----\n{}", rendered, expected);
+        assert_eq!(rendered, expected);
+    }
+
+    #[test]
     fn from_base() {
         let template = "\
 {{#payload.list}}
