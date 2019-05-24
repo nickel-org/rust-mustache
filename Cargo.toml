@@ -17,7 +17,7 @@ serde = "1.0.0"
 [dev-dependencies]
 serde_derive = "1.0.0"
 serde_json = "1.0.0"
-tempdir = "0.3.4"
+tempfile = "3"
 
 [[test]]
 name = "test"
