@@ -152,7 +152,7 @@ impl MapBuilder {
     #[inline]
     pub fn insert_fn2<K: ToString, F>(self, key: K, f: F) -> MapBuilder
     where
-        F: FnMut(String, &(FnMut(String) -> String)) -> String + Send + 'static,
+        F: FnMut(String, &mut (FnMut(String) -> String)) -> String + Send + 'static,
     {
         let MapBuilder { mut data } = self;
         data.insert(key.to_string(), Data::Fun2(RefCell::new(Box::new(f))));

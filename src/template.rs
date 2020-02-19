@@ -296,7 +296,7 @@ impl<'a> RenderContext<'a> {
                         let ctx2 = self.template.ctx.clone();
                         let partials2 = self.template.partials.clone();
 
-                        let f0 = {
+                        let mut f0 = {
                             |src: String| {
                                 let compiler = Compiler::new_with(
                                     ctx2.clone(),
@@ -315,7 +315,7 @@ impl<'a> RenderContext<'a> {
                                 String::from_utf8_lossy(&vw).to_string()
                             }
                         };
-                        let src = f(src.to_string(), &f0);
+                        let src = f(src.to_string(), &mut f0);
 
                         let compiler = Compiler::new_with(
                             self.template.ctx.clone(),
