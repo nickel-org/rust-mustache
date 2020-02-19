@@ -291,6 +291,43 @@ impl<'a> RenderContext<'a> {
                         let tokens = try!(self.render_fun(src, otag, ctag, f));
                         try!(self.render(wr, stack, &tokens));
                     }
+                    Data::Fun2(ref fcell) => {
+                        let f = &mut *fcell.borrow_mut();
+                        let ctx2 = self.template.ctx.clone();
+                        let partials2 = self.template.partials.clone();
+
+                        let f0 = {
+                            |src: String| {
+                                let compiler = Compiler::new_with(
+                                    ctx2.clone(),
+                                    src.chars(),
+                                    partials2.clone(),
+                                    otag.to_string(),
+                                    ctag.to_string(),
+                                );
+                                let mut vw: Vec<u8> = vec![];
+                                match compiler.compile() {
+                                    Ok((tokens, _)) => {
+                                        self.render(&mut vw, stack, &tokens).unwrap_or(())
+                                    }
+                                    _ => (),
+                                }
+                                String::from_utf8_lossy(&vw).to_string()
+                            }
+                        };
+                        let src = f(src.to_string(), &f0);
+
+                        let compiler = Compiler::new_with(
+                            self.template.ctx.clone(),
+                            src.chars(),
+                            self.template.partials.clone(),
+                            otag.to_string(),
+                            ctag.to_string(),
+                        );
+
+                        let (tokens, _) = try!(compiler.compile());
+                        try!(self.render(wr, stack, &tokens));
+                    }
                 }
             }
         };
