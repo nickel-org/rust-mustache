@@ -65,6 +65,7 @@ struct RenderContext<'a> {
     template: &'a Template,
     indent: String,
     line_start: bool,
+    inner_fn2_rendered: bool,
 }
 
 impl<'a> RenderContext<'a> {
@@ -73,6 +74,7 @@ impl<'a> RenderContext<'a> {
             template: template,
             indent: "".to_string(),
             line_start: true,
+            inner_fn2_rendered: true,
         }
     }
 
@@ -295,6 +297,7 @@ impl<'a> RenderContext<'a> {
                         let f = &mut *fcell.borrow_mut();
                         let ctx2 = self.template.ctx.clone();
                         let partials2 = self.template.partials.clone();
+                        self.inner_fn2_rendered = false;
 
                         let mut f0 = {
                             |src: String| {
@@ -308,6 +311,7 @@ impl<'a> RenderContext<'a> {
                                 let mut vw: Vec<u8> = vec![];
                                 match compiler.compile() {
                                     Ok((tokens, _)) => {
+                                        self.inner_fn2_rendered = true;
                                         self.render(&mut vw, stack, &tokens).unwrap_or(())
                                     }
                                     _ => (),
@@ -316,17 +320,21 @@ impl<'a> RenderContext<'a> {
                             }
                         };
                         let src = f(src.to_string(), &mut f0);
+                        if self.inner_fn2_rendered {
+                            self.inner_fn2_rendered = false;
+                            try!(self.render_text(wr, &src));
+                        } else {
+                            let compiler = Compiler::new_with(
+                                self.template.ctx.clone(),
+                                src.chars(),
+                                self.template.partials.clone(),
+                                otag.to_string(),
+                                ctag.to_string(),
+                            );
 
-                        let compiler = Compiler::new_with(
-                            self.template.ctx.clone(),
-                            src.chars(),
-                            self.template.partials.clone(),
-                            otag.to_string(),
-                            ctag.to_string(),
-                        );
-
-                        let (tokens, _) = try!(compiler.compile());
-                        try!(self.render(wr, stack, &tokens));
+                            let (tokens, _) = try!(compiler.compile());
+                            try!(self.render(wr, stack, &tokens));
+                        }
                     }
                 }
             }
