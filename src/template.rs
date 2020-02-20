@@ -311,7 +311,8 @@ impl<'a> RenderContext<'a> {
                                 let mut vw: Vec<u8> = vec![];
                                 match compiler.compile() {
                                     Ok((tokens, _)) => {
-                                        self.inner_fn2_rendered = true;
+                                        /* a trick to reset the flag is to pass an empty string */
+                                        self.inner_fn2_rendered = (src.len() > 0);
                                         self.render(&mut vw, stack, &tokens).unwrap_or(())
                                     }
                                     _ => (),
