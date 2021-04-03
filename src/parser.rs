@@ -2,6 +2,9 @@ use std::error::Error as StdError;
 use std::mem;
 use std::fmt;
 
+// for bug!
+use log::{log, error};
+
 /// `Token` is a section of a compiled mustache string.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
@@ -64,7 +67,7 @@ impl fmt::Display for Error {
             Error::EarlySectionClose(ref name) => {
                 write!(f, "found a closing tag for an unopened section {:?}", name)
             },
-            _ => write!(f, "{}", self.description()),
+            _ => write!(f, "{}", self.to_string()),
         }
     }
 }
@@ -213,7 +216,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                             self.state = ParserState::ClosingTag;
                             self.bump();
                         } else {
-                            try!(self.add_tag());
+                            self.add_tag()?;
                             self.state = ParserState::Text;
                         }
                     } else {
@@ -224,7 +227,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                 ParserState::ClosingTag => {
                     if ch == self.closing_tag_chars[self.tag_position] {
                         if self.tag_position == self.closing_tag_chars.len() - 1 {
-                            try!(self.add_tag());
+                            self.add_tag()?;
                             self.state = ParserState::Text;
                         } else {
                             self.state = ParserState::Tag;
@@ -362,7 +365,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         let mut content = String::new();
         mem::swap(&mut content, &mut self.content);
         let len = content.len();
-        try!(deny_blank(&content));
+        deny_blank(&content)?;
         let content = content;
 
         match content.as_bytes()[0] as char {
@@ -372,13 +375,13 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             }
             '&' => {
                 let name = &content[1..len];
-                let name = try!(get_name_or_implicit(name));
+                let name = get_name_or_implicit(name)?;
                 self.tokens.push(Token::UnescapedTag(name, tag));
             }
             '{' => {
                 if content.ends_with('}') {
                     let name = &content[1..len - 1];
-                    let name = try!(get_name_or_implicit(name));
+                    let name = get_name_or_implicit(name)?;
                     self.tokens.push(Token::UnescapedTag(name, tag));
                 } else {
                     return Err(Error::UnbalancedUnescapeTag)
@@ -387,19 +390,19 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             '#' => {
                 let newlined = self.eat_whitespace();
 
-                let name = try!(get_name_or_implicit(&content[1..len]));
+                let name = get_name_or_implicit(&content[1..len])?;
                 self.tokens.push(Token::IncompleteSection(name, false, tag, newlined));
             }
             '^' => {
                 let newlined = self.eat_whitespace();
 
-                let name = try!(get_name_or_implicit(&content[1..len]));
+                let name = get_name_or_implicit(&content[1..len])?;
                 self.tokens.push(Token::IncompleteSection(name, true, tag, newlined));
             }
             '/' => {
                 self.eat_whitespace();
 
-                let name = try!(get_name_or_implicit(&content[1..len]));
+                let name = get_name_or_implicit(&content[1..len])?;
                 let mut children: Vec<Token> = Vec::new();
 
                 loop {
@@ -458,14 +461,12 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                     }
                 }
             }
-            '>' => {
-                try!(self.add_partial(&content, tag));
-            }
+            '>' => self.add_partial(&content, tag)?,
             '=' => {
                 self.eat_whitespace();
 
                 if len > 2usize && content.ends_with('=') {
-                    let s = try!(deny_blank(&content[1..len - 1]));
+                    let s = deny_blank(&content[1..len - 1])?;
 
                     let pos = s.find(char::is_whitespace);
                     let pos = match pos {
@@ -492,7 +493,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
             _ => {
                 // If the name is "." then we want the top element, which we represent with
                 // an empty name.
-                let name = try!(get_name_or_implicit(&content));
+                let name = get_name_or_implicit(&content)?;
                 self.tokens.push(Token::EscapedTag(name, tag));
             }
         };
@@ -530,7 +531,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
         // partial. So instead, we'll cache the partials we used and look them
         // up later.
         let name = &content[1..content.len()];
-        let name = try!(deny_blank(name));
+        let name = deny_blank(name)?;
 
         self.tokens.push(Token::Partial(name.into(), indent, tag));
         self.partials.push(name.into());
@@ -560,7 +561,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
 fn get_name_or_implicit(name: &str) -> Result<Vec<String>, Error> {
     // If the name is "." then we want the top element, which we represent with
     // an empty name.
-    let name = try!(deny_blank(&name));
+    let name = deny_blank(&name)?;
     Ok(if name == "." {
         Vec::new()
     } else {

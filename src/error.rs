@@ -1,4 +1,3 @@
-use std::error::Error as StdError;
 use std::fmt;
 use std::io::Error as StdIoError;
 use std::result;
@@ -14,6 +13,7 @@ use encoder;
 pub enum Error {
     InvalidStr,
     NoFilename,
+    IncompleteSection,
     Io(StdIoError),
     Parser(parser::Error),
     Encoder(encoder::Error),
@@ -26,10 +26,11 @@ pub type Result<T> = result::Result<T, Error>;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.description().fmt(f)
+        self.to_string().fmt(f)
     }
 }
 
+/*
 impl StdError for Error {
     fn description(&self) -> &str {
         match *self {
@@ -42,6 +43,7 @@ impl StdError for Error {
         }
     }
 }
+*/
 
 impl From<StdIoError> for Error {
     fn from(err: StdIoError) -> Error {

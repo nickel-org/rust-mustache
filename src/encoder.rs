@@ -35,8 +35,7 @@ pub type Result<T> = result::Result<T, Error>;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use std::error::Error;
-        self.description().fmt(f)
+        self.to_string().fmt(f)
     }
 }
 
@@ -328,7 +327,7 @@ impl ser::SerializeTupleVariant for SerializeTupleVariant {
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
         where T: Serialize
     {
-        self.vec.push(try!(to_data(&value)));
+        self.vec.push(to_data(&value)?);
         Ok(())
     }
 
@@ -362,11 +361,10 @@ impl ser::SerializeMap for SerializeMap {
     where
         T: Serialize
     {
-        let key = self.next_key.take();
-        // Panic because this indicates a bug in the program rather than an
-        // expected failure.
-        let key = key.expect("serialize_value called before serialize_key");
-        self.map.insert(key, try!(to_data(&value)));
+        // Taking the key should only fail if this gets called before
+        // serialize_key, which is a bug in the library.
+        let key = self.next_key.take().ok_or(Error::MissingElements)?;
+        self.map.insert(key, to_data(&value)?);
         Ok(())
     }
 
