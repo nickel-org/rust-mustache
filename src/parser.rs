@@ -35,39 +35,21 @@ pub enum Error {
     __Nonexhaustive,
 }
 
-impl StdError for Error {
-    fn description(&self) -> &'static str {
-        match *self {
-            Error::BadClosingTag(..) => "found a malformed closing tag",
-            Error::UnclosedTag => "found an unclosed tag",
-            Error::UnclosedSection(..) => "found an unclosed section",
-            Error::UnbalancedUnescapeTag => "found an unbalanced unescape tag",
-            Error::EmptyTag => "found an empty tag",
-            Error::EarlySectionClose(..) => "found a closing tag for an unopened section",
-            Error::MissingSetDelimeterClosingTag => "missing the new closing tag in set delimeter tag",
-            Error::InvalidSetDelimeterSyntax => "invalid set delimeter tag syntax",
-            Error::__Nonexhaustive => unreachable!(),
-        }
-    }
-}
+impl StdError for Error { }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Provide more information where possible
         match *self {
-            Error::BadClosingTag(actual, expected) => {
-                write!(f,
-                       "character {:?} was unexpected in the closing tag, expected {:?}",
-                       actual,
-                       expected)
-            }
-            Error::UnclosedSection(ref name) => {
-                write!(f, "found an unclosed section: {:?}", name)
-            },
-            Error::EarlySectionClose(ref name) => {
-                write!(f, "found a closing tag for an unopened section {:?}", name)
-            },
-            _ => write!(f, "{}", self.to_string()),
+            Error::BadClosingTag(actual, expected) => write!(f, "character {:?} was unexpected in the closing tag, expected {:?}", actual, expected),
+            Error::UnclosedSection(ref name) => write!(f, "found an unclosed section: {:?}", name),
+            Error::EarlySectionClose(ref name) => write!(f, "found a closing tag for an unopened section {:?}", name),
+            Error::UnclosedTag => write!(f, "found an unclosed tag"),
+            Error::UnbalancedUnescapeTag => write!(f, "found an unbalanced unescape tag"),
+            Error::EmptyTag => write!(f, "found an empty tag",),
+            Error::MissingSetDelimeterClosingTag => write!(f, "missing the new closing tag in set delimeter tag"),
+            Error::InvalidSetDelimeterSyntax => write!(f, "invalid set delimeter tag syntax"),
+            Error::__Nonexhaustive => unreachable!(),
         }
     }
 }

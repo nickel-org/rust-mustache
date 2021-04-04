@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::error;
+use std::error::Error as StdError;
 use std::fmt::{self, Display};
-use std::result;
+use std::result::Result as StdResult;
 
 use serde::{self, Serialize, ser};
 
@@ -31,17 +31,11 @@ impl serde::ser::Error for Error {
 }
 
 /// Alias for a `Result` with the error type `mustache::encoder::Error`.
-pub type Result<T> = result::Result<T, Error>;
+pub type Result<T> = StdResult<T, Error>;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.to_string().fmt(f)
-    }
-}
-
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
+        write!(f, "{}", match *self {
             Error::NestedOptions => "nested Option types are not supported",
             Error::UnsupportedType => "unsupported type",
             Error::MissingElements => "no elements in value",
@@ -49,9 +43,11 @@ impl error::Error for Error {
             Error::NoDataToEncode => "the encodable type created no data",
             Error::Message(ref s) => s,
             Error::__Nonexhaustive => unreachable!(),
-        }
+        })
     }
 }
+
+impl StdError for Error { }
 
 #[derive(Default)]
 pub struct Encoder;

@@ -1,6 +1,6 @@
 use std::fmt;
 use std::io::Error as StdIoError;
-use std::result;
+use std::result::Result as StdResult;
 
 use parser;
 use encoder;
@@ -22,28 +22,21 @@ pub enum Error {
     __Nonexhaustive,
 }
 
-pub type Result<T> = result::Result<T, Error>;
+pub type Result<T> = StdResult<T, Error>;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.to_string().fmt(f)
-    }
-}
-
-/*
-impl StdError for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::InvalidStr => "invalid str",
-            Error::NoFilename => "a filename must be provided",
-            Error::Io(ref err) => err.description(),
-            Error::Parser(ref err) => err.description(),
-            Error::Encoder(ref err) => err.description(),
+        write!(f, "{}", match *self {
+            Error::InvalidStr => "invalid str".to_string(),
+            Error::NoFilename => "a filename must be provided".to_string(),
+            Error::IncompleteSection => "a section wasn't completed".to_string(), // Is there a better way to put this?
+            Error::Io(ref err) => err.to_string(),
+            Error::Parser(ref err) => err.to_string(),
+            Error::Encoder(ref err) => err.to_string(),
             Error::__Nonexhaustive => unreachable!(),
-        }
+        })
     }
 }
-*/
 
 impl From<StdIoError> for Error {
     fn from(err: StdIoError) -> Error {
