@@ -1,7 +1,6 @@
 use std::fmt;
 use std::io::Error as StdIoError;
 use std::result::Result as StdResult;
-use std::error::Error as StdError;
 
 use parser;
 use encoder;
@@ -53,5 +52,3 @@ impl From<encoder::Error> for Error {
         Error::Encoder(err)
     }
 }
-
-impl StdError for Error { }
