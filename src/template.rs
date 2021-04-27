@@ -220,6 +220,11 @@ impl<'a> RenderContext<'a> {
                         try!(self.render(wr, stack, &tokens));
                     }
 
+                    Data::Bool(val) => {
+                        let s = if val { "true" } else { "false" };
+                        try!(self.write_tracking_newlines(wr, s));
+                    }
+
                     ref value => {
                         bug!("render_utag: unexpected value {:?}", value);
                     }
