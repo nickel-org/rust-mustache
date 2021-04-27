@@ -9,6 +9,7 @@ pub enum Data {
     Vec(Vec<Data>),
     Map(HashMap<String, Data>),
     Fun(RefCell<Box<FnMut(String) -> String + Send>>),
+    Fun2(RefCell<Box<FnMut(String, &mut (FnMut(String) -> String)) -> String + Send>>),
 }
 
 impl PartialEq for Data {
@@ -35,6 +36,7 @@ impl fmt::Debug for Data {
             Data::Vec(ref v) => write!(f, "VecVal({:?})", v),
             Data::Map(ref v) => write!(f, "Map({:?})", v),
             Data::Fun(_) => write!(f, "Fun(...)"),
+            Data::Fun2(_) => write!(f, "Fun2(...)"),
         }
     }
 }
