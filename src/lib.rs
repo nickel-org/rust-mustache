@@ -43,7 +43,7 @@ pub fn compile_iter<T: Iterator<Item = char>>(iter: T) -> Result<Template> {
 }
 
 /// Compiles a template from a path.
-/// returns None if the file cannot be read OR the file is not UTF-8 encoded
+/// returns [Error] if the file cannot be read OR the file is not UTF-8 encoded
 pub fn compile_path<U: AsRef<Path>>(path: U) -> Result<Template> {
     let path = path.as_ref();
 
