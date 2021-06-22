@@ -1,14 +1,15 @@
-use std::io::Write;
 use std::collections::HashMap;
 use std::mem;
-use std::result;
+use std::io::Write;
 use std::str;
-use serde::Serialize;
 
 use compiler::Compiler;
+// for bug!
+use log::{log, error};
 use parser::Token;
+use serde::Serialize;
 
-use super::{Context, Data, Result, to_data, Error};
+use super::{Context, Data, Error, Result, to_data};
 
 /// `Template` represents a compiled mustache file.
 #[derive(Debug, Clone)]
@@ -47,17 +48,17 @@ impl Template {
     }
 
     /// Renders the template to a `String` with the `Encodable` data.
-    pub fn render_to_string<T: Serialize>(&self, data: &T) -> result::Result<String, Error> {
+    pub fn render_to_string<T: Serialize>(&self, data: &T) -> Result<String> {
         let mut output = Vec::new();
-        try!(self.render(&mut output, data));
-        Ok(String::from_utf8(output).expect("invalid utf-8 in template"))
+        self.render(&mut output, data)?;
+        String::from_utf8(output).map_err(|_| Error::InvalidStr)
     }
 
     /// Renders the template to a `String` with the `Data`.
-    pub fn render_data_to_string(&self, data: &Data) -> result::Result<String, Error> {
+    pub fn render_data_to_string(&self, data: &Data) -> Result<String> {
         let mut output = Vec::new();
-        try!(self.render_data(&mut output, data));
-        Ok(String::from_utf8(output).expect("invalid utf-8 in template"))
+        self.render_data(&mut output, data)?;
+        String::from_utf8(output).map_err(|_| Error::InvalidStr)
     }
 }
 
@@ -78,7 +79,7 @@ impl<'a> RenderContext<'a> {
 
     fn render<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, tokens: &[Token]) -> Result<()> {
         for token in tokens.iter() {
-            try!(self.render_token(wr, stack, token));
+            self.render_token(wr, stack, token)?;
         }
 
         Ok(())
@@ -105,13 +106,14 @@ impl<'a> RenderContext<'a> {
                 self.render_partial(wr, stack, name, indent)
             }
             Token::IncompleteSection(..) => {
-                bug!("render_token should not encounter IncompleteSections")
+                bug!("render_token should not encounter IncompleteSections");
+                Err(Error::IncompleteSection)
             }
         }
     }
 
     fn write_tracking_newlines<W: Write>(&mut self, wr: &mut W, value: &str) -> Result<()> {
-        try!(wr.write_all(value.as_bytes()));
+        wr.write_all(value.as_bytes())?;
         self.line_start = match value.chars().last() {
             None => self.line_start, // None == ""
             Some('\n') => true,
@@ -123,7 +125,7 @@ impl<'a> RenderContext<'a> {
 
     fn write_indent<W: Write>(&mut self, wr: &mut W) -> Result<()> {
         if self.line_start {
-            try!(wr.write_all(self.indent.as_bytes()));
+            wr.write_all(self.indent.as_bytes())?;
         }
 
         Ok(())
@@ -153,10 +155,10 @@ impl<'a> RenderContext<'a> {
                 };
 
                 if line.as_bytes()[0] != b'\n' {
-                    try!(self.write_indent(wr));
+                    self.write_indent(wr)?;
                 }
 
-                try!(self.write_tracking_newlines(wr, line));
+                self.write_tracking_newlines(wr, line)?;
             }
         }
 
@@ -166,28 +168,16 @@ impl<'a> RenderContext<'a> {
     fn render_etag<W: Write>(&mut self, wr: &mut W, stack: &mut Vec<&Data>, path: &[String]) -> Result<()> {
         let mut bytes = vec![];
 
-        try!(self.render_utag(&mut bytes, stack, path));
+        self.render_utag(&mut bytes, stack, path)?;
 
         for b in bytes {
             match b {
-                b'<' => {
-                    try!(wr.write_all(b"&lt;"));
-                }
-                b'>' => {
-                    try!(wr.write_all(b"&gt;"));
-                }
-                b'&' => {
-                    try!(wr.write_all(b"&amp;"));
-                }
-                b'"' => {
-                    try!(wr.write_all(b"&quot;"));
-                }
-                b'\'' => {
-                    try!(wr.write_all(b"&#39;"));
-                }
-                _ => {
-                    try!(wr.write_all(&[b]));
-                }
+                b'<' => wr.write_all(b"&lt;")?,
+                b'>' => wr.write_all(b"&gt;")?,
+                b'&' => wr.write_all(b"&amp;")?,
+                b'"' => wr.write_all(b"&quot;")?,
+                b'\'' => wr.write_all(b"&#39;")?,
+                _ => wr.write_all(&[b])?,
             }
         }
 
@@ -198,7 +188,7 @@ impl<'a> RenderContext<'a> {
         match self.find(path, stack) {
             None => {}
             Some(value) => {
-                try!(self.write_indent(wr));
+                self.write_indent(wr)?;
 
                 // Currently this doesn't allow Option<Option<Foo>>, which
                 // would be un-nameable in the view anyway, so I'm unsure if it's
@@ -210,14 +200,14 @@ impl<'a> RenderContext<'a> {
 
                 match *value {
                     Data::String(ref value) => {
-                        try!(self.write_tracking_newlines(wr, value));
+                        self.write_tracking_newlines(wr, value)?;
                     }
 
                     // etags and utags use the default delimiter.
                     Data::Fun(ref fcell) => {
                         let f = &mut *fcell.borrow_mut();
-                        let tokens = try!(self.render_fun("", "{{", "}}", f));
-                        try!(self.render(wr, stack, &tokens));
+                        let tokens = self.render_fun("", "{{", "}}", f)?;
+                        self.render(wr, stack, &tokens)?;
                     }
 
                     ref value => {
@@ -263,33 +253,31 @@ impl<'a> RenderContext<'a> {
                     Data::Null => {
                         // do nothing
                     }
-                    Data::Bool(true) => {
-                        try!(self.render(wr, stack, children));
-                    }
-                    Data::Bool(false) => {}
+                    Data::Bool(true) => self.render(wr, stack, children)?,
+                    Data::Bool(false) => (),
                     Data::String(ref val) => {
                         if !val.is_empty() {
                             stack.push(value);
-                            try!(self.render(wr, stack, children));
+                            self.render(wr, stack, children)?;
                             stack.pop();
                         }
                     }
                     Data::Vec(ref vs) => {
                         for v in vs.iter() {
                             stack.push(v);
-                            try!(self.render(wr, stack, children));
+                            self.render(wr, stack, children)?;
                             stack.pop();
                         }
                     }
                     Data::Map(_) => {
                         stack.push(value);
-                        try!(self.render(wr, stack, children));
+                        self.render(wr, stack, children)?;
                         stack.pop();
                     }
                     Data::Fun(ref fcell) => {
                         let f = &mut *fcell.borrow_mut();
-                        let tokens = try!(self.render_fun(src, otag, ctag, f));
-                        try!(self.render(wr, stack, &tokens));
+                        let tokens = self.render_fun(src, otag, ctag, f)?;
+                        self.render(wr, stack, &tokens)?;
                     }
                 }
             }
@@ -304,12 +292,12 @@ impl<'a> RenderContext<'a> {
                                 name: &str,
                                 indent: &str) -> Result<()> {
         match self.template.partials.get(name) {
-            None => {}
+            None => (),
             Some(ref tokens) => {
                 let mut indent = self.indent.clone() + indent;
 
                 mem::swap(&mut self.indent, &mut indent);
-                try!(self.render(wr, stack, &tokens));
+                self.render(wr, stack, &tokens)?;
                 mem::swap(&mut self.indent, &mut indent);
             }
         };
@@ -321,7 +309,7 @@ impl<'a> RenderContext<'a> {
                   src: &str,
                   otag: &str,
                   ctag: &str,
-                  f: &mut Box<FnMut(String) -> String + Send + 'static>)
+                  f: &mut Box<dyn FnMut(String) -> String + Send + 'static>)
                   -> Result<Vec<Token>> {
         let src = f(src.to_string());
 
@@ -331,7 +319,7 @@ impl<'a> RenderContext<'a> {
                                           otag.to_string(),
                                           ctag.to_string());
 
-        let (tokens, _) = try!(compiler.compile());
+        let (tokens, _) = compiler.compile()?;
         Ok(tokens)
     }
 

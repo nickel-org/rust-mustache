@@ -51,7 +51,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
     pub fn compile(mut self) -> Result<(Vec<Token>, PartialsMap)> {
         let (tokens, partials) = {
             let parser = Parser::new(&mut self.reader, &self.otag, &self.ctag);
-            try!(parser.parse())
+            parser.parse()?
         };
 
         // Compile the partials if we haven't done so already.
@@ -66,7 +66,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
                 match File::open(&path) {
                     Ok(mut file) => {
                         let mut string = String::new();
-                        try!(file.read_to_string(&mut string));
+                        file.read_to_string(&mut string)?;
 
                         let compiler = Compiler {
                             ctx: self.ctx.clone(),
@@ -76,7 +76,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
                             ctag: "}}".to_string(),
                         };
 
-                        let (tokens, subpartials) = try!(compiler.compile());
+                        let (tokens, subpartials) = compiler.compile()?;
 
                         // Include subpartials
                         self.partials.extend(subpartials.into_iter());

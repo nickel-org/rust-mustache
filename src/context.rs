@@ -37,7 +37,7 @@ impl Context {
     /// Compiles a template from a string
     pub fn compile<IT: Iterator<Item = char>>(&self, reader: IT) -> Result<Template> {
         let compiler = compiler::Compiler::new(self.clone(), reader);
-        let (tokens, partials) = try!(compiler.compile());
+        let (tokens, partials) = compiler.compile()?;
 
         Ok(template::new(self.clone(), tokens, partials))
     }
@@ -49,8 +49,8 @@ impl Context {
         let mut path = self.template_path.join(path.as_ref());
         path.set_extension(&self.template_extension);
         let mut s = vec![];
-        let mut file = try!(File::open(&path));
-        try!(file.read_to_end(&mut s));
+        let mut file = File::open(&path)?;
+        file.read_to_end(&mut s)?;
 
         // TODO: maybe allow UTF-16 as well?
         let template = match str::from_utf8(&*s) {

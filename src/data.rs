@@ -2,13 +2,16 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 use std::fmt;
 
+// for bug!
+use log::{log, error};
+
 pub enum Data {
     Null,
     String(String),
     Bool(bool),
     Vec(Vec<Data>),
     Map(HashMap<String, Data>),
-    Fun(RefCell<Box<FnMut(String) -> String + Send>>),
+    Fun(RefCell<Box<dyn FnMut(String) -> String + Send>>),
 }
 
 impl PartialEq for Data {
@@ -20,7 +23,10 @@ impl PartialEq for Data {
             (&Data::Bool(ref v0), &Data::Bool(ref v1)) => v0 == v1,
             (&Data::Vec(ref v0), &Data::Vec(ref v1)) => v0 == v1,
             (&Data::Map(ref v0), &Data::Map(ref v1)) => v0 == v1,
-            (&Data::Fun(_), &Data::Fun(_)) => bug!("Cannot compare closures"),
+            (&Data::Fun(_), &Data::Fun(_)) => {
+                bug!("Cannot compare closures");
+                false
+            },
             (_, _) => false,
         }
     }
