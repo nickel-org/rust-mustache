@@ -53,6 +53,9 @@ impl<T: Iterator<Item = char>> Compiler<T> {
             let path =
                 self.ctx.template_path.join(&(name.clone() + "." + &self.ctx.template_extension));
 
+            // This is too complicated to just be
+            // self.partials.entry(&name).or_insert(...)
+            #[allow(clippy::map_entry)]
             if !self.partials.contains_key(&name) {
                 // Insert a placeholder so we don't recurse off to infinity.
                 self.partials.insert(name.to_string(), Vec::new());

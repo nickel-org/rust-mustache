@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::fmt;
 
 // for bug!
-use log::{log, error};
+use log::error;
 
 pub enum Data {
     Null,

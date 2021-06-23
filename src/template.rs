@@ -5,7 +5,7 @@ use std::str;
 
 use compiler::Compiler;
 // for bug!
-use log::{log, error};
+use log::error;
 use parser::Token;
 use serde::Serialize;
 
@@ -208,7 +208,7 @@ impl<'a> RenderContext<'a> {
 
                     Data::Bool(val) => {
                         let s = if val { "true" } else { "false" };
-                        try!(self.write_tracking_newlines(wr, s));
+                        self.write_tracking_newlines(wr, s)?;
                     }
 
                     ref value => {
@@ -239,6 +239,7 @@ impl<'a> RenderContext<'a> {
         self.render(wr, stack, children)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_section<W: Write>(&mut self,
                                 wr: &mut W,
                                 stack: &mut Vec<&Data>,

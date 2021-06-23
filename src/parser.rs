@@ -3,7 +3,7 @@ use std::mem;
 use std::fmt;
 
 // for bug!
-use log::{log, error};
+use log::error;
 
 /// `Token` is a section of a compiled mustache string.
 #[derive(Clone, Debug, PartialEq)]
