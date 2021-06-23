@@ -3,7 +3,7 @@ name = "mustache"
 description = "Rust implementation of Mustache"
 repository = "https://github.com/nickel-org/rust-mustache"
 documentation = "http://nickel-org.github.io/rust-mustache"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["erick.tryzelaar@gmail.com"]
 license = "MIT/Apache-2.0"
 
@@ -11,13 +11,13 @@ license = "MIT/Apache-2.0"
 unstable = []
 
 [dependencies]
-log = "0.3.5"
+log = "0.4"
 serde = "1.0.0"
 
 [dev-dependencies]
 serde_derive = "1.0.0"
 serde_json = "1.0.0"
-tempdir = "0.3.4"
+tempfile = "3"
 
 [[test]]
 name = "test"

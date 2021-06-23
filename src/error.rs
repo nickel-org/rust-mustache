@@ -10,6 +10,7 @@ use encoder;
 /// This type is not intended to be matched exhaustively as new variants
 /// may be added in future without a version bump.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     InvalidStr,
     NoFilename,
@@ -17,9 +18,6 @@ pub enum Error {
     Io(StdIoError),
     Parser(parser::Error),
     Encoder(encoder::Error),
-
-    #[doc(hidden)]
-    __Nonexhaustive,
 }
 
 pub type Result<T> = StdResult<T, Error>;
@@ -33,7 +31,6 @@ impl fmt::Display for Error {
             Error::Io(ref err) => err.to_string(),
             Error::Parser(ref err) => err.to_string(),
             Error::Encoder(ref err) => err.to_string(),
-            Error::__Nonexhaustive => unreachable!(),
         })
     }
 }

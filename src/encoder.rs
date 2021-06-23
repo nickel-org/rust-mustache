@@ -12,6 +12,7 @@ use super::{Data, to_data};
 /// This type is not intended to be matched exhaustively as new variants
 /// may be added in future without a version bump.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     NestedOptions,
     UnsupportedType,
@@ -19,9 +20,6 @@ pub enum Error {
     KeyIsNotString,
     NoDataToEncode,
     Message(String),
-
-    #[doc(hidden)]
-    __Nonexhaustive,
 }
 
 impl serde::ser::Error for Error {
@@ -42,7 +40,6 @@ impl fmt::Display for Error {
             Error::KeyIsNotString => "key is not a string",
             Error::NoDataToEncode => "the encodable type created no data",
             Error::Message(ref s) => s,
-            Error::__Nonexhaustive => unreachable!(),
         })
     }
 }

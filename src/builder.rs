@@ -37,7 +37,7 @@ impl MapBuilder {
         let MapBuilder { mut data } = self;
         let value = to_data(value)?;
         data.insert(key.into(), value);
-        Ok(MapBuilder { data: data })
+        Ok(MapBuilder { data })
     }
 
     /// Add a `String` to the `MapBuilder`.
@@ -56,7 +56,7 @@ impl MapBuilder {
     {
         let MapBuilder { mut data } = self;
         data.insert(key.into(), Data::String(value.into()));
-        MapBuilder { data: data }
+        MapBuilder { data }
     }
 
     /// Add a `bool` to the `MapBuilder`.
@@ -74,7 +74,7 @@ impl MapBuilder {
     {
         let MapBuilder { mut data } = self;
         data.insert(key.into(), Data::Bool(value));
-        MapBuilder { data: data }
+        MapBuilder { data }
     }
 
     /// Add a `Vec` to the `MapBuilder`.
@@ -97,7 +97,7 @@ impl MapBuilder {
         let MapBuilder { mut data } = self;
         let builder = f(VecBuilder::new());
         data.insert(key.into(), builder.build());
-        MapBuilder { data: data }
+        MapBuilder { data }
     }
 
     /// Add a `Map` to the `MapBuilder`.
@@ -126,7 +126,7 @@ impl MapBuilder {
         let MapBuilder { mut data } = self;
         let builder = f(MapBuilder::new());
         data.insert(key.into(), builder.build());
-        MapBuilder { data: data }
+        MapBuilder { data }
     }
 
     /// Add a function to the `MapBuilder`.
@@ -147,7 +147,7 @@ impl MapBuilder {
     {
         let MapBuilder { mut data } = self;
         data.insert(key.to_string(), Data::Fun(RefCell::new(Box::new(f))));
-        MapBuilder { data: data }
+        MapBuilder { data }
     }
 
     /// Return the built `Data`.
@@ -183,7 +183,7 @@ impl VecBuilder {
         let VecBuilder { mut data } = self;
         let value = to_data(value)?;
         data.push(value);
-        Ok(VecBuilder { data: data })
+        Ok(VecBuilder { data })
     }
 
     /// Add a `String` to the `VecBuilder`.
@@ -199,7 +199,7 @@ impl VecBuilder {
     pub fn push_str<T: ToString>(self, value: T) -> VecBuilder {
         let VecBuilder { mut data } = self;
         data.push(Data::String(value.to_string()));
-        VecBuilder { data: data }
+        VecBuilder { data }
     }
 
     /// Add a `bool` to the `VecBuilder`.
@@ -215,7 +215,7 @@ impl VecBuilder {
     pub fn push_bool(self, value: bool) -> VecBuilder {
         let VecBuilder { mut data } = self;
         data.push(Data::Bool(value));
-        VecBuilder { data: data }
+        VecBuilder { data }
     }
 
     /// Add a `Vec` to the `MapBuilder`.
@@ -237,7 +237,7 @@ impl VecBuilder {
         let VecBuilder { mut data } = self;
         let builder = f(VecBuilder::new());
         data.push(builder.build());
-        VecBuilder { data: data }
+        VecBuilder { data }
     }
 
     /// Add a `Map` to the `VecBuilder`.
@@ -264,7 +264,7 @@ impl VecBuilder {
         let VecBuilder { mut data } = self;
         let builder = f(MapBuilder::new());
         data.push(builder.build());
-        VecBuilder { data: data }
+        VecBuilder { data }
     }
 
     /// Add a function to the `VecBuilder`.
@@ -285,7 +285,7 @@ impl VecBuilder {
     {
         let VecBuilder { mut data } = self;
         data.push(Data::Fun(RefCell::new(Box::new(f))));
-        VecBuilder { data: data }
+        VecBuilder { data }
     }
 
     #[inline]

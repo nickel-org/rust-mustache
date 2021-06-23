@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use tempdir::TempDir;
+use tempfile::Builder;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
@@ -211,6 +211,51 @@ mod context_search {
         }).build();
 
         let template = compile_str(template);
+        let rendered = render_data(&template, &ctx);
+        println!("{}\n----\n{}", rendered, expected);
+        assert_eq!(rendered, expected);
+    }
+
+    #[test]
+    fn renders_bool() {
+        let template = compile_str(
+"{{bool}}
+#map{{#outer}}
+    {{#bool}}
+        #bool
+        #vec{{#inner}}{{{.}}}{{/inner}}/vec
+    {{/bool}}\n\
+    {{^not_ok}}
+        ^not_ok
+        #vec{{#inner}}{{{.}}}{{/inner}}/vec
+    {{/not_ok}}\n\
+{{/outer}}
+/map
+{{ok}}");
+        let ctx = MapBuilder::new()
+            .insert_bool("bool", false)
+            .insert_bool("not_ok", false)
+            .insert_map("outer", |map| {
+                map.insert_bool("bool", true)
+                    .insert_vec("inner", |vec| {
+                        vec.push_bool(false)
+                            .push_bool(true)
+                            .push_bool(false)
+                    })
+            })
+            .insert_bool("ok", true)
+            .build();
+
+        let expected = "false
+#map
+        #bool
+        #vecfalsetruefalse/vec
+
+        ^not_ok
+        #vecfalsetruefalse/vec
+
+/map
+true";
         let rendered = render_data(&template, &ctx);
         println!("{}\n----\n{}", rendered, expected);
         assert_eq!(rendered, expected);
@@ -492,7 +537,7 @@ fn run_test(test: serde_json::Map<String, Json>, data: Data) {
 
     // Make a temporary dir where we'll store our partials. This is to
     // avoid a race on filenames.
-    let tmpdir = TempDir::new("").expect("Failed to make tempdir");
+    let tmpdir = Builder::new().tempdir().expect("Failed to make tempdir");
 
     if let Some(value) = test.get("partials") {
         write_partials(tmpdir.path(), value)

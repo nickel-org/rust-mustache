@@ -43,13 +43,13 @@ pub fn compile_iter<T: Iterator<Item = char>>(iter: T) -> Result<Template> {
 }
 
 /// Compiles a template from a path.
-/// returns None if the file cannot be read OR the file is not UTF-8 encoded
+/// returns [Error] if the file cannot be read OR the file is not UTF-8 encoded
 pub fn compile_path<U: AsRef<Path>>(path: U) -> Result<Template> {
     let path = path.as_ref();
 
     match path.file_name() {
         Some(filename) => {
-            let template_dir = path.parent().unwrap_or(Path::new("."));
+            let template_dir = path.parent().unwrap_or_else(|| Path::new("."));
             // FIXME: Should work with OsStrings, this will not use provided extension if
             // the extension is not utf8 :(
             let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("mustache");

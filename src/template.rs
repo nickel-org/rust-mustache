@@ -5,7 +5,7 @@ use std::str;
 
 use compiler::Compiler;
 // for bug!
-use log::{log, error};
+use log::error;
 use parser::Token;
 use serde::Serialize;
 
@@ -22,11 +22,7 @@ pub struct Template {
 /// Construct a `Template`. This is not part of the impl of Template so it is
 /// not exported outside of mustache.
 pub fn new(ctx: Context, tokens: Vec<Token>, partials: HashMap<String, Vec<Token>>) -> Template {
-    Template {
-        ctx: ctx,
-        tokens: tokens,
-        partials: partials,
-    }
+    Template { ctx, tokens, partials }
 }
 
 impl Template {
@@ -71,8 +67,8 @@ struct RenderContext<'a> {
 impl<'a> RenderContext<'a> {
     fn new(template: &'a Template) -> RenderContext<'a> {
         RenderContext {
-            template: template,
-            indent: "".to_string(),
+            template,
+            indent: String::new(),
             line_start: true,
         }
     }
@@ -210,6 +206,11 @@ impl<'a> RenderContext<'a> {
                         self.render(wr, stack, &tokens)?;
                     }
 
+                    Data::Bool(val) => {
+                        let s = if val { "true" } else { "false" };
+                        self.write_tracking_newlines(wr, s)?;
+                    }
+
                     ref value => {
                         bug!("render_utag: unexpected value {:?}", value);
                     }
@@ -238,6 +239,7 @@ impl<'a> RenderContext<'a> {
         self.render(wr, stack, children)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_section<W: Write>(&mut self,
                                 wr: &mut W,
                                 stack: &mut Vec<&Data>,
@@ -340,14 +342,11 @@ impl<'a> RenderContext<'a> {
         let mut value = None;
 
         for data in stack.iter().rev() {
-            match **data {
-                Data::Map(ref m) => {
-                    if let Some(v) = m.get(&path[0]) {
-                        value = Some(v);
-                        break;
-                    }
+            if let Data::Map(m) = *data {
+                if let Some(v) = m.get(&path[0]) {
+                    value = Some(v);
+                    break;
                 }
-                _ => { /* continue searching the stack */ },
             }
         }
 

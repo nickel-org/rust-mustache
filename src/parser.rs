@@ -3,7 +3,7 @@ use std::mem;
 use std::fmt;
 
 // for bug!
-use log::{log, error};
+use log::error;
 
 /// `Token` is a section of a compiled mustache string.
 #[derive(Clone, Debug, PartialEq)]
@@ -21,6 +21,7 @@ pub enum Token {
 /// This type is not intended to be matched exhaustively as new variants
 /// may be added in future without a version bump.
 #[derive(Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Error {
     BadClosingTag(char, char),
     UnclosedTag,
@@ -30,9 +31,6 @@ pub enum Error {
     EarlySectionClose(String),
     MissingSetDelimeterClosingTag,
     InvalidSetDelimeterSyntax,
-
-    #[doc(hidden)]
-    __Nonexhaustive,
 }
 
 impl StdError for Error { }
@@ -49,7 +47,6 @@ impl fmt::Display for Error {
             Error::EmptyTag => write!(f, "found an empty tag",),
             Error::MissingSetDelimeterClosingTag => write!(f, "missing the new closing tag in set delimeter tag"),
             Error::InvalidSetDelimeterSyntax => write!(f, "invalid set delimeter tag syntax"),
-            Error::__Nonexhaustive => unreachable!(),
         }
     }
 }
@@ -88,7 +85,7 @@ enum ParserState {
 impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
     pub fn new(reader: &'a mut T, opening_tag: &str, closing_tag: &str) -> Parser<'a, T> {
         let mut parser = Parser {
-            reader: reader,
+            reader,
             ch: None,
             lookahead: None,
             line: 1,
@@ -172,7 +169,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
                             curly_brace_tag = false;
                             self.state = ParserState::Tag;
                         } else {
-                            self.tag_position = self.tag_position + 1;
+                            self.tag_position += 1;
                         }
                     } else {
                         // We don't have a tag, so add all the tag parts we've seen
@@ -523,7 +520,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
 
     fn not_otag(&mut self) {
         for (i, ch) in self.opening_tag_chars.iter().enumerate() {
-            if !(i < self.tag_position) {
+            if i >= self.tag_position {
                 break;
             }
             self.content.push(*ch);
@@ -532,7 +529,7 @@ impl<'a, T: Iterator<Item = char>> Parser<'a, T> {
 
     fn not_ctag(&mut self) {
         for (i, ch) in self.closing_tag_chars.iter().enumerate() {
-            if !(i < self.tag_position) {
+            if i >= self.tag_position {
                 break;
             }
             self.content.push(*ch);

@@ -23,8 +23,8 @@ impl<T: Iterator<Item = char>> Compiler<T> {
     /// Construct a default compiler.
     pub fn new(ctx: Context, reader: T) -> Compiler<T> {
         Compiler {
-            ctx: ctx,
-            reader: reader,
+            ctx,
+            reader,
             partials: HashMap::new(),
             otag: "{{".to_string(),
             ctag: "}}".to_string(),
@@ -38,13 +38,7 @@ impl<T: Iterator<Item = char>> Compiler<T> {
                     otag: String,
                     ctag: String)
                     -> Compiler<T> {
-        Compiler {
-            ctx: ctx,
-            reader: reader,
-            partials: partials,
-            otag: otag,
-            ctag: ctag,
-        }
+        Compiler { ctx, reader, partials, otag, ctag }
     }
 
     /// Compiles a template into a series of tokens.
@@ -59,6 +53,9 @@ impl<T: Iterator<Item = char>> Compiler<T> {
             let path =
                 self.ctx.template_path.join(&(name.clone() + "." + &self.ctx.template_extension));
 
+            // This is too complicated to just be
+            // self.partials.entry(&name).or_insert(...)
+            #[allow(clippy::map_entry)]
             if !self.partials.contains_key(&name) {
                 // Insert a placeholder so we don't recurse off to infinity.
                 self.partials.insert(name.to_string(), Vec::new());
