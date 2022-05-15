@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use tempdir::TempDir;
+use tempfile::TempDir;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
@@ -492,7 +492,7 @@ fn run_test(test: serde_json::Map<String, Json>, data: Data) {
 
     // Make a temporary dir where we'll store our partials. This is to
     // avoid a race on filenames.
-    let tmpdir = TempDir::new("").expect("Failed to make tempdir");
+    let tmpdir = TempDir::new().expect("Failed to make tempdir");
 
     if let Some(value) = test.get("partials") {
         write_partials(tmpdir.path(), value)
