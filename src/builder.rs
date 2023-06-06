@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use serde::Serialize;
 
 use encoder::Error;
+use crate::Template;
+
 use super::{Data, to_data};
 
 /// `MapBuilder` is a helper type that construct `Data` types.
@@ -148,6 +150,21 @@ impl MapBuilder {
         let MapBuilder { mut data } = self;
         data.insert(key.to_string(), Data::Fun(RefCell::new(Box::new(f))));
         MapBuilder { data: data }
+    }
+
+    /// Adds a template to the `MapBuilder`.
+    /// 
+    /// ```rust
+    /// use mustache::{MapBuilder, compile_str};
+    /// let user_template = compile_str("<strong>{{username}}</strong>").unwrap();
+    /// let data = MapBuilder::new()
+    ///     .insert_template("user", user_template)
+    ///     .build();
+    /// ```
+    #[inline]
+    pub fn insert_template<K: ToString>(mut self, key: K, value: Template) -> MapBuilder {
+        self.data.insert(key.to_string(), Data::Template(value));
+        self
     }
 
     /// Return the built `Data`.

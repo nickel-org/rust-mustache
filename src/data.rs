@@ -5,12 +5,15 @@ use std::fmt;
 // for bug!
 use log::{log, error};
 
+use crate::Template;
+
 pub enum Data {
     Null,
     String(String),
     Bool(bool),
     Vec(Vec<Data>),
     Map(HashMap<String, Data>),
+    Template(Template),
     Fun(RefCell<Box<dyn FnMut(String) -> String + Send>>),
 }
 
@@ -40,6 +43,7 @@ impl fmt::Debug for Data {
             Data::Bool(v) => write!(f, "Bool({:?})", v),
             Data::Vec(ref v) => write!(f, "VecVal({:?})", v),
             Data::Map(ref v) => write!(f, "Map({:?})", v),
+            Data::Template(ref v) => write!(f, "Template({:?})", v),
             Data::Fun(_) => write!(f, "Fun(...)"),
         }
     }
