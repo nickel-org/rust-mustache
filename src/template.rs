@@ -274,6 +274,7 @@ impl<'a> RenderContext<'a> {
                         self.render(wr, stack, children)?;
                         stack.pop();
                     }
+                    Data::Template(_) => {}
                     Data::Fun(ref fcell) => {
                         let f = &mut *fcell.borrow_mut();
                         let tokens = self.render_fun(src, otag, ctag, f)?;
@@ -291,9 +292,16 @@ impl<'a> RenderContext<'a> {
                                 stack: &mut Vec<&Data>,
                                 name: &str,
                                 indent: &str) -> Result<()> {
-        match self.template.partials.get(name) {
+        match self
+            .find(&[name], stack)
+            .and_then(|d| match d {
+                Data::Template(t) => Some(&t.tokens),
+                _ => None,
+            })
+            .or_else(|| self.template.partials.get(name))
+        {
             None => (),
-            Some(ref tokens) => {
+            Some(tokens) => {
                 let mut indent = self.indent.clone() + indent;
 
                 mem::swap(&mut self.indent, &mut indent);
@@ -323,7 +331,7 @@ impl<'a> RenderContext<'a> {
         Ok(tokens)
     }
 
-    fn find<'c>(&self, path: &[String], stack: &mut Vec<&'c Data>) -> Option<&'c Data> {
+    fn find<'c>(&self, path: &[impl AsRef<str>], stack: &mut Vec<&'c Data>) -> Option<&'c Data> {
         // If we have an empty path, we just want the top value in our stack.
         if path.is_empty() {
             match stack.last() {
@@ -342,7 +350,7 @@ impl<'a> RenderContext<'a> {
         for data in stack.iter().rev() {
             match **data {
                 Data::Map(ref m) => {
-                    if let Some(v) = m.get(&path[0]) {
+                    if let Some(v) = m.get(path[0].as_ref()) {
                         value = Some(v);
                         break;
                     }
@@ -362,7 +370,7 @@ impl<'a> RenderContext<'a> {
         for part in path[1..].iter() {
             match *value {
                 Data::Map(ref m) => {
-                    match m.get(part) {
+                    match m.get(part.as_ref()) {
                         Some(v) => {
                             value = v;
                         }

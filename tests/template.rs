@@ -434,6 +434,15 @@ fn assert_partials_data(template: Template) {
     let mut ctx0 = HashMap::new();
     let mut ctx1 = HashMap::new();
     ctx1.insert("name".to_string(), Data::String("a".to_string()));
+    ctx0.insert("names".to_string(), Data::Vec(vec![Data::Map(ctx1)]));
+    let user_partial = compile_str("<span>{{>username}}</span>\n");
+    ctx0.insert("user".to_string(), Data::Template(user_partial));
+    assert_eq!(render_data(&template, &Data::Map(ctx0)),
+                "<h2>Names</h2>\n  <span>a</span>\n\n".to_string());
+
+    let mut ctx0 = HashMap::new();
+    let mut ctx1 = HashMap::new();
+    ctx1.insert("name".to_string(), Data::String("a".to_string()));
     let mut ctx2 = HashMap::new();
     ctx2.insert("name".to_string(), Data::String("<b>".to_string()));
     ctx0.insert("names".to_string(), Data::Vec(vec![Data::Map(ctx1), Data::Map(ctx2)]));
